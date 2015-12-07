@@ -241,7 +241,7 @@ imarray = np.array(im)
 (IMH, IMW) =imarray.shape
 # Crop
 
-CropArray=imarray[0+Opt.CropT:IMH-Opt.CropB,Opt.CropL:IMW-Opt.CropR]
+CropArray=imarray[int(0+Opt.CropT):int(IMH-Opt.CropB),int(Opt.CropL):int(IMW-Opt.CropR)]
 (CIMH, CIMW)=CropArray.shape
 ArrayIn=CropArray
 
@@ -274,25 +274,27 @@ if Opt.FFTToggle==1:
     F2Array=np.fft.fftshift(FourierArray);
     PowerSpec2d= np.abs( F2Array )**2;
     PowerSpec1d= azimuthalAverage(PowerSpec2d);
-    Peak=signal.find_peaks_cwt(PowerSpec1d, np.arange(10,15));
+    Peak=signal.find_peaks_cwt(PowerSpec1d[5:], np.arange(40,50),);
+    Test=ndimage.sobel(PowerSpec1d)
     
     PFreq=np.zeros(np.size(Peak))
     Pspace=np.zeros(np.size(Peak));
     for i in range(0, np.size(Peak)):
+        Peak[i]+=5
         PFreq[i]=FreqA[Peak[i]]
         Pspace[i]=1/FreqA[Peak[i]]
-    Output.l0=Pspace[1] 
+    Output.l0=Pspace[0] 
 # Now save plots
     Fig=plt.figure()
     PSD1D=Fig.add_subplot(111)
-    PSD1D.plot(FreqA[1:np.floor(Opt.FSize/2)], PowerSpec1d[1:np.floor(Opt.FSize/2)])
+    PSD1D.plot(FreqA[1:int(np.floor(Opt.FSize/2))], PowerSpec1d[1:int( np.floor(Opt.FSize/2))])
     PSD1D.set_yscale('log')
     PSD1D.set_title('1D Power Spectral Density')
     PSD1D.set_xlabel('q (1/nm)')
     PSD1D.set_ylabel('Intensity')
     PSD1D.set_ylim([np.min(PowerSpec1d)*.5, np.max(PowerSpec1d)*10])
     Fig.savefig(os.path.join(FPath,"output",BName + "PowerSpecFreq.png"))
-    PSD1D.annotate('Primary Peak at %f' %PFreq[1], xy=(PFreq[1], PowerSpec1d[Peak[1]]), xytext=(1.5*PFreq[1], 1.5*PowerSpec1d[PFreq[1]]),
+    PSD1D.annotate('Primary Peak at %f' %PFreq[0], xy=(PFreq[0], PowerSpec1d[int(Peak[0])]), xytext=(1.5*PFreq[0], 1.5*PowerSpec1d[int(PFreq[0])]),
                 arrowprops=dict(facecolor='black', width=2,headwidth=5),
                 )
     Fig.savefig(os.path.join(FPath,"output",BName + "PowerSpecFreqLabel.png"))
@@ -426,8 +428,8 @@ if Opt.SkeleToggle==1:
     LAdCount=signal.convolve(LASkel, np.ones((3,3)),mode='same')
     # Remove Opt.DefEdge pixels at edge to prevent edge effects. be sure to account for area difference
     
-    LAdCount[0:Opt.DefEdge-1,:]=0; LAdCount[CIMH+1-Opt.DefEdge:CIMH,:]=0; 
-    LAdCount[:,0:Opt.DefEdge-1]=0; LAdCount[:,CIMW+1-Opt.DefEdge:CIMW]=0; 
+    LAdCount[0:int(Opt.DefEdge-1),:]=0; LAdCount[int(CIMH+1-Opt.DefEdge):int(CIMH),:]=0; 
+    LAdCount[:,0:int(Opt.DefEdge-1)]=0; LAdCount[:,int(CIMW+1-Opt.DefEdge):int(CIMW)]=0; 
     DefArea=( CIMW-2*Opt.DefEdge)*( CIMH-2*Opt.DefEdge)*Opt.NmPP*Opt.NmPP; # Area in nm^2
     
     # Terminal
@@ -615,7 +617,7 @@ if Opt.SkeleToggle==1:
     DJCA=DJCount/DefArea
     DJLog = signal.convolve(DJLog, np.ones((3,3)),mode='same')
     
-    DASkelJ= Image.fromarray(30*LASkel+100*DJLog)
+    DASkelJ= Image.fromarray(30*DASkel+100*DJLog)
     if ShowImage == 1:
         DASkelJ.show()
     DASkelJ.save(os.path.join(FPath,"output",BName+"DASkelJunc.tif"))
