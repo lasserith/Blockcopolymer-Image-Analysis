@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Spyder Editor
-
-This is a temporary script file.
+Block Copolymer Analysis Package by Moshe Dolejsi
+Done in Spyder/VStudio2015 Community with Anaconda.
+ToDO: Classify independent function blocks
 """
 #%%
-Vers="0.1"
+Vers="0.2"
+
 #%% Imports
 from PIL import Image
 # 
@@ -77,7 +78,7 @@ class GUI:
         self.l3.pack(side=tk.LEFT)
         self.e6 = tk.Entry(f3)
         self.e6.pack(side=tk.LEFT)
-        self.e6.insert(0,"100") #100
+        self.e6.insert(0,"130") #100
         
         f4= tk.Frame(master)
         f4.pack()
@@ -87,7 +88,7 @@ class GUI:
         self.l4.pack(side=tk.LEFT)
         self.e7 = tk.Entry(f4)
         self.e7.pack(side=tk.LEFT)
-        self.e7.insert(0,"100")
+        self.e7.insert(0,"2")
         
         f5= tk.Frame(master)
         f5.pack()
@@ -197,23 +198,25 @@ except:
 
 #%% Constants
 
-#Opt.CropT= 50; # Pixels to crop
-#Opt.DefEdge = 5; # pixels to exclude from defect analysis from each edge
-#Opt.SPCutoff = 10; # After thresholding if any size cluster of pixels < this remove
-#
-Opt.RSFactor=1;#Not yet implemented
-Opt.RSToggle=0; # nyi
 
+
+Opt.RSFactor=2;#Not yet implemented
+Opt.RSToggle=0; # nyi
+# need to make a GUI for this as well
 Opt.FFTToggle=1; 
 Opt.DenToggle=1; #Denoising ON
+Opt.ThreshToggle=1;
+Opt.SFRToggle=1;
+Opt.LabelToggle=1;
+Opt.SkeleToggle=1;
 Opt.ACToggle=0;
 Opt.ACCutoff=10;
 Opt.ACSize=50;
 
-IndividualLog =1; # Write a log for each sample?
+#IndividualLog =1; # Write a log for each sample?
 CombLog = 1; # If One write a combined log, if two clean it out each time(don't append)
 ShowImage = 0; # Show images?
-
+#%% Autodetect per pixel scaling for merlin, don't have a nanosem image to figure that out
 
 SkimFile = open(FNFull,'rb')
 MetaF=exifread.process_file(SkimFile)
@@ -240,6 +243,8 @@ imarray = np.array(im)
 
 CropArray=imarray[0+Opt.CropT:IMH-Opt.CropB,Opt.CropL:IMW-Opt.CropR]
 (CIMH, CIMW)=CropArray.shape
+ArrayIn=CropArray
+
 #%% Data Rescaling Not Yet Implemented correctly
 
 if Opt.RSToggle==1:
@@ -247,6 +252,7 @@ if Opt.RSToggle==1:
     CIMW*=Opt.RSFactor;
     RSArray=skimage.transform.resize(CropArray,(CIMH,CIMW))
     Opt.NmPP*=1/Opt.RSFactor;
+    ArrayIn=RSArray
 else:
     Opt.RSFactor=1;
 
@@ -258,10 +264,7 @@ else:
 # pyFAI ? AI=pyFAI.load(CropArray)
 #PowerSpec1d=AI.integrate1d(CropArray,100)
 if Opt.FFTToggle==1:
-    try: 
-        ArrayIn=RSArray
-    except:
-        ArrayIn=CropArray
+
     
     Opt.FSize=np.min( (CIMH, CIMW) );
     
@@ -292,9 +295,6 @@ if Opt.FFTToggle==1:
     PSD1D.annotate('Primary Peak at %f' %PFreq[1], xy=(PFreq[1], PowerSpec1d[Peak[1]]), xytext=(1.5*PFreq[1], 1.5*PowerSpec1d[PFreq[1]]),
                 arrowprops=dict(facecolor='black', width=2,headwidth=5),
                 )
-    PSD1D.annotate('Secondary Peak at %f' %PFreq[2], xy=(PFreq[2], PowerSpec1d[Peak[2]]), xytext=(1.5*PFreq[2], PowerSpec1d[Peak[2]]),
-                arrowprops=dict(facecolor='black', width=2,headwidth=5),
-                )
     Fig.savefig(os.path.join(FPath,"output",BName + "PowerSpecFreqLabel.png"))
     
     
@@ -306,30 +306,16 @@ if Opt.FFTToggle==1:
     PS2DImage.save(os.path.join(FPath,"output",BName + "PowerSpec2d.tif"))
 
 
-       
-
-#py.semilogy( FreqA[1:np.floor(Opt.FSize/2)], PowerSpec1d[1:np.floor(Opt.FSize/2)] )
-#py.xlabel('Spatial Frequency')
-#py.ylabel('Power Spectrum')
-
-#py.figure(3)
-#py.clf()
-#py.imshow( F2Array )
-
-
-
 
 #%% Denoise
 if Opt.DenToggle==1:
-    try: 
-        ArrayIn=RSArray
-    except:
-        ArrayIn=CropArray
-    
-    Output.Denoise=( Opt.DenWeight*(Opt.NmPP/Output.l0)); # 
-
+   
+    Output.Denoise=( Opt.DenWeight/ (Output.l0/Opt.NmPP )); # 
+#
     LDenArray = skimage.restoration.denoise_tv_bregman(ArrayIn,Output.Denoise ) # smaller = more denoise
-    LDenArray *= 256
+    LDenArray *= 255
+    
+    ArrayIn=LDenArray
     
     LDenImage=Image.fromarray(LDenArray)
     LDenImage=LDenImage.convert(mode="RGB")
@@ -338,116 +324,139 @@ if Opt.DenToggle==1:
         LDenImage.show()
         
     LDenImage.save(os.path.join(FPath,"output",BName + "LDen.tif"))
+    
+    
+#    CLDenArray = skimage.restoration.denoise_tv_chambolle(ArrayIn, Output.Denoise ) # Larger = more denoise
+#    ArrayIn=CLDenArray    
+#    
+#    CLDenImage=Image.fromarray(CLDenArray)
+#    CLDenImage=CLDenImage.convert(mode="RGB")
+#    
+#    if ShowImage == 1:
+#        CLDenImage.show()
+#        
+#    CLDenImage.save(os.path.join(FPath,"output",BName + "CLDen.tif"))
 
 ##%% Otsu Thresholding (Not used, but can be shown for comp)
-#OtsuV=skimage.filters.threshold_otsu(DenArray)
+#
+#if Opt.DenToggle==1:
+#    ArrayIn=LDenArray
+#elif Opt.RSToggle==1:
+#    ArrayIn=RSArray
+#else:
+#    ArrayIn=CropArray
+#
+#OtsuV=skimage.filters.threshold_otsu(ArrayIn)
 #OtsuBin= CropArray <= OtsuV
 #
 #OtsuThresh = Image.fromarray(100*np.uint8(OtsuBin))
 #OtsuThresh=OtsuThresh.convert(mode="RGB")
 #OtsuThresh.show()
-#OtsuThresh.save(os.path.join(FPath,"output",BName + "LOtsu.tif")
+#OtsuThresh.save(os.path.join(FPath,"output",BName + "LOtsu.tif") )
 
 #%% Adaptive Local Thresholding over 15 pixels, gauss
-try: 
-    ArrayIn=LDenArray
-except:
-    ArrayIn=CropArray
+if Opt.ThreshToggle==1:
+        
+    Output.Thresh=Opt.ThreshWeight*(Output.l0/Opt.NmPP )
+    Output.Thresh=np.floor( Output.Thresh )
+    Output.Thresh=np.max( (Output.Thresh, 1))
     
-Output.Thresh=np.floor( Opt.ThreshWeight*(Opt.RSFactor**2)*(Opt.NmPP/Output.l0 ))
-Output.Thresh=np.max( (Output.Thresh, 1))
-Output.Thresh=7
-LAdaptBin=skimage.filters.threshold_adaptive(ArrayIn,Output.Thresh ,'gaussian')
+    LAdaptBin=skimage.filters.threshold_adaptive(ArrayIn,Output.Thresh ,'gaussian')
+    ArrayIn=LAdaptBin;
+    
+    LAdaptThresh = Image.fromarray(100*np.uint8(LAdaptBin))
+    LAdaptThresh=LAdaptThresh.convert(mode="RGB")
+    if ShowImage == 1:
+        LAdaptThresh.show()
+    LAdaptThresh.save(os.path.join(FPath,"output",BName+"LAThresh.tif"))
 
-LAdaptThresh = Image.fromarray(100*np.uint8(LAdaptBin))
-LAdaptThresh=LAdaptThresh.convert(mode="RGB")
-if ShowImage == 1:
-    LAdaptThresh.show()
-LAdaptThresh.save(os.path.join(FPath,"output",BName+"LAThresh.tif"))
 
 
 
 
 #%% Small Feature Removal (May not be necessary)
 
-
-LAdRSO = skimage.morphology.remove_small_objects(LAdaptBin, Opt.SPCutoff)
-LAdRSOIm = Image.fromarray(100*np.uint8(LAdRSO))
-LAdRSOIm=LAdRSOIm.convert(mode="RGB")
-if ShowImage == 1:
-    LAdRSOIm.show()
-LAdRSOIm.save(os.path.join(FPath,"output",BName+"LADRSO.tif"))
-
-LDPFrac=(LAdRSO==0).sum()
-LLPFrac=(LAdRSO.size-LDPFrac)
+if Opt.SFRToggle==1:
+    LAdRSO = skimage.morphology.remove_small_objects(ArrayIn, Opt.SPCutoff)
+    ArrayIn=LAdRSO
+    LAdRSOIm = Image.fromarray(100*np.uint8(LAdRSO))
+    LAdRSOIm=LAdRSOIm.convert(mode="RGB")
+    if ShowImage == 1:
+        LAdRSOIm.show()
+    LAdRSOIm.save(os.path.join(FPath,"output",BName+"LADRSO.tif"))
+    
+    LDPFrac=(LAdRSO==0).sum()
+    LLPFrac=(LAdRSO.size-LDPFrac)
 #%% Feature Finding
 
-LALab, LNumFeat = ndimage.measurements.label(LAdRSO)
 
-LDomFrac=(LALab==1).sum()/(LLPFrac)
-LDomI=1
-for i in range(2,LNumFeat):
-    TestFrac=(LALab==i).sum()/(LLPFrac)
-    if TestFrac > LDomFrac:
-        LDomFrac=TestFrac
-        LDomI=i
-        
-#print("Dominant index %d is %f of total" % (LDomI, LDomFrac))
-
-LALabI= Image.fromarray(LALab)
-LALabI=LALabI.convert(mode="RGB")
-
-if ShowImage == 1:
-    LALabI.show()
-LALabI.save(os.path.join(FPath,"output",BName+"LLab.tif"))
+if Opt.LabelToggle==1:
+    LALab, LNumFeat = ndimage.measurements.label(ArrayIn)
+    LDomFrac=(LALab==1).sum()/(LLPFrac)
+    LDomI=1
+    for i in range(2,LNumFeat):
+        TestFrac=(LALab==i).sum()/(LLPFrac)
+        if TestFrac > LDomFrac:
+            LDomFrac=TestFrac
+            LDomI=i
+            
+    #print("Dominant index %d is %f of total" % (LDomI, LDomFrac))
+    
+    LALabI= Image.fromarray(LALab)
+    LALabI=LALabI.convert(mode="RGB")
+    
+    if ShowImage == 1:
+        LALabI.show()
+    LALabI.save(os.path.join(FPath,"output",BName+"LLab.tif"))
 
 
 #%% Skeletonization 
 
-LASkel = skimage.morphology.skeletonize(LAdaptBin)
-
-LASkelI= Image.fromarray(100*LASkel)
-LASkelI=LASkelI.convert(mode="RGB")
-if ShowImage == 1:
-    LASkelI.show()
-LASkelI.save(os.path.join(FPath,"output",BName+"LSkel.tif"))
+if Opt.SkeleToggle==1:
+    LASkel = skimage.morphology.skeletonize(ArrayIn)
+    
+    LASkelI= Image.fromarray(100*LASkel)
+    LASkelI=LASkelI.convert(mode="RGB")
+    if ShowImage == 1:
+        LASkelI.show()
+    LASkelI.save(os.path.join(FPath,"output",BName+"LSkel.tif"))
 
 #%% Terminal/Junction finder
 
-LAdCount=signal.convolve(LASkel, np.ones((3,3)),mode='same')
-# Remove Opt.DefEdge pixels at edge to prevent edge effects. be sure to account for area difference
-
-LAdCount[0:Opt.DefEdge-1,:]=0; LAdCount[CIMH+1-Opt.DefEdge:CIMH,:]=0; 
-LAdCount[:,0:Opt.DefEdge-1]=0; LAdCount[:,CIMW+1-Opt.DefEdge:CIMW]=0; 
-DefArea=( CIMW-2*Opt.DefEdge)*( CIMH-2*Opt.DefEdge)*Opt.NmPP*Opt.NmPP; # Area in nm^2
-
-# Terminal
-LTLog = ((LAdCount==2) * (LASkel == 1)) # if next to 1 + on skel
-LTCount = (LTLog==1).sum()
-LTCA=LTCount/DefArea
-LTLog = signal.convolve(LTLog, np.ones((3,3)),mode='same')
-
-
-LASkelT= Image.fromarray(30*LASkel+100*LTLog)
-if ShowImage == 1:
-    LASkelT.show()
-LASkelT.save(os.path.join(FPath,"output",BName+"LASkelTerm.tif"))
-
-# Junctions
-
-LJLog = ((LAdCount > 3) * (LASkel == 1)) # if next to >2 + on skel
-
-LSkelAC = LASkel-LJLog # Pruned Skel to use for autocorrelation
-
-LJCount = (LJLog==1).sum()
-LJCA=LJCount/DefArea
-LJLog = signal.convolve(LJLog, np.ones((3,3)),mode='same')
-
-
-LASkelJ= Image.fromarray(30*LASkel+100*LJLog)
-if ShowImage == 1:
-    LASkelJ.show()
-LASkelJ.save(os.path.join(FPath,"output",BName+"LASkelJunc.tif"))
+    LAdCount=signal.convolve(LASkel, np.ones((3,3)),mode='same')
+    # Remove Opt.DefEdge pixels at edge to prevent edge effects. be sure to account for area difference
+    
+    LAdCount[0:Opt.DefEdge-1,:]=0; LAdCount[CIMH+1-Opt.DefEdge:CIMH,:]=0; 
+    LAdCount[:,0:Opt.DefEdge-1]=0; LAdCount[:,CIMW+1-Opt.DefEdge:CIMW]=0; 
+    DefArea=( CIMW-2*Opt.DefEdge)*( CIMH-2*Opt.DefEdge)*Opt.NmPP*Opt.NmPP; # Area in nm^2
+    
+    # Terminal
+    LTLog = ((LAdCount==2) * (LASkel == 1)) # if next to 1 + on skel
+    LTCount = (LTLog==1).sum()
+    LTCA=LTCount/DefArea
+    LTLog = signal.convolve(LTLog, np.ones((3,3)),mode='same')
+    
+    
+    LASkelT= Image.fromarray(30*LASkel+100*LTLog)
+    if ShowImage == 1:
+        LASkelT.show()
+    LASkelT.save(os.path.join(FPath,"output",BName+"LASkelTerm.tif"))
+    
+    # Junctions
+    
+    LJLog = ((LAdCount > 3) * (LASkel == 1)) # if next to >2 + on skel
+    
+    LSkelAC = LASkel-LJLog # Pruned Skel to use for autocorrelation
+    
+    LJCount = (LJLog==1).sum()
+    LJCA=LJCount/DefArea
+    LJLog = signal.convolve(LJLog, np.ones((3,3)),mode='same')
+    
+    
+    LASkelJ= Image.fromarray(30*LASkel+100*LJLog)
+    if ShowImage == 1:
+        LASkelJ.show()
+    LASkelJ.save(os.path.join(FPath,"output",BName+"LASkelJunc.tif"))
 
 #%% Autocorrel. LETS GO
 if Opt.ACToggle==1:
@@ -500,104 +509,116 @@ if Opt.ACToggle==1:
             AutoCor.BBI+=1
         
         AutoCor.Ind += 1
-#%% 1st Der
 
 #%% Find the inverse or 'Dark' Image repeat as above
-DCropArray=255-CropArray
 
+DCropArray=255-CropArray;
+ArrayIn=DCropArray;
+if Opt.RSToggle==1:
+    DRSArray=255-RSArray;
+    ArrayIn=DRSArray;
+    
 #%% Denoise Dark
-DDenArray = skimage.restoration.denoise_tv_bregman(DCropArray,Output.Denoise)
-DDenArray *= 256
 
-DDenImage=Image.fromarray(DDenArray)
-DDenImage=DDenImage.convert(mode="RGB")
-if ShowImage == 1:
-    DDenImage.show()
-DDenImage.save(os.path.join(FPath,"output",BName + "DDen.tif"))
+
+if Opt.DenToggle==1:
+        
+    DDenArray = skimage.restoration.denoise_tv_bregman(ArrayIn,Output.Denoise)
+    DDenArray *= 255
+    ArrayIn=DDenArray    
+    
+    DDenImage=Image.fromarray(DDenArray)
+    DDenImage=DDenImage.convert(mode="RGB")
+    if ShowImage == 1:
+        DDenImage.show()
+    DDenImage.save(os.path.join(FPath,"output",BName + "DDen.tif"))
 
 
 #%% Adaptive Local Thresholding over 15 pixels, gauss
-DAdaptBin=skimage.filters.threshold_adaptive(DDenArray,Output.Thresh,'gaussian')
-
-DAdaptThresh = Image.fromarray(100*np.uint8(DAdaptBin))
-DAdaptThresh=DAdaptThresh.convert(mode="RGB")
-if ShowImage == 1:
-    DAdaptThresh.show()
-DAdaptThresh.save(os.path.join(FPath,"output",BName+"DAThresh.tif"))
+if Opt.ThreshToggle==1:
+    DAdaptBin=skimage.filters.threshold_adaptive(ArrayIn,Output.Thresh,'gaussian')
+    ArrayIn=DAdaptBin;
+    DAdaptThresh = Image.fromarray(100*np.uint8(DAdaptBin))
+    DAdaptThresh=DAdaptThresh.convert(mode="RGB")
+    if ShowImage == 1:
+        DAdaptThresh.show()
+    DAdaptThresh.save(os.path.join(FPath,"output",BName+"DAThresh.tif"))
 
 #%% Small Feature Removal (May not be necessary)
-
-DAdRSO = skimage.morphology.remove_small_objects(DAdaptBin, Opt.SPCutoff)
-DAdRSOIm = Image.fromarray(100*np.uint8(DAdRSO))
-DAdRSOIm=DAdRSOIm.convert(mode="RGB")
-if ShowImage == 1:
-    DAdRSOIm.show()
-DAdRSOIm.save(os.path.join(FPath,"output",BName+"DADRSO.tif"))
-
-DLPFrac=(DAdRSO==0).sum()
-DDPFrac=(DAdRSO.size-DLPFrac)
+if Opt.SFRToggle==1:
+    DAdRSO = skimage.morphology.remove_small_objects(DAdaptBin, Opt.SPCutoff)
+    ArrayIn=DAdRSO;
+    DAdRSOIm = Image.fromarray(100*np.uint8(DAdRSO))
+    DAdRSOIm=DAdRSOIm.convert(mode="RGB")
+    if ShowImage == 1:
+        DAdRSOIm.show()
+    DAdRSOIm.save(os.path.join(FPath,"output",BName+"DADRSO.tif"))
+    
+    DLPFrac=(DAdRSO==0).sum()
+    DDPFrac=(DAdRSO.size-DLPFrac)
 #%% Feature Finding
-
-DALab, DNumFeat = ndimage.measurements.label(DAdRSO)
-
-DDomFrac=(DALab==1).sum()/(DDPFrac)
-for i in range(2,LNumFeat):
-    TestFrac=(DALab==i).sum()/(DDPFrac)
-    if TestFrac > DDomFrac:
-        DDomFrac=TestFrac
-        DDomI=i
-        
-#print("Dominant dark index %d is %f of total" % (DDomI, DDomFrac))
-
-DALabI= Image.fromarray(DALab)
-DALabI=LALabI.convert(mode="RGB")
-if ShowImage == 1:
-    DALabI.show()
-DALabI.save(os.path.join(FPath,"output",BName+"DLab.tif"))
+if Opt.LabelToggle==1:
+    DALab, DNumFeat = ndimage.measurements.label(DAdRSO)
+    
+    DDomFrac=(DALab==1).sum()/(DDPFrac)
+    DDomI=1;
+    for i in range(2,LNumFeat):
+        TestFrac=(DALab==i).sum()/(DDPFrac)
+        if TestFrac > DDomFrac:
+            DDomFrac=TestFrac
+            DDomI=i
+            
+    #print("Dominant dark index %d is %f of total" % (DDomI, DDomFrac))
+    
+    DALabI= Image.fromarray(DALab)
+    DALabI=LALabI.convert(mode="RGB")
+    if ShowImage == 1:
+        DALabI.show()
+    DALabI.save(os.path.join(FPath,"output",BName+"DLab.tif"))
 
 
 #%% Skeletonization 
-
-DASkel = skimage.morphology.skeletonize(DAdaptBin)
-
-DASkelI= Image.fromarray(100*DASkel)
-DASkelI=DASkelI.convert(mode="RGB")
-if ShowImage == 1:
-    DASkelI.show()
-DASkelI.save(os.path.join(FPath,"output",BName+"DSkel.tif"))
-
-#%% Terminal/Junction finder
-
-DAdCount=signal.convolve(DASkel, np.ones((3,3)),mode='same')
-# Remove Opt.DefEdge pixels at edge to prevent edge effects. be sure to account for area difference
-
-DAdCount[0:Opt.DefEdge-1,:]=0; DAdCount[CIMH+1-Opt.DefEdge:CIMH,:]=0; 
-DAdCount[:,0:Opt.DefEdge-1]=0; DAdCount[:,CIMW+1-Opt.DefEdge:CIMW]=0; 
-DefArea=( CIMW-2*Opt.DefEdge)*( CIMH-2*Opt.DefEdge)*Opt.NmPP*Opt.NmPP; # Area in nm^2, don't have to do this again but it makes code readable
-
-# Terminal
-DTLog = ((DAdCount==2) * (DASkel == 1)) # if next to 1 + on skel
-DTCount = (DTLog==1).sum()
-DTCA=DTCount/DefArea
-DTLog = signal.convolve(DTLog, np.ones((3,3)),mode='same')
-
-
-DASkelT= Image.fromarray(30*DASkel+100*DTLog)
-if ShowImage == 1:
-    DASkelT.show()
-DASkelT.save(os.path.join(FPath,"output",BName+"DASkelTerm.tif"))
-
-# Junctions
-
-DJLog = ((DAdCount > 3) * (DASkel == 1)) # if next to >2 + on skel
-DJCount = (DJLog==1).sum()
-DJCA=DJCount/DefArea
-DJLog = signal.convolve(DJLog, np.ones((3,3)),mode='same')
-
-DASkelJ= Image.fromarray(30*LASkel+100*DJLog)
-if ShowImage == 1:
-    DASkelJ.show()
-DASkelJ.save(os.path.join(FPath,"output",BName+"DASkelJunc.tif"))
+if Opt.SkeleToggle==1:
+    DASkel = skimage.morphology.skeletonize(DAdaptBin)
+    
+    DASkelI= Image.fromarray(100*DASkel)
+    DASkelI=DASkelI.convert(mode="RGB")
+    if ShowImage == 1:
+        DASkelI.show()
+    DASkelI.save(os.path.join(FPath,"output",BName+"DSkel.tif"))
+    
+    #%% Terminal/Junction finder
+    
+    DAdCount=signal.convolve(DASkel, np.ones((3,3)),mode='same')
+    # Remove Opt.DefEdge pixels at edge to prevent edge effects. be sure to account for area difference
+    
+    DAdCount[0:Opt.DefEdge-1,:]=0; DAdCount[CIMH+1-Opt.DefEdge:CIMH,:]=0; 
+    DAdCount[:,0:Opt.DefEdge-1]=0; DAdCount[:,CIMW+1-Opt.DefEdge:CIMW]=0; 
+    DefArea=( CIMW-2*Opt.DefEdge)*( CIMH-2*Opt.DefEdge)*Opt.NmPP*Opt.NmPP; # Area in nm^2, don't have to do this again but it makes code readable
+    
+    # Terminal
+    DTLog = ((DAdCount==2) * (DASkel == 1)) # if next to 1 + on skel
+    DTCount = (DTLog==1).sum()
+    DTCA=DTCount/DefArea
+    DTLog = signal.convolve(DTLog, np.ones((3,3)),mode='same')
+    
+    
+    DASkelT= Image.fromarray(30*DASkel+100*DTLog)
+    if ShowImage == 1:
+        DASkelT.show()
+    DASkelT.save(os.path.join(FPath,"output",BName+"DASkelTerm.tif"))
+    
+    # Junctions
+    
+    DJLog = ((DAdCount > 3) * (DASkel == 1)) # if next to >2 + on skel
+    DJCount = (DJLog==1).sum()
+    DJCA=DJCount/DefArea
+    DJLog = signal.convolve(DJLog, np.ones((3,3)),mode='same')
+    
+    DASkelJ= Image.fromarray(30*LASkel+100*DJLog)
+    if ShowImage == 1:
+        DASkelJ.show()
+    DASkelJ.save(os.path.join(FPath,"output",BName+"DASkelJunc.tif"))
 
 #%% Logging
 
@@ -649,7 +670,9 @@ if (os.path.isfile(os.path.join(FPath, "output", "output.csv"))==False and CombL
         'DTerminals',
         'DTerminals/nm^2',
         'DJunctions',
-        'DJunctions/nm^2'])
+        'DJunctions/nm^2',
+        'Denoise'
+        'Threshold'])
 
 if CombLog > 0:
     with open(os.path.join(FPath, "output", "output.csv"), 'a') as Log:
@@ -675,7 +698,9 @@ if CombLog > 0:
         DTCount,
         DTCA,
         DJCount,
-        DJCA])
+        DJCA,
+        Output.Denoise,
+        Output.Thresh])
     
 
 
