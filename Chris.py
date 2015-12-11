@@ -486,7 +486,7 @@ if Opt.ACToggle==1:
     LC1stDx = scipy.ndimage.sobel(LDenArray, axis=1, mode='constant', cval=0) 
     
     LAngD=np.float32(np.arctan2(LC1stDy,LC1stDx))
-    LAnGDS=LAngD*LSkelAC
+    LAnGDS=LAngD*LASkel
 
     
     
@@ -494,35 +494,90 @@ if Opt.ACToggle==1:
     Note that angles are 0<->pi/2 will use trick later to correct for  
     """
     
-    AutoCor.SkI, AutoCorSkJ=np.nonzero(LASkel); #Get indexes of nonzero try LASkel/LSKelAC
+    AutoCor.SkI, AutoCor.SkJ=np.nonzero(LASkel); #Get indexes of nonzero try LASkel/LSKelAC
     AutoCor.n=np.zeros(Opt.ACCutoff)
     
-    AutoCor.RandoList=np.random.choice(2*len(AutoCor.SkI), 2*len(AutoCor.SkI), replace=False)
+    AutoCor.RandoList=np.random.choice(len(AutoCor.SkI), len(AutoCor.SkI), replace=False)
     AutoCor.h=np.zeros(Opt.ACCutoff)
-
+    AutoCor.Indexes=np.array([[-1,-1],[0,-1],[1,-1],[-1,0],[1,0],[-1,1],[0,1],[1,1]]) # for picking nearby
+    AutoCor.IndAngles=np.array([135,90,45,180,0,-135,-90,-45]) #angle of the above in degrees
+    AutoCor.IndAngles=AutoCor.IndAngles*np.pi/180 # radians
     AutoCor.Ind=0;
     
-    while AutoCor.Ind < Opt.ACSize :
-        AutoCor.ntemp=np.zeros(Opt.ACCutoff)
-        AutoCor.htemp=np.zeros( Opt.ACCutoff )
-        AutoCor.angtemp=np.zeros(Opt.ACCutoff+1)
-        AutoCor.BBI = 0
-        AutoCor.angtemp[0]=LAnGDS[ AutoCor.SkI[AutoCor.RandoList[AutoCor.Ind]] ,
+    while AutoCor.Ind < Opt.ACSize : # How many points to start at to calc auto correlate
+        # The following is the AutoCor Loop
+        AutoCor.ntemp=np.zeros(Opt.ACCutoff) # How many times have calculated the n=Index+1 correlation?
+        AutoCor.htemp=np.zeros( Opt.ACCutoff ) # what is the current sum value of the correlation(divide by ntemp at end)
+        AutoCor.angtemp=np.zeros(Opt.ACCutoff+1) # What is the current angle, 1 prev angle, etc etc
+        AutoCor.BBI = 0 # not necessary but helpful to remind us start = BBI 0
+        AutoCor.SAD=0;
+        #First pick a point, find it's angle
+        AutoCor.CCOORD=[AutoCor.SkI[AutoCor.RandoList[AutoCor.Ind]] ,
                         AutoCor.SkJ[AutoCor.RandoList[AutoCor.Ind]] ]
-                        
-        while AutoCor.BBI <= 2*(Opt.ACCutoff): # How far to walk BackBoneIndex
-            np.roll(AutoCor.angtemp)
-            AutoCor.angtemp[0]=LAnGDS[ AutoCor.SkI[AutoCor.RandoList[AutoCor.Ind]] ,
-                    AutoCor.SkJ[AutoCor.RandoList[AutoCor.Ind]] ]
-            for AutoCor.PI in range (0,Opt.ACCutoff): # Persistance Index, 0 = 1 dist etc
-                if (AutoCor.BBI > 0 & AutoCor.BBI%(AutoCor.PI+1)==0):
-                    AutoCor.htemp[AutoCor.PI]=np.cos()
-                    AutoCor.ntemp[AutoCor.PI]+=1
-                    
-            #Fine next point
-            AutoCor.BBI+=1
+        AutoCor.angtemp[0]=LAnGDS[ tuple(AutoCor.CCOORD) ]
         
-        AutoCor.Ind += 1
+        AutoCor.BBI=1 #now we at first point... 
+        
+                      
+        while AutoCor.BBI <= 2*(Opt.ACCutoff): # How far to walk BackBoneIndex total points is 2*Cuttoff+1 (1st point)
+            np.roll(AutoCor.angtemp,1) # now 1st angle is index 1 instead of 0 etc
+            #what is our next points Cooard?
+        
+            AutoCor.WalkDirect=np.random.choice(8,8,replace=False) # pick a spot to move
+            for TestNeighbor in np.arange(8):
+                AutoCor.COORD=AutoCor.Indexes[AutoCor.WalkDirect[TestNeighbor]]+AutoCor.CCOORD
+                if np.array( (AutoCor.COORD < LASkel.shape) ).all(): # If we are still in bounds
+                    if LASkel[ tuple(AutoCor.COORD)] == 1: # if we have a valid move
+                        if AutoCor.BBI==1: # And its the first move we need to fix 1st angle
+                            if AutoCor.angtemp[1] <=0: # if angle is neg
+                                if( np.abs( (AutoCor.angtemp[1]+np.pi)-AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]]) <=
+                            np.abs(AutoCor.angtemp[1]-AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]])):
+                                    #is angle + pi closer?
+                                    AutoCor.angtemp[1]+=np.pi;
+                            else: # if angle is postive
+                                if( np.abs( (AutoCor.angtemp[1]-np.pi)-AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]]) <=
+                            np.abs(AutoCor.angtemp[1]-AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]])):
+                                    #is angle + pi closer?
+                                    AutoCor.angtemp[1]+=np.pi;
+                        AutoCor.CCOORD=AutoCor.COORD; # move there
+                        AutoCor.angtemp[0]=LAnGDS[tuple(AutoCor.CCOORD)] # set angle to new angle
+                        break # break the for loop
+            else:
+                # Need to break out of the backbone loop as well...
+                AutoCor.SAD=1; # because
+                    
+            if AutoCor.SAD==1:
+                # Decide if I count this or not...
+                AutoCor.SAD=0;
+                break
+            
+            # BUT WAIT WE NEED TO FIX THE NEW ANGLE TOO! Keep it within pi of previous
+            if AutoCor.angtemp[0] <=0 and ( np.abs( (AutoCor.angtemp[0]+np.pi)-AutoCor.angtemp[1]) <=
+            np.abs(AutoCor.angtemp[0]-AutoCor.angtemp[1])):
+                    #is angle + pi closer?
+                    AutoCor.angtemp[0]+=np.pi;
+            elif AutoCor.angtemp[0] > 0 and (np.abs( (AutoCor.angtemp[0]-np.pi)-AutoCor.angtemp[1]) <=
+            np.abs(AutoCor.angtemp[0]-AutoCor.angtemp[1])):
+                    #is angle + pi closer?
+                    AutoCor.angtemp[1]+=np.pi;           
+                        
+                    
+            for AutoCor.PI in range (0,Opt.ACCutoff): # Persistance Index, 0 = 1 dist etc
+                #Calculating autocorrelation loop
+                if (AutoCor.BBI > 0 & AutoCor.BBI%(AutoCor.PI+1)==0):
+                    AutoCor.htemp[AutoCor.PI]+=np.cos(AutoCor.angtemp[0]-AutoCor.angtemp[AutoCor.PI+1]) # dotproduct is cos
+                    AutoCor.ntemp[AutoCor.PI]+=1
+            
+                    
+            #FinD next point
+            AutoCor.BBI+=1
+            
+            if AutoCor.BBI==2*(Opt.ACCutoff): # we found all our points!
+                AutoCor.h +=AutoCor.htemp
+                AutoCor.n +=AutoCor.ntemp
+                AutoCor.Ind += 1
+        
+        
 
 #%% Find the inverse or 'Dark' Image repeat as above
 
