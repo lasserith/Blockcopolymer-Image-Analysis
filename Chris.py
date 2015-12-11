@@ -22,7 +22,9 @@ from skimage import restoration, morphology, filters, feature
 import re #dat regex
 import matplotlib.pyplot as plt
 import exifread
-from scipy import ndimage, signal
+
+import scipy
+
 # Will hold options
 class Opt:
     pass
@@ -245,6 +247,10 @@ CropArray=imarray[int(0+Opt.CropT):int(IMH-Opt.CropB),int(Opt.CropL):int(IMW-Opt
 (CIMH, CIMW)=CropArray.shape
 ArrayIn=CropArray
 
+RImage=Image.new('RGB',(CIMW,CIMH),'Red')
+GImage=Image.new('RGB',(CIMW,CIMH),'Green')
+BImage=Image.new('RGB',(CIMW,CIMH),'Blue')
+
 #%% Data Rescaling Not Yet Implemented correctly
 
 if Opt.RSToggle==1:
@@ -274,8 +280,8 @@ if Opt.FFTToggle==1:
     F2Array=np.fft.fftshift(FourierArray);
     PowerSpec2d= np.abs( F2Array )**2;
     PowerSpec1d= azimuthalAverage(PowerSpec2d);
-    Peak=signal.find_peaks_cwt(PowerSpec1d[5:], np.arange(40,50),);
-    Test=ndimage.sobel(PowerSpec1d)
+    Peak=scipy.signal.find_peaks_cwt(PowerSpec1d[5:], np.arange(40,50),);
+    
     
     PFreq=np.zeros(np.size(Peak))
     Pspace=np.zeros(np.size(Peak));
@@ -381,11 +387,10 @@ if Opt.ThreshToggle==1:
 if Opt.SFRToggle==1:
     LAdRSO = skimage.morphology.remove_small_objects(ArrayIn, Opt.SPCutoff)
     ArrayIn=LAdRSO
-    LAdRSOIm = Image.fromarray(100*np.uint8(LAdRSO))
-    LAdRSOIm=LAdRSOIm.convert(mode="RGB")
+    LAdRSOI = Image.fromarray(100*np.uint8(LAdRSO)).convert(mode="RGB")
     if ShowImage == 1:
-        LAdRSOIm.show()
-    LAdRSOIm.save(os.path.join(FPath,"output",BName+"LADRSO.tif"))
+        LAdRSOI.show()
+    LAdRSOI.save(os.path.join(FPath,"output",BName+"LADRSO.tif"))
     
     LDPFrac=(LAdRSO==0).sum()
     LLPFrac=(LAdRSO.size-LDPFrac)
@@ -393,7 +398,7 @@ if Opt.SFRToggle==1:
 
 
 if Opt.LabelToggle==1:
-    LALab, LNumFeat = ndimage.measurements.label(ArrayIn)
+    LALab, LNumFeat = scipy.ndimage.measurements.label(ArrayIn)
     LDomFrac=(LALab==1).sum()/(LLPFrac)
     LDomI=1
     for i in range(2,LNumFeat):
@@ -403,13 +408,20 @@ if Opt.LabelToggle==1:
             LDomI=i
             
     #print("Dominant index %d is %f of total" % (LDomI, LDomFrac))
-    
-    LALabI= Image.fromarray(LALab)
-    LALabI=LALabI.convert(mode="RGB")
-    
-    if ShowImage == 1:
+    LDomMask= ( LALab==LDomI )*255;
+    LDomMaskI=Image.fromarray(LDomMask)
+    LDomMaskI=LDomMaskI.convert(mode="L")
+
+    LALabI=scipy.misc.toimage(LALab).convert(mode="RGB") 
+    LADomCI=Image.composite(RImage,Image.fromarray(100*np.uint8(ArrayIn)).convert(mode="RGB"),LDomMaskI)
+    LALabDomCI=Image.composite(RImage,LALabI,LDomMaskI)
+    if ShowImage == 1:        
         LALabI.show()
+        LADomCI.show()
+        LALabDomCI.show()
     LALabI.save(os.path.join(FPath,"output",BName+"LLab.tif"))
+    LADomCI.save(os.path.join(FPath,"output",BName+"LDomC.tif"))
+    LALabDomCI.save(os.path.join(FPath,"output",BName+"LLabDomC.tif"))
 
 
 #%% Skeletonization 
@@ -425,7 +437,7 @@ if Opt.SkeleToggle==1:
 
 #%% Terminal/Junction finder
 
-    LAdCount=signal.convolve(LASkel, np.ones((3,3)),mode='same')
+    LAdCount=scipy.signal.convolve(LASkel, np.ones((3,3)),mode='same')
     # Remove Opt.DefEdge pixels at edge to prevent edge effects. be sure to account for area difference
     
     LAdCount[0:int(Opt.DefEdge-1),:]=0; LAdCount[int(CIMH+1-Opt.DefEdge):int(CIMH),:]=0; 
@@ -436,7 +448,7 @@ if Opt.SkeleToggle==1:
     LTLog = ((LAdCount==2) * (LASkel == 1)) # if next to 1 + on skel
     LTCount = (LTLog==1).sum()
     LTCA=LTCount/DefArea
-    LTLog = signal.convolve(LTLog, np.ones((3,3)),mode='same')
+    LTLog = scipy.signal.convolve(LTLog, np.ones((3,3)),mode='same')
     
     
     LASkelT= Image.fromarray(30*LASkel+100*LTLog)
@@ -452,7 +464,7 @@ if Opt.SkeleToggle==1:
     
     LJCount = (LJLog==1).sum()
     LJCA=LJCount/DefArea
-    LJLog = signal.convolve(LJLog, np.ones((3,3)),mode='same')
+    LJLog = scipy.signal.convolve(LJLog, np.ones((3,3)),mode='same')
     
     
     LASkelJ= Image.fromarray(30*LASkel+100*LJLog)
@@ -470,8 +482,8 @@ if Opt.ACToggle==1:
 #    
 #    LAng=np.arctan2(LStructTen[2],LStructTen[0]) # use arctan dy/dx to find direction of line Rads
 #    LAngS=LAng*LSkelAC #Mask out with Skeleton
-    LC1stDy = ndimage.sobel(LDenArray, axis=0, mode='constant', cval=0)
-    LC1stDx = ndimage.sobel(LDenArray, axis=1, mode='constant', cval=0) 
+    LC1stDy = scipy.ndimage.sobel(LDenArray, axis=0, mode='constant', cval=0)
+    LC1stDx = scipy.ndimage.sobel(LDenArray, axis=1, mode='constant', cval=0) 
     
     LAngD=np.float32(np.arctan2(LC1stDy,LC1stDx))
     LAnGDS=LAngD*LSkelAC
@@ -548,36 +560,48 @@ if Opt.ThreshToggle==1:
 
 #%% Small Feature Removal (May not be necessary)
 if Opt.SFRToggle==1:
-    DAdRSO = skimage.morphology.remove_small_objects(DAdaptBin, Opt.SPCutoff)
+    DAdRSO = skimage.morphology.remove_small_objects(ArrayIn, Opt.SPCutoff)
     ArrayIn=DAdRSO;
-    DAdRSOIm = Image.fromarray(100*np.uint8(DAdRSO))
-    DAdRSOIm=DAdRSOIm.convert(mode="RGB")
+    DAdRSOI = Image.fromarray(100*np.uint8(DAdRSO))
+    DAdRSOI=DAdRSOI.convert(mode="RGB")
     if ShowImage == 1:
-        DAdRSOIm.show()
-    DAdRSOIm.save(os.path.join(FPath,"output",BName+"DADRSO.tif"))
+        DAdRSOI.show()
+    DAdRSOI.save(os.path.join(FPath,"output",BName+"DADRSO.tif"))
     
     DLPFrac=(DAdRSO==0).sum()
     DDPFrac=(DAdRSO.size-DLPFrac)
 #%% Feature Finding
 if Opt.LabelToggle==1:
-    DALab, DNumFeat = ndimage.measurements.label(DAdRSO)
+    DALab, DNumFeat = scipy.ndimage.measurements.label(ArrayIn)
     
     DDomFrac=(DALab==1).sum()/(DDPFrac)
     DDomI=1;
-    for i in range(2,LNumFeat):
+    for i in range(2,DNumFeat):
         TestFrac=(DALab==i).sum()/(DDPFrac)
         if TestFrac > DDomFrac:
             DDomFrac=TestFrac
             DDomI=i
             
+
+            
     #print("Dominant dark index %d is %f of total" % (DDomI, DDomFrac))
+    DDomMask= ( DALab==DDomI )*255;
+    DDomMaskI=Image.fromarray(DDomMask)
+    DDomMaskI=DDomMaskI.convert(mode="L")
     
-    DALabI= Image.fromarray(DALab)
-    DALabI=LALabI.convert(mode="RGB")
+
+    
+    DALabI=scipy.misc.toimage(DALab).convert(mode="RGB")
+    DADomCI=Image.composite(RImage,Image.fromarray(100*np.uint8(ArrayIn)).convert(mode="RGB"),DDomMaskI)
+    DALabDomCI=Image.composite(RImage,DALabI,DDomMaskI)
     if ShowImage == 1:
         DALabI.show()
+        DADomCI.show()
+        DALabDomCI.show()
     DALabI.save(os.path.join(FPath,"output",BName+"DLab.tif"))
-
+    DADomCI.save(os.path.join(FPath,"output",BName+"DDomC.tif"))
+    DALabDomCI.save(os.path.join(FPath,"output",BName+"DLabDomC.tif"))
+    
 
 #%% Skeletonization 
 if Opt.SkeleToggle==1:
@@ -591,7 +615,7 @@ if Opt.SkeleToggle==1:
     
     #%% Terminal/Junction finder
     
-    DAdCount=signal.convolve(DASkel, np.ones((3,3)),mode='same')
+    DAdCount=scipy.signal.convolve(DASkel, np.ones((3,3)),mode='same')
     # Remove Opt.DefEdge pixels at edge to prevent edge effects. be sure to account for area difference
     
     DAdCount[0:Opt.DefEdge-1,:]=0; DAdCount[CIMH+1-Opt.DefEdge:CIMH,:]=0; 
@@ -602,7 +626,7 @@ if Opt.SkeleToggle==1:
     DTLog = ((DAdCount==2) * (DASkel == 1)) # if next to 1 + on skel
     DTCount = (DTLog==1).sum()
     DTCA=DTCount/DefArea
-    DTLog = signal.convolve(DTLog, np.ones((3,3)),mode='same')
+    DTLog = scipy.signal.convolve(DTLog, np.ones((3,3)),mode='same')
     
     
     DASkelT= Image.fromarray(30*DASkel+100*DTLog)
@@ -615,7 +639,7 @@ if Opt.SkeleToggle==1:
     DJLog = ((DAdCount > 3) * (DASkel == 1)) # if next to >2 + on skel
     DJCount = (DJLog==1).sum()
     DJCA=DJCount/DefArea
-    DJLog = signal.convolve(DJLog, np.ones((3,3)),mode='same')
+    DJLog = scipy.signal.convolve(DJLog, np.ones((3,3)),mode='same')
     
     DASkelJ= Image.fromarray(30*DASkel+100*DJLog)
     if ShowImage == 1:
@@ -673,7 +697,7 @@ if (os.path.isfile(os.path.join(FPath, "output", "output.csv"))==False and CombL
         'DTerminals/nm^2',
         'DJunctions',
         'DJunctions/nm^2',
-        'Denoise'
+        'Denoise',
         'Threshold'])
 
 if CombLog > 0:
