@@ -211,7 +211,7 @@ Opt.ThreshToggle=1;
 Opt.SFRToggle=1;
 Opt.LabelToggle=1;
 Opt.SkeleToggle=1;
-Opt.ACToggle=0;
+Opt.ACToggle=1;
 Opt.ACCutoff=10;
 Opt.ACSize=50;
 
@@ -231,7 +231,7 @@ except:
     pass
 
 
-print("Instrument was autodetected as %s, NmPP is %f" % (Opt.Machine ,Opt.NmPP) )
+print("Instrument was autodetected as %s, NmPP is %f \n" % (Opt.Machine ,Opt.NmPP) )
      
 
 
@@ -514,20 +514,21 @@ if Opt.ACToggle==1:
         #First pick a point, find it's angle
         AutoCor.CCOORD=[AutoCor.SkI[AutoCor.RandoList[AutoCor.Ind]] ,
                         AutoCor.SkJ[AutoCor.RandoList[AutoCor.Ind]] ]
+        
         AutoCor.angtemp[0]=LAnGDS[ tuple(AutoCor.CCOORD) ]
         
         AutoCor.BBI=1 #now we at first point... 
-        
+        AutoCor.PastN=9 # No previous point to worry about moving back to
                       
         while AutoCor.BBI <= 2*(Opt.ACCutoff): # How far to walk BackBoneIndex total points is 2*Cuttoff+1 (1st point)
             np.roll(AutoCor.angtemp,1) # now 1st angle is index 1 instead of 0 etc
             #what is our next points Cooard?
-        
+            print('%F' % AutoCor.BBI)
             AutoCor.WalkDirect=np.random.choice(8,8,replace=False) # pick a spot to move
             for TestNeighbor in np.arange(8):
                 AutoCor.COORD=AutoCor.Indexes[AutoCor.WalkDirect[TestNeighbor]]+AutoCor.CCOORD
                 if np.array( (AutoCor.COORD < LASkel.shape) ).all(): # If we are still in bounds
-                    if LASkel[ tuple(AutoCor.COORD)] == 1: # if we have a valid move
+                    if (LASkel[ tuple(AutoCor.COORD)] == 1 & AutoCor.WalkDirect[TestNeighbor] != 7-AutoCor.PastN): # if we have a valid move
                         if AutoCor.BBI==1: # And its the first move we need to fix 1st angle
                             if AutoCor.angtemp[1] <=0: # if angle is neg
                                 if( np.abs( (AutoCor.angtemp[1]+np.pi)-AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]]) <=
@@ -539,12 +540,15 @@ if Opt.ACToggle==1:
                             np.abs(AutoCor.angtemp[1]-AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]])):
                                     #is angle + pi closer?
                                     AutoCor.angtemp[1]+=np.pi;
+                        AutoCor.PastN=AutoCor.WalkDirect[TestNeighbor];
+                        del TestNeighbor;
                         AutoCor.CCOORD=AutoCor.COORD; # move there
                         AutoCor.angtemp[0]=LAnGDS[tuple(AutoCor.CCOORD)] # set angle to new angle
                         break # break the for loop
             else:
                 # Need to break out of the backbone loop as well...
                 AutoCor.SAD=1; # because
+                del TestNeighbor
                     
             if AutoCor.SAD==1:
                 # Decide if I count this or not...
@@ -561,10 +565,11 @@ if Opt.ACToggle==1:
                     #is angle + pi closer?
                     AutoCor.angtemp[1]+=np.pi;           
                         
-                    
+#            print(np.array_str(AutoCor.CCOORD))        
             for AutoCor.PI in range (0,Opt.ACCutoff): # Persistance Index, 0 = 1 dist etc
                 #Calculating autocorrelation loop
                 if (AutoCor.BBI > 0 & AutoCor.BBI%(AutoCor.PI+1)==0):
+                    
                     AutoCor.htemp[AutoCor.PI]+=np.cos(AutoCor.angtemp[0]-AutoCor.angtemp[AutoCor.PI+1]) # dotproduct is cos
                     AutoCor.ntemp[AutoCor.PI]+=1
             
