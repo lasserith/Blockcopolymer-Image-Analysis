@@ -5,7 +5,7 @@ Done in Spyder/VStudio2015 Community with Anaconda.
 ToDO: Classify independent function blocks
 """
 #%%
-Vers="0.2"
+Vers="0.21"
 
 #%% Imports
 from PIL import Image
@@ -31,6 +31,32 @@ class Opt:
 # WIll hold outputs
 class Output:
     pass
+#%% Default options
+
+Opt.AutoDenoise=1;
+Opt.AutoThresh=1;
+
+Opt.RSFactor=2;#Not yet implemented
+Opt.RSToggle=0; # nyi
+# need to make a GUI for this as well
+Opt.FFTToggle=1; 
+Opt.DenToggle=1; #Denoising ON
+Opt.ThreshToggle=1;
+Opt.SFRToggle=1;
+Opt.LabelToggle=1;
+Opt.SkeleToggle=1;
+Opt.ACToggle=0;
+Opt.ACCutoff=10;
+Opt.ACSize=50;
+
+Opt.Machine="Unkown";
+
+
+
+#IndividualLog =1; # Write a log for each sample?
+CombLog = 1; # If One write a combined log, if two clean it out each time(don't append)
+ShowImage = 0; # Show images?
+
 #%% Gui Cus why not?
 class GUI:
     def __init__(self, master):
@@ -72,43 +98,76 @@ class GUI:
         self.e5.pack(side=tk.LEFT)
         self.e5.insert(0, "50")          
         
-        f3= tk.Frame(master)
-        f3.pack()
+        fftf=tk.Frame(master)
+        fftf.pack()
+
+        self.fftTog=tk.Checkbutton(
+            fftf,text="Enable FFT")
+        self.fftTog.pack(side=tk.LEFT)
+        self.fftTog.select()
+        self.fftl=tk.Label(
+            fftf, text="Enter L0 (nm) if not using FFT"
+            )
+        self.fftl.pack(side=tk.LEFT) 
+        self.L0 =tk.Entry(fftf)
+        self.L0.pack(side=tk.LEFT)
+        self.L0.insert(0,"0")
+        
+        
+        Denf= tk.Frame(master)
+        Denf.pack()
+        self.DenTog=tk.Checkbutton(
+            Denf,text="Enable Denoising")
+        self.DenTog.pack(side=tk.LEFT)
+        self.DenTog.select()
         self.l3=tk.Label(
-            f3, text="Denoising weight Lower = More Blur"            
+            Denf, text="Denoising weight Lower = More Blur"            
             )
         self.l3.pack(side=tk.LEFT)
-        self.e6 = tk.Entry(f3)
+        self.e6 = tk.Entry(Denf)
         self.e6.pack(side=tk.LEFT)
         self.e6.insert(0,"130") #100
+        self
         
-        f4= tk.Frame(master)
-        f4.pack()
+        Threshf= tk.Frame(master)
+        Threshf.pack()
+        self.ThreshTog=tk.Checkbutton(
+            Threshf,text="Enable Thresholding")
+        self.ThreshTog.pack(side=tk.LEFT)
+        self.ThreshTog.select()
         self.l4=tk.Label(
-            f4, text="Thresholding weight, Lower = Local Thresh, Higher = Global"            
+            Threshf, text="Thresholding weight, Lower = Local Thresh, Higher = Global"            
             )
         self.l4.pack(side=tk.LEFT)
-        self.e7 = tk.Entry(f4)
+        self.e7 = tk.Entry(Threshf)
         self.e7.pack(side=tk.LEFT)
         self.e7.insert(0,"2")
         
-        f5= tk.Frame(master)
-        f5.pack()
+        RSOf= tk.Frame(master)
+        RSOf.pack()
+        self.RSOTog=tk.Checkbutton(
+            RSOf,text="Remove small features")
+        self.RSOTog.pack(side=tk.LEFT)
+        self.RSOTog.select()
         self.l5=tk.Label(
-            f5, text="Remove Clusters < this many Pixels"            
+            RSOf, text="Remove Clusters < this many Pixels"            
             )
         self.l5.pack(side=tk.LEFT)
-        self.e8 = tk.Entry(f5)
+        self.e8 = tk.Entry(RSOf)
         self.e8.pack(side=tk.LEFT)
         self.e8.insert(0,"10")        
         
-        f6= tk.Frame(master)
-        f6.pack()
+        Skelef= tk.Frame(master)
+        Skelef.pack()
+        self.SkeleTog=tk.Checkbutton(
+            Skelef,text="Enable Skeleton/Defect Analysis")
+        self.SkeleTog.pack(side=tk.LEFT)
+        self.SkeleTog.select()
         self.l6=tk.Label(
-            f6, text="Defect Analysis Edge Protect (Px)"            
+            Skelef, text="Defect Analysis Edge Protect (Px)"            
             )
         self.l6.pack(side=tk.LEFT)
-        self.e9 = tk.Entry(f6)
+        self.e9 = tk.Entry(Skelef)
         self.e9.pack(side=tk.LEFT)
         self.e9.insert(0,"10")          
         
@@ -123,6 +182,18 @@ class GUI:
             Opt.NmPP=float(self.e1.get())
         except:
             pass
+        try:
+            Output.l0=float(self.L0.get())
+        except:
+            pass
+        
+        Opt.FFTToggle=float(self.fftTog.get())
+        Opt.DenToggle=float(self.DenTog.get())
+        Opt.ThreshToggle=float(self.ThreshTog.get())
+        Opt.SFRToggle=float(self.RSOTog.get())
+        Opt.SkeleToggle=float(self.SkeleTog.get())
+        
+        
         Opt.CropT=float(self.e2.get())
         Opt.CropL=float(self.e3.get())
         Opt.CropR=float(self.e4.get())
@@ -131,6 +202,8 @@ class GUI:
         Opt.ThreshWeight=float(self.e7.get())
         Opt.SPCutoff =float(self.e8.get())
         Opt.DefEdge=float(self.e9.get())
+        
+        
         root.destroy()
 
 
@@ -198,26 +271,7 @@ except:
     os.mkdir(os.path.join(FPath,"output"))  
 
 
-#%% Constants
 
-
-
-Opt.RSFactor=2;#Not yet implemented
-Opt.RSToggle=0; # nyi
-# need to make a GUI for this as well
-Opt.FFTToggle=1; 
-Opt.DenToggle=1; #Denoising ON
-Opt.ThreshToggle=1;
-Opt.SFRToggle=1;
-Opt.LabelToggle=1;
-Opt.SkeleToggle=1;
-Opt.ACToggle=1;
-Opt.ACCutoff=10;
-Opt.ACSize=50;
-
-#IndividualLog =1; # Write a log for each sample?
-CombLog = 1; # If One write a combined log, if two clean it out each time(don't append)
-ShowImage = 0; # Show images?
 #%% Autodetect per pixel scaling for merlin, don't have a nanosem image to figure that out
 
 SkimFile = open(FNFull,'rb')
@@ -230,20 +284,27 @@ try:
 except:
     pass
 
-
-print("Instrument was autodetected as %s, NmPP is %f \n" % (Opt.Machine ,Opt.NmPP) )
+if Opt.NmPP!=0:
+    print("Instrument was autodetected as %s, NmPP is %f \n" % (Opt.Machine ,Opt.NmPP) )
+else:
+    print("Instrument was not detected, and NmPP was not set. Please set NmPP and rerun")
      
 
 
 
 
 #%% Crop
+if im.mode!="P":
+    im=im.convert(mode='P')
+    print("Image was not in the original format, and has been converted back to grayscale. Consider using the original image.")
 
 imarray = np.array(im)
 (IMH, IMW) =imarray.shape
+
 # Crop
 
 CropArray=imarray[int(0+Opt.CropT):int(IMH-Opt.CropB),int(Opt.CropL):int(IMW-Opt.CropR)]
+
 (CIMH, CIMW)=CropArray.shape
 ArrayIn=CropArray
 
@@ -269,6 +330,7 @@ else:
 # http://www.astrobetter.com/blog/2010/03/03/fourier-transforms-of-images-in-python/
 # pyFAI ? AI=pyFAI.load(CropArray)
 #PowerSpec1d=AI.integrate1d(CropArray,100)
+
 if Opt.FFTToggle==1:
 
     
@@ -280,17 +342,26 @@ if Opt.FFTToggle==1:
     F2Array=np.fft.fftshift(FourierArray);
     PowerSpec2d= np.abs( F2Array )**2;
     PowerSpec1d= azimuthalAverage(PowerSpec2d);
-    Peak=scipy.signal.find_peaks_cwt(PowerSpec1d[5:], np.arange(40,50),);
+    Peak=scipy.signal.find_peaks_cwt(PowerSpec1d[0:int( np.floor(Opt.FSize/2))], np.arange(5,10),);
     
     
     PFreq=np.zeros(np.size(Peak))
     Pspace=np.zeros(np.size(Peak));
+    PHeight=np.zeros(np.size(Peak));
     for i in range(0, np.size(Peak)):
-        Peak[i]+=5
+        Peak[i]+=1
         PFreq[i]=FreqA[Peak[i]]
         Pspace[i]=1/FreqA[Peak[i]]
-    Output.l0=Pspace[0] 
-# Now save plots
+        PHeight[i]=PowerSpec1d[Peak[i]]
+    if Peak[0] < 10: # if first peak is found at L= infty
+        PHeight[0]=0; # dont consider it for characteristic peak
+         
+    PHMax=PHeight.max()
+    PFMax=(PFreq*(PHMax==PHeight)).max()
+    PSMax=1/PFMax;
+    Output.l0=PSMax 
+    # Now save plots
+    
     Fig=plt.figure()
     PSD1D=Fig.add_subplot(111)
     PSD1D.plot(FreqA[1:int(np.floor(Opt.FSize/2))], PowerSpec1d[1:int( np.floor(Opt.FSize/2))])
@@ -300,7 +371,7 @@ if Opt.FFTToggle==1:
     PSD1D.set_ylabel('Intensity')
     PSD1D.set_ylim([np.min(PowerSpec1d)*.5, np.max(PowerSpec1d)*10])
     Fig.savefig(os.path.join(FPath,"output",BName + "PowerSpecFreq.png"))
-    PSD1D.annotate('Primary Peak at %f' %PFreq[0], xy=(PFreq[0], PowerSpec1d[int(Peak[0])]), xytext=(1.5*PFreq[0], 1.5*PowerSpec1d[int(PFreq[0])]),
+    PSD1D.annotate('Primary Peak at %f' %PFMax, xy=(PFMax, PHMax), xytext=(1.5*PFMax, 1.5*PHMax),
                 arrowprops=dict(facecolor='black', width=2,headwidth=5),
                 )
     Fig.savefig(os.path.join(FPath,"output",BName + "PowerSpecFreqLabel.png"))
@@ -317,8 +388,10 @@ if Opt.FFTToggle==1:
 
 #%% Denoise
 if Opt.DenToggle==1:
-   
-    Output.Denoise=( Opt.DenWeight/ (Output.l0/Opt.NmPP )); # 
+    if Opt.AutoDenoise==1:
+        Output.Denoise=( Opt.DenWeight/ (Output.l0/Opt.NmPP )); # 
+    else:
+        Output.Denoise=Opt.DenWeight
 #
     LDenArray = skimage.restoration.denoise_tv_bregman(ArrayIn,Output.Denoise ) # smaller = more denoise
     LDenArray *= 255
@@ -364,11 +437,13 @@ if Opt.DenToggle==1:
 
 #%% Adaptive Local Thresholding over 15 pixels, gauss
 if Opt.ThreshToggle==1:
+    if Opt.AutoThresh==1:    
+        Output.Thresh=Opt.ThreshWeight*(Output.l0/Opt.NmPP )
+        Output.Thresh=np.floor( Output.Thresh )
+        Output.Thresh=np.max( (Output.Thresh, 1))
+    else:
+        Output.Thresh=Opt.ThreshWeight
         
-    Output.Thresh=Opt.ThreshWeight*(Output.l0/Opt.NmPP )
-    Output.Thresh=np.floor( Output.Thresh )
-    Output.Thresh=np.max( (Output.Thresh, 1))
-    
     LAdaptBin=skimage.filters.threshold_adaptive(ArrayIn,Output.Thresh ,'gaussian')
     ArrayIn=LAdaptBin;
     
