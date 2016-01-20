@@ -1,5 +1,12 @@
 # -*- coding: utf-8 -*-
 """
+Created on Tue Jan 19 14:38:16 2016
+
+@author: Moshe
+"""
+
+# -*- coding: utf-8 -*-
+"""
 Block Copolymer Analysis Package by Moshe Dolejsi
 Done in Spyder/VStudio2015 Community with Anaconda.
 ToDO: Classify independent function blocks
@@ -11,6 +18,8 @@ Vers="0.21"
 from PIL import Image
 # 
 import tkinter as tk
+from tkinter import *
+from tkinter.ttk import *
 from tkinter import filedialog
 
 import os
@@ -21,7 +30,7 @@ from skimage import restoration, morphology, filters, feature
 
 import re #dat regex
 import matplotlib.pyplot as plt
-import exifread
+import exifread #needed to read tif tags
 
 import scipy
 
@@ -39,17 +48,17 @@ Opt.AutoThresh=1;
 Opt.RSFactor=2;#Not yet implemented
 Opt.RSToggle=0; # nyi
 # need to make a GUI for this as well
-Opt.FFTToggle=1; 
+Opt.FFTToggle=1; #fft
 Opt.DenToggle=1; #Denoising ON
-Opt.ThreshToggle=1;
-Opt.SFRToggle=1;
-Opt.LabelToggle=1;
-Opt.SkeleToggle=1;
-Opt.ACToggle=0;
+Opt.ThreshToggle=1; #thresh
+Opt.RSOToggle=1; #remove small objects
+Opt.LabelToggle=1; # label domains
+Opt.SkeleToggle=1; # Skeleton/Defect analysis
+Opt.ACToggle=0; #autocorrelation (currently broken)
 Opt.ACCutoff=10;
 Opt.ACSize=50;
 
-Opt.Machine="Unkown";
+Opt.Machine="Unknown";
 
 
 
@@ -60,128 +69,237 @@ ShowImage = 0; # Show images?
 #%% Gui Cus why not?
 class GUI:
     def __init__(self, master):
+      
+        
         
         self.fftTVAR=tk.IntVar()
         self.DenTVAR=tk.IntVar()
         self.ThreshTVAR=tk.IntVar()
         self.RSOTVAR=tk.IntVar()
         self.SkeleTVAR=tk.IntVar()
-
-        f1 = tk.Frame(master)
-        f1.pack()
-        self.title = tk.Label(
-            f1, text="Image Analysis Software by Moshe V"+Vers
-            )
-        self.title.pack(side=tk.TOP)
+        #show images?
+        Opt.CropSh=tk.IntVar()
+        Opt.FFTSh=tk.IntVar()
+        Opt.DenSh=tk.IntVar()
+        Opt.ThreshSh=tk.IntVar()
+        Opt.RSOSh=tk.IntVar()
+        Opt.LabelSh=tk.IntVar()
+        Opt.SkeleSh=tk.IntVar()
+        #save images?
+        Opt.CropSa=tk.IntVar()
+        Opt.FFTSa=tk.IntVar()
+        Opt.DenSa=tk.IntVar()
+        Opt.ThreshSa=tk.IntVar()
+        Opt.RSOSa=tk.IntVar()
+        Opt.LabelSa=tk.IntVar()
+        Opt.SkeleSa=tk.IntVar()
+        
+        
+        Note=tk.ttk.Notebook(master)
+        
+        Note.pack()        
+        
+        Page1=tk.Frame(Note)
+        Page2=tk.Frame(Note)
+        Note.add(Page1,text='Options')
+        Note.add(Page2,text='Image Options')
+        Note.select(Page1)
+        
+        self.f1 = tk.ttk.Labelframe(Page1)
+        self.f1.pack()              
         self.l1 = tk.Label(
-            f1, text="Nanometers Per Pixel (Merlin Auto)"            
+            self.f1, text="Nanometers Per Pixel (Merlin Auto)"            
             )
         self.l1.pack(side=tk.LEFT)
-        self.e1 = tk.Entry(f1)
+        self.e1 = tk.Entry(self.f1)
         self.e1.pack(side=tk.LEFT)
         self.e1.insert(0, "0")  
         
-        f2 = tk.Frame(master)
-        f2.pack()
+        self.f2 = tk.ttk.Labelframe(Page1)
+        self.f2.pack()
         self.l2 = tk.Label(
-            f2, text="Pixels to crop Top, Left, Right, Bottom"            
+            self.f2, text="Pixels to crop Top, Left, Right, Bottom"            
             )
         self.l2.pack(side=tk.TOP)
         
-        self.e2 = tk.Entry(f2)
+        self.e2 = tk.Entry(self.f2)
         self.e2.pack(side=tk.LEFT)
         self.e2.insert(0, "0")  
         
-        self.e3 = tk.Entry(f2)
+        self.e3 = tk.Entry(self.f2)
         self.e3.pack(side=tk.LEFT)
         self.e3.insert(0, "0")
         
-        self.e4 = tk.Entry(f2)
+        self.e4 = tk.Entry(self.f2)
         self.e4.pack(side=tk.LEFT)
         self.e4.insert(0, "0")
         
-        self.e5 = tk.Entry(f2)
+        self.e5 = tk.Entry(self.f2)
         self.e5.pack(side=tk.LEFT)
         self.e5.insert(0, "50")          
         
-        fftf=tk.Frame(master)
-        fftf.pack()
+        self.fftf=tk.ttk.Labelframe(Page1)
+        self.fftf.pack()
 
         self.fftTog=tk.Checkbutton(
-            fftf,text="Enable FFT",variable=self.fftTVAR)
+            self.fftf,text="Enable FFT",variable=self.fftTVAR)
         self.fftTog.pack(side=tk.LEFT)
         self.fftTog.select()
         self.fftl=tk.Label(
-            fftf, text="Enter L0 (nm) if not using FFT"
+            self.fftf, text="Enter L0 (nm) if not using FFT"
             )
         self.fftl.pack(side=tk.LEFT) 
-        self.L0 =tk.Entry(fftf)
+        self.L0 =tk.Entry(self.fftf)
         self.L0.pack(side=tk.LEFT)
         self.L0.insert(0,"0")
         
         
-        Denf= tk.Frame(master)
-        Denf.pack()
+        self.Denf= tk.ttk.Labelframe(Page1)
+        self.Denf.pack()
         self.DenTog=tk.Checkbutton(
-            Denf,text="Enable Denoising",variable=self.DenTVAR)
+            self.Denf,text="Enable Denoising",variable=self.DenTVAR)
         self.DenTog.pack(side=tk.LEFT)
         self.DenTog.select()
         self.l3=tk.Label(
-            Denf, text="Denoising weight Lower = More Blur"            
+            self.Denf, text="Denoising weight Lower = More Blur"            
             )
         self.l3.pack(side=tk.LEFT)
-        self.e6 = tk.Entry(Denf)
+        self.e6 = tk.Entry(self.Denf)
         self.e6.pack(side=tk.LEFT)
-        self.e6.insert(0,"130") #100
+        self.e6.insert(0,"130") #130
         self
         
-        Threshf= tk.Frame(master)
-        Threshf.pack()
+        self.Threshf= tk.ttk.Labelframe(Page1)
+        self.Threshf.pack()
         self.ThreshTog=tk.Checkbutton(
-            Threshf,text="Enable Thresholding",variable=self.ThreshTVAR)
+            self.Threshf,text="Enable Thresholding",variable=self.ThreshTVAR)
         self.ThreshTog.pack(side=tk.LEFT)
         self.ThreshTog.select()
         self.l4=tk.Label(
-            Threshf, text="Thresholding weight, Lower = Local Thresh, Higher = Global"            
+            self.Threshf, text="Thresholding weight, Lower = Local Thresh, Higher = Global"            
             )
         self.l4.pack(side=tk.LEFT)
-        self.e7 = tk.Entry(Threshf)
+        self.e7 = tk.Entry(self.Threshf)
         self.e7.pack(side=tk.LEFT)
         self.e7.insert(0,"2")
         
-        RSOf= tk.Frame(master)
-        RSOf.pack()
+        self.RSOf= tk.ttk.Labelframe(Page1)
+        self.RSOf.pack()
         self.RSOTog=tk.Checkbutton(
-            RSOf,text="Remove small features",variable=self.RSOTVAR)
+            self.RSOf,text="Remove small features",variable=self.RSOTVAR)
         self.RSOTog.pack(side=tk.LEFT)
         self.RSOTog.select()
         self.l5=tk.Label(
-            RSOf, text="Remove Clusters < this many Pixels"            
+            self.RSOf, text="Remove Clusters < this many Pixels"            
             )
         self.l5.pack(side=tk.LEFT)
-        self.e8 = tk.Entry(RSOf)
+        self.e8 = tk.Entry(self.RSOf)
         self.e8.pack(side=tk.LEFT)
         self.e8.insert(0,"10")        
         
-        Skelef= tk.Frame(master)
-        Skelef.pack()
+        self.Skelef= tk.ttk.Labelframe(Page1)
+        self.Skelef.pack()
         self.SkeleTog=tk.Checkbutton(
-            Skelef,text="Enable Skeleton/Defect Analysis",variable=self.SkeleTVAR)
+            self.Skelef,text="Enable Skeleton/Defect Analysis",variable=self.SkeleTVAR)
         self.SkeleTog.pack(side=tk.LEFT)
         self.SkeleTog.select()
         self.l6=tk.Label(
-            Skelef, text="Defect Analysis Edge Protect (Px)"            
+            self.Skelef, text="Defect Analysis Edge Protect (Px)"            
             )
         self.l6.pack(side=tk.LEFT)
-        self.e9 = tk.Entry(Skelef)
+        self.e9 = tk.Entry(self.Skelef)
         self.e9.pack(side=tk.LEFT)
         self.e9.insert(0,"10")          
         
-        fend=tk.Frame(master)
-        fend.pack()
-        self.AcB = tk.Button(fend, text="Accept and Select File", command=self.begin)
+        self.fend=tk.ttk.Labelframe(Page1)
+        self.fend.pack()
+        self.AcB = tk.Button(self.fend, text="Accept and Select File", command=self.begin)
         self.AcB.pack()
-
+        
+        self.ImShow=tk.ttk.Button(Page2,text="Show all Images",command=self.ImShowFun)
+        self.ImShow.grid()
+        
+        self.ImNoShow=tk.ttk.Button(Page2,text="Show no Images",command=self.ImShowNoFun)
+        self.ImNoShow.grid(row=0,column=1)
+        
+        self.ImSave=tk.ttk.Button(Page2,text="Save all Images",command=self.ImSaveFun)
+        self.ImSave.grid(row=0,column=2)
+        
+        self.ImNoSave=tk.ttk.Button(Page2,text="Save no Images",command=self.ImSaveNoFun)
+        self.ImNoSave.grid(row=0,column=3)
+        #crop
+        self.CropShC=tk.Checkbutton(Page2,text='Show Cropped Image',variable=Opt.CropSh)
+        self.CropShC.grid(row=5,columnspan=2,column=0)
+        self.CropSaC=tk.Checkbutton(Page2,text='Save Cropped Image',variable=Opt.CropSa)
+        self.CropSaC.grid(row=5,columnspan=2,column=2)
+        #fft
+        self.FFTShC=tk.Checkbutton(Page2,text='Show FFT Image',variable=Opt.FFTSh)
+        self.FFTShC.grid(row=10,columnspan=2,column=0)
+        self.FFTSaC=tk.Checkbutton(Page2,text='Save FFT Image',variable=Opt.FFTSa)
+        self.FFTSaC.grid(row=10,columnspan=2,column=2)
+        #den
+        self.DenShC=tk.Checkbutton(Page2,text='Show Denoised Image',variable=Opt.DenSh)
+        self.DenShC.grid(row=15,columnspan=2,column=0)
+        self.DenSaC=tk.Checkbutton(Page2,text='Save Denoises Image',variable=Opt.DenSa)
+        self.DenSaC.grid(row=15,columnspan=2,column=2)
+        #Thresh
+        self.ThreshShC=tk.Checkbutton(Page2,text='Show Thresholded Image',variable=Opt.ThreshSh)
+        self.ThreshShC.grid(row=20,columnspan=2,column=0)
+        self.ThreshSaC=tk.Checkbutton(Page2,text='Save Thresholded Image',variable=Opt.ThreshSa)
+        self.ThreshSaC.grid(row=20,columnspan=2,column=2)
+        #RSO
+        self.RSOShC=tk.Checkbutton(Page2,text='Show RSOd Image',variable=Opt.RSOSh)
+        self.RSOShC.grid(row=25,columnspan=2,column=0)
+        self.RSOSaC=tk.Checkbutton(Page2,text='Save RSOd Image',variable=Opt.RSOSa)
+        self.RSOSaC.grid(row=25,columnspan=2,column=2)
+        #label domains
+        self.LabelShC=tk.Checkbutton(Page2,text='Show Labeld Image',variable=Opt.LabelSh)
+        self.LabelShC.grid(row=26,columnspan=2,column=0)
+        self.LabelSaC=tk.Checkbutton(Page2,text='Save Labeld Image',variable=Opt.LabelSa)
+        self.LabelSaC.grid(row=26,columnspan=2,column=2)
+        #Skele
+        self.SkeleShC=tk.Checkbutton(Page2,text='Show Skeletonized Image',variable=Opt.SkeleSh)
+        self.SkeleShC.grid(row=30,columnspan=2,column=0)
+        self.SkeleSaC=tk.Checkbutton(Page2,text='Save Skeletonized Image',variable=Opt.SkeleSa)
+        self.SkeleSaC.grid(row=30,columnspan=2,column=2)
+        
+        
+    def ImShowFun(self):
+        self.CropShC.select()
+        self.FFTShC.select()
+        self.DenShC.select()
+        self.ThreshShC.select()
+        self.RSOShC.select()
+        self.LabelShC.select()
+        self.SkeleShC.select()
+        
+    def ImShowNoFun(self):
+        self.CropShC.deselect()
+        self.FFTShC.deselect()
+        self.DenShC.deselect()
+        self.ThreshShC.deselect()
+        self.RSOShC.deselect()
+        self.LabelShC.deselect()
+        self.SkeleShC.deselect()
+        
+    def ImSaveFun(self):
+        self.CropSaC.select()
+        self.FFTSaC.select()
+        self.DenSaC.select()
+        self.ThreshSaC.select()
+        self.RSOSaC.select()
+        self.LabelSaC.select()
+        self.SkeleSaC.select()
+        
+    def ImSaveNoFun(self):
+        self.CropSaC.deselect()
+        self.FFTSaC.deselect()
+        self.DenSaC.deselect()
+        self.ThreshSaC.deselect()
+        self.RSOSaC.deselect()
+        self.LabelSaC.deselect()
+        self.SkeleSaC.deselect()
+        
     def begin(self):
         
         try:
@@ -198,8 +316,7 @@ class GUI:
         Opt.ThreshToggle=float(self.ThreshTVAR.get())
         Opt.SFRToggle=float(self.RSOTVAR.get())
         Opt.SkeleToggle=float(self.SkeleTVAR.get())
-        
-        
+                
         Opt.CropT=float(self.e2.get())
         Opt.CropL=float(self.e3.get())
         Opt.CropR=float(self.e4.get())
@@ -209,15 +326,31 @@ class GUI:
         Opt.SPCutoff =float(self.e8.get())
         Opt.DefEdge=float(self.e9.get())
         
+        Opt.CropSh=int(Opt.CropSh.get())
+        Opt.FFTSh=int(Opt.FFTSh.get())
+        Opt.DenSh=int(Opt.DenSh.get())
+        Opt.ThreshSh=int(Opt.ThreshSh.get())
+        Opt.RSOSh=int(Opt.RSOSh.get())
+        Opt.LabelSh=int(Opt.LabelSh.get())
+        Opt.SkeleSh=int(Opt.SkeleSh.get())
+        #save images?
+        Opt.CropSa=int(Opt.CropSa.get())
+        Opt.FFTSa=int(Opt.FFTSa.get())
+        Opt.DenSa=int(Opt.DenSa.get())
+        Opt.ThreshSa=int(Opt.ThreshSa.get())
+        Opt.RSOSa=int(Opt.RSOSa.get())
+        Opt.LabelSa=int(Opt.LabelSa.get())
+        Opt.SkeleSa=int(Opt.SkeleSa.get())
         
         root.destroy()
 
 
 root = tk.Tk()
-
-GUI = GUI(root)
+root.title("Image Analysis Software by Moshe V"+Vers)
+gui=GUI(root)
 
 root.mainloop()
+
 #%%
 def azimuthalAverage(image, center=None):
     """
@@ -263,12 +396,12 @@ FOpen=tk.Tk()
 
 currdir = os.getcwd()
 FNFull = tk.filedialog.askopenfilename(parent=FOpen, title='Please select a file', multiple=1)
-
-if len(FNFull) > 0:
-    print("You chose %s" % FNFull)
+FOpen.withdraw()
+#if len(FNFull) > 0:
+#    print("You chose %s" % FNFull)
 
 for ImNum in range(0, len(FNFull)-1 ):
-    FOpen.withdraw()
+    
     im= Image.open(FNFull[ImNum])
     FName = os.path.splitext(FNFull[ImNum])[0]
     FPath, BName= os.path.split(FName)
@@ -370,29 +503,29 @@ for ImNum in range(0, len(FNFull)-1 ):
         PSMax=1/PFMax;
         Output.l0=PSMax 
         # Now save plots
-        
-        Fig=plt.figure()
-        PSD1D=Fig.add_subplot(111)
-        PSD1D.plot(FreqA[1:int(np.floor(Opt.FSize/2))], PowerSpec1d[1:int( np.floor(Opt.FSize/2))])
-        PSD1D.set_yscale('log')
-        PSD1D.set_title('1D Power Spectral Density')
-        PSD1D.set_xlabel('q (1/nm)')
-        PSD1D.set_ylabel('Intensity')
-        PSD1D.set_ylim([np.min(PowerSpec1d)*.5, np.max(PowerSpec1d)*10])
-        Fig.savefig(os.path.join(FPath,"output",BName + "PowerSpecFreq.png"))
-        PSD1D.annotate('Primary Peak at %f' %PFMax, xy=(PFMax, PHMax), xytext=(1.5*PFMax, 1.5*PHMax),
-                    arrowprops=dict(facecolor='black', width=2,headwidth=5),
-                    )
-        Fig.savefig(os.path.join(FPath,"output",BName + "PowerSpecFreqLabel.png"))
-        
-        
-        PS2DImage=Image.fromarray(255/np.max(np.log(PowerSpec2d))*np.log(PowerSpec2d))
-        PS2DImage=PS2DImage.convert(mode="RGB")
-        if ShowImage == 1:
-            PS2DImage.show()
+        if Opt.FFTSh==1 or Opt.FFTSa==1:
+            Fig=plt.figure()
+            PSD1D=Fig.add_subplot(111)
+            PSD1D.plot(FreqA[1:int(np.floor(Opt.FSize/2))], PowerSpec1d[1:int( np.floor(Opt.FSize/2))])
+            PSD1D.set_yscale('log')
+            PSD1D.set_title('1D Power Spectral Density')
+            PSD1D.set_xlabel('q (1/nm)')
+            PSD1D.set_ylabel('Intensity')
+            PSD1D.set_ylim([np.min(PowerSpec1d)*.5, np.max(PowerSpec1d)*10])
+            Fig.savefig(os.path.join(FPath,"output",BName + "PowerSpecFreq.png"))
+            PSD1D.annotate('Primary Peak at %f' %PFMax, xy=(PFMax, PHMax), xytext=(1.5*PFMax, 1.5*PHMax),
+                        arrowprops=dict(facecolor='black', width=2,headwidth=5),
+                        )
+            Fig.savefig(os.path.join(FPath,"output",BName + "PowerSpecFreqLabel.png"))
             
-        PS2DImage.save(os.path.join(FPath,"output",BName + "PowerSpec2d.tif"))
-    
+            
+            PS2DImage=Image.fromarray(255/np.max(np.log(PowerSpec2d))*np.log(PowerSpec2d))
+            PS2DImage=PS2DImage.convert(mode="RGB")
+            if Opt.FFTSh == 1:
+                PS2DImage.show()
+            if Opt.FFTSa==1:
+                PS2DImage.save(os.path.join(FPath,"output",BName + "PowerSpec2d.tif"))
+        
     
     
     #%% Denoise
@@ -410,10 +543,10 @@ for ImNum in range(0, len(FNFull)-1 ):
         LDenImage=Image.fromarray(LDenArray)
         LDenImage=LDenImage.convert(mode="RGB")
         
-        if ShowImage == 1:
+        if Opt.DenSh == 1:
             LDenImage.show()
-            
-        LDenImage.save(os.path.join(FPath,"output",BName + "LDen.tif"))
+        if Opt.DenSa == 1:   
+            LDenImage.save(os.path.join(FPath,"output",BName + "LDen.tif"))
         
         
     #    CLDenArray = skimage.restoration.denoise_tv_chambolle(ArrayIn, Output.Denoise ) # Larger = more denoise
@@ -458,9 +591,10 @@ for ImNum in range(0, len(FNFull)-1 ):
         
         LAdaptThresh = Image.fromarray(100*np.uint8(LAdaptBin))
         LAdaptThresh=LAdaptThresh.convert(mode="RGB")
-        if ShowImage == 1:
+        if Opt.ThreshSh == 1:
             LAdaptThresh.show()
-        LAdaptThresh.save(os.path.join(FPath,"output",BName+"LAThresh.tif"))
+        if Opt.ThreshSa==1:
+            LAdaptThresh.save(os.path.join(FPath,"output",BName+"LAThresh.tif"))
     
     
     
@@ -472,9 +606,10 @@ for ImNum in range(0, len(FNFull)-1 ):
         LAdRSO = skimage.morphology.remove_small_objects(ArrayIn, Opt.SPCutoff)
         ArrayIn=LAdRSO
         LAdRSOI = Image.fromarray(100*np.uint8(LAdRSO)).convert(mode="RGB")
-        if ShowImage == 1:
+        if Opt.RSOSh == 1:
             LAdRSOI.show()
-        LAdRSOI.save(os.path.join(FPath,"output",BName+"LADRSO.tif"))
+        if Opt.RSOSa==1:
+            LAdRSOI.save(os.path.join(FPath,"output",BName+"LADRSO.tif"))
         
         LDPFrac=(LAdRSO==0).sum()
         LLPFrac=(LAdRSO.size-LDPFrac)
@@ -499,14 +634,15 @@ for ImNum in range(0, len(FNFull)-1 ):
         LALabI=scipy.misc.toimage(LALab).convert(mode="RGB") 
         LADomCI=Image.composite(RImage,Image.fromarray(100*np.uint8(ArrayIn)).convert(mode="RGB"),LDomMaskI)
         LALabDomCI=Image.composite(RImage,LALabI,LDomMaskI)
-        if ShowImage == 1:        
+        if Opt.LabelSh == 1:        
             LALabI.show()
             LADomCI.show()
             LALabDomCI.show()
-        LALabI.save(os.path.join(FPath,"output",BName+"LLab.tif"))
-        LADomCI.save(os.path.join(FPath,"output",BName+"LDomC.tif"))
-        LALabDomCI.save(os.path.join(FPath,"output",BName+"LLabDomC.tif"))
-    
+        if Opt.LabelSa == 1:
+            LALabI.save(os.path.join(FPath,"output",BName+"LLab.tif"))
+            LADomCI.save(os.path.join(FPath,"output",BName+"LDomC.tif"))
+            LALabDomCI.save(os.path.join(FPath,"output",BName+"LLabDomC.tif"))
+        
     
     #%% Skeletonization 
     
@@ -515,9 +651,10 @@ for ImNum in range(0, len(FNFull)-1 ):
         
         LASkelI= Image.fromarray(100*LASkel)
         LASkelI=LASkelI.convert(mode="RGB")
-        if ShowImage == 1:
+        if Opt.SkeleSh == 1:
             LASkelI.show()
-        LASkelI.save(os.path.join(FPath,"output",BName+"LSkel.tif"))
+        if Opt.SkeleSa==1:
+            LASkelI.save(os.path.join(FPath,"output",BName+"LSkel.tif"))
     
     #%% Terminal/Junction finder
     
@@ -536,9 +673,10 @@ for ImNum in range(0, len(FNFull)-1 ):
         
         
         LASkelT= Image.fromarray(30*LASkel+100*LTLog)
-        if ShowImage == 1:
+        if Opt.SkeleSh == 1:
             LASkelT.show()
-        LASkelT.save(os.path.join(FPath,"output",BName+"LASkelTerm.tif"))
+        if Opt.SkeleSa==1:
+            LASkelT.save(os.path.join(FPath,"output",BName+"LASkelTerm.tif"))
         
         # Junctions
         
@@ -552,9 +690,10 @@ for ImNum in range(0, len(FNFull)-1 ):
         
         
         LASkelJ= Image.fromarray(30*LASkel+100*LJLog)
-        if ShowImage == 1:
+        if Opt.SkeleSh == 1:
             LASkelJ.show()
-        LASkelJ.save(os.path.join(FPath,"output",BName+"LASkelJunc.tif"))
+        if Opt.SkeleSa==1:
+            LASkelJ.save(os.path.join(FPath,"output",BName+"LASkelJunc.tif"))
     
     #%% Autocorrel. LETS GO
     if Opt.ACToggle==1:
@@ -687,9 +826,10 @@ for ImNum in range(0, len(FNFull)-1 ):
         
         DDenImage=Image.fromarray(DDenArray)
         DDenImage=DDenImage.convert(mode="RGB")
-        if ShowImage == 1:
+        if Opt.DenSh == 1:
             DDenImage.show()
-        DDenImage.save(os.path.join(FPath,"output",BName + "DDen.tif"))
+        if Opt.DenSa==1:
+            DDenImage.save(os.path.join(FPath,"output",BName + "DDen.tif"))
     
     
     #%% Adaptive Local Thresholding over 15 pixels, gauss
@@ -698,9 +838,10 @@ for ImNum in range(0, len(FNFull)-1 ):
         ArrayIn=DAdaptBin;
         DAdaptThresh = Image.fromarray(100*np.uint8(DAdaptBin))
         DAdaptThresh=DAdaptThresh.convert(mode="RGB")
-        if ShowImage == 1:
+        if Opt.ThreshSh == 1:
             DAdaptThresh.show()
-        DAdaptThresh.save(os.path.join(FPath,"output",BName+"DAThresh.tif"))
+        if Opt.ThreshSa==1:
+            DAdaptThresh.save(os.path.join(FPath,"output",BName+"DAThresh.tif"))
     
     #%% Small Feature Removal (May not be necessary)
     if Opt.SFRToggle==1:
@@ -708,9 +849,10 @@ for ImNum in range(0, len(FNFull)-1 ):
         ArrayIn=DAdRSO;
         DAdRSOI = Image.fromarray(100*np.uint8(DAdRSO))
         DAdRSOI=DAdRSOI.convert(mode="RGB")
-        if ShowImage == 1:
+        if Opt.RSOSh == 1:
             DAdRSOI.show()
-        DAdRSOI.save(os.path.join(FPath,"output",BName+"DADRSO.tif"))
+        if Opt.RSOSa==1:
+            DAdRSOI.save(os.path.join(FPath,"output",BName+"DADRSO.tif"))
         
         DLPFrac=(DAdRSO==0).sum()
         DDPFrac=(DAdRSO.size-DLPFrac)
@@ -738,14 +880,15 @@ for ImNum in range(0, len(FNFull)-1 ):
         DALabI=scipy.misc.toimage(DALab).convert(mode="RGB")
         DADomCI=Image.composite(RImage,Image.fromarray(100*np.uint8(ArrayIn)).convert(mode="RGB"),DDomMaskI)
         DALabDomCI=Image.composite(RImage,DALabI,DDomMaskI)
-        if ShowImage == 1:
+        if Opt.LabelSh == 1:
             DALabI.show()
             DADomCI.show()
             DALabDomCI.show()
-        DALabI.save(os.path.join(FPath,"output",BName+"DLab.tif"))
-        DADomCI.save(os.path.join(FPath,"output",BName+"DDomC.tif"))
-        DALabDomCI.save(os.path.join(FPath,"output",BName+"DLabDomC.tif"))
-        
+        if Opt.LabelSa==1:
+            DALabI.save(os.path.join(FPath,"output",BName+"DLab.tif"))
+            DADomCI.save(os.path.join(FPath,"output",BName+"DDomC.tif"))
+            DALabDomCI.save(os.path.join(FPath,"output",BName+"DLabDomC.tif"))
+            
     
     #%% Skeletonization 
     if Opt.SkeleToggle==1:
@@ -753,9 +896,10 @@ for ImNum in range(0, len(FNFull)-1 ):
         
         DASkelI= Image.fromarray(100*DASkel)
         DASkelI=DASkelI.convert(mode="RGB")
-        if ShowImage == 1:
+        if Opt.SkeleSh == 1:
             DASkelI.show()
-        DASkelI.save(os.path.join(FPath,"output",BName+"DSkel.tif"))
+        if Opt.SkeleSa==1:
+            DASkelI.save(os.path.join(FPath,"output",BName+"DSkel.tif"))
         
         #%% Terminal/Junction finder
         
@@ -774,9 +918,10 @@ for ImNum in range(0, len(FNFull)-1 ):
         
         
         DASkelT= Image.fromarray(30*DASkel+100*DTLog)
-        if ShowImage == 1:
+        if Opt.SkeleSh == 1:
             DASkelT.show()
-        DASkelT.save(os.path.join(FPath,"output",BName+"DASkelTerm.tif"))
+        if Opt.SkeleSa==1:
+            DASkelT.save(os.path.join(FPath,"output",BName+"DASkelTerm.tif"))
         
         # Junctions
         
@@ -786,9 +931,10 @@ for ImNum in range(0, len(FNFull)-1 ):
         DJLog = scipy.signal.convolve(DJLog, np.ones((3,3)),mode='same')
         
         DASkelJ= Image.fromarray(30*DASkel+100*DJLog)
-        if ShowImage == 1:
+        if Opt.SkeleSh == 1:
             DASkelJ.show()
-        DASkelJ.save(os.path.join(FPath,"output",BName+"DASkelJunc.tif"))
+        if Opt.SkeleSa==1:
+            DASkelJ.save(os.path.join(FPath,"output",BName+"DASkelJunc.tif"))
     
     #%% Logging
     
