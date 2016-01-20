@@ -12,15 +12,13 @@ Done in Spyder/VStudio2015 Community with Anaconda.
 ToDO: Classify independent function blocks
 """
 #%%
-Vers="0.21"
+Vers="0.22"
 
 #%% Imports
 from PIL import Image
 # 
 import tkinter as tk
-from tkinter import *
-from tkinter.ttk import *
-from tkinter import filedialog
+from tkinter import filedialog, ttk
 
 import os
 import csv
@@ -400,7 +398,7 @@ FOpen.withdraw()
 #if len(FNFull) > 0:
 #    print("You chose %s" % FNFull)
 
-for ImNum in range(0, len(FNFull)-1 ):
+for ImNum in range(0, len(FNFull) ):
     
     im= Image.open(FNFull[ImNum])
     FName = os.path.splitext(FNFull[ImNum])[0]
