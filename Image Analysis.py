@@ -2,7 +2,7 @@
 """
 Created on Tue Jan 19 14:38:16 2016
 
-@author: Moshe
+@author: Moshe Dolejsi MosheDolejsi@uchicago.edu
 """
 
 # -*- coding: utf-8 -*-
@@ -12,13 +12,15 @@ Done in Spyder/VStudio2015 Community with Anaconda.
 ToDO: Classify independent function blocks
 """
 #%%
-Vers="0.22"
+Vers="0.23"
 
 #%% Imports
 from PIL import Image
 # 
 import tkinter as tk
 from tkinter import filedialog, ttk
+
+import lmfit
 
 import os
 import csv
@@ -42,27 +44,31 @@ class Output:
 
 Opt.AutoDenoise=1;
 Opt.AutoThresh=1;
-
 Opt.RSFactor=2;#Not yet implemented
 Opt.RSToggle=0; # nyi
-# need to make a GUI for this as well
+
+Opt.ACToggle=0; #autocorrelation (currently broken)
+Opt.ACCutoff=10;
+Opt.ACSize=50;
+
+#IndividualLog =1; # Write a log for each sample?
+CombLog = 1; # If One write a combined log, if two clean it out each time(don't append)
+ShowImage = 0; # Show images?
+# Following is GUI supported
+Opt.EDToggle=1; #WIP ED/LER
 Opt.FFTToggle=1; #fft
 Opt.DenToggle=1; #Denoising ON
 Opt.ThreshToggle=1; #thresh
 Opt.RSOToggle=1; #remove small objects
 Opt.LabelToggle=1; # label domains
 Opt.SkeleToggle=1; # Skeleton/Defect analysis
-Opt.ACToggle=0; #autocorrelation (currently broken)
-Opt.ACCutoff=10;
-Opt.ACSize=50;
+
 
 Opt.Machine="Unknown";
+Output.Denoise='NA';
 
 
 
-#IndividualLog =1; # Write a log for each sample?
-CombLog = 1; # If One write a combined log, if two clean it out each time(don't append)
-ShowImage = 0; # Show images?
 
 #%% Gui Cus why not?
 class GUI:
@@ -75,6 +81,8 @@ class GUI:
         self.ThreshTVAR=tk.IntVar()
         self.RSOTVAR=tk.IntVar()
         self.SkeleTVAR=tk.IntVar()
+        Opt.EDToggle=tk.IntVar()        
+        
         #show images?
         Opt.CropSh=tk.IntVar()
         Opt.FFTSh=tk.IntVar()
@@ -83,6 +91,7 @@ class GUI:
         Opt.RSOSh=tk.IntVar()
         Opt.LabelSh=tk.IntVar()
         Opt.SkeleSh=tk.IntVar()
+        Opt.EDSh=tk.IntVar()
         #save images?
         Opt.CropSa=tk.IntVar()
         Opt.FFTSa=tk.IntVar()
@@ -91,7 +100,7 @@ class GUI:
         Opt.RSOSa=tk.IntVar()
         Opt.LabelSa=tk.IntVar()
         Opt.SkeleSa=tk.IntVar()
-        
+        Opt.EDSa=tk.IntVar()
         
         Note=tk.ttk.Notebook(master)
         
@@ -209,6 +218,12 @@ class GUI:
         self.e9.pack(side=tk.LEFT)
         self.e9.insert(0,"10")          
         
+        self.EDF=tk.ttk.Labelframe(Page1)
+        self.EDF.pack()
+        self.EDTog=tk.Checkbutton(self.EDF,text="Enable Edge Detection/LER",variable=Opt.EDToggle)
+        self.EDTog.pack()
+        self.EDTog.select()
+        
         self.fend=tk.ttk.Labelframe(Page1)
         self.fend.pack()
         self.AcB = tk.Button(self.fend, text="Accept and Select File", command=self.begin)
@@ -238,7 +253,7 @@ class GUI:
         #den
         self.DenShC=tk.Checkbutton(Page2,text='Show Denoised Image',variable=Opt.DenSh)
         self.DenShC.grid(row=15,columnspan=2,column=0)
-        self.DenSaC=tk.Checkbutton(Page2,text='Save Denoises Image',variable=Opt.DenSa)
+        self.DenSaC=tk.Checkbutton(Page2,text='Save Denoised Image',variable=Opt.DenSa)
         self.DenSaC.grid(row=15,columnspan=2,column=2)
         #Thresh
         self.ThreshShC=tk.Checkbutton(Page2,text='Show Thresholded Image',variable=Opt.ThreshSh)
@@ -248,19 +263,23 @@ class GUI:
         #RSO
         self.RSOShC=tk.Checkbutton(Page2,text='Show RSOd Image',variable=Opt.RSOSh)
         self.RSOShC.grid(row=25,columnspan=2,column=0)
-        self.RSOSaC=tk.Checkbutton(Page2,text='Save RSOd Image',variable=Opt.RSOSa)
+        self.RSOSaC=tk.Checkbutton(Page2,text='Save RSO d Image',variable=Opt.RSOSa)
         self.RSOSaC.grid(row=25,columnspan=2,column=2)
         #label domains
-        self.LabelShC=tk.Checkbutton(Page2,text='Show Labeld Image',variable=Opt.LabelSh)
+        self.LabelShC=tk.Checkbutton(Page2,text='Show Labeled Image',variable=Opt.LabelSh)
         self.LabelShC.grid(row=26,columnspan=2,column=0)
-        self.LabelSaC=tk.Checkbutton(Page2,text='Save Labeld Image',variable=Opt.LabelSa)
+        self.LabelSaC=tk.Checkbutton(Page2,text='Save Labeled Image',variable=Opt.LabelSa)
         self.LabelSaC.grid(row=26,columnspan=2,column=2)
         #Skele
         self.SkeleShC=tk.Checkbutton(Page2,text='Show Skeletonized Image',variable=Opt.SkeleSh)
         self.SkeleShC.grid(row=30,columnspan=2,column=0)
         self.SkeleSaC=tk.Checkbutton(Page2,text='Save Skeletonized Image',variable=Opt.SkeleSa)
         self.SkeleSaC.grid(row=30,columnspan=2,column=2)
-        
+        #EdgeDetect
+        self.EDShC=tk.Checkbutton(Page2,text='Show Edge Detection/LER image',variable=Opt.EDSh)
+        self.EDShC.grid(row=35,columnspan=2,column=0)
+        self.EDSaC=tk.Checkbutton(Page2,text='Save Edge Detection/LER image',variable=Opt.EDSa)
+        self.EDSaC.grid(row=35,columnspan=2,column=2)
         
     def ImShowFun(self):
         self.CropShC.select()
@@ -270,6 +289,7 @@ class GUI:
         self.RSOShC.select()
         self.LabelShC.select()
         self.SkeleShC.select()
+        self.EDShC.select()
         
     def ImShowNoFun(self):
         self.CropShC.deselect()
@@ -279,6 +299,7 @@ class GUI:
         self.RSOShC.deselect()
         self.LabelShC.deselect()
         self.SkeleShC.deselect()
+        self.EDShC.deselect()
         
     def ImSaveFun(self):
         self.CropSaC.select()
@@ -288,6 +309,7 @@ class GUI:
         self.RSOSaC.select()
         self.LabelSaC.select()
         self.SkeleSaC.select()
+        self.EDSaC.select()
         
     def ImSaveNoFun(self):
         self.CropSaC.deselect()
@@ -297,6 +319,7 @@ class GUI:
         self.RSOSaC.deselect()
         self.LabelSaC.deselect()
         self.SkeleSaC.deselect()
+        self.EDSaC.deselect()
         
     def begin(self):
         
@@ -309,12 +332,13 @@ class GUI:
         except:
             pass
         
-        Opt.FFTToggle=float(self.fftTVAR.get())
-        Opt.DenToggle=float(self.DenTVAR.get())
-        Opt.ThreshToggle=float(self.ThreshTVAR.get())
-        Opt.SFRToggle=float(self.RSOTVAR.get())
-        Opt.SkeleToggle=float(self.SkeleTVAR.get())
-                
+        Opt.FFTToggle=int(self.fftTVAR.get())
+        Opt.DenToggle=int(self.DenTVAR.get())
+        Opt.ThreshToggle=int(self.ThreshTVAR.get())
+        Opt.SFRToggle=int(self.RSOTVAR.get())
+        Opt.SkeleToggle=int(self.SkeleTVAR.get())
+        Opt.EDToggle=int(Opt.EDToggle.get())        
+        
         Opt.CropT=float(self.e2.get())
         Opt.CropL=float(self.e3.get())
         Opt.CropR=float(self.e4.get())
@@ -331,6 +355,7 @@ class GUI:
         Opt.RSOSh=int(Opt.RSOSh.get())
         Opt.LabelSh=int(Opt.LabelSh.get())
         Opt.SkeleSh=int(Opt.SkeleSh.get())
+        Opt.EDSh=int(Opt.EDSh.get())
         #save images?
         Opt.CropSa=int(Opt.CropSa.get())
         Opt.FFTSa=int(Opt.FFTSa.get())
@@ -339,6 +364,7 @@ class GUI:
         Opt.RSOSa=int(Opt.RSOSa.get())
         Opt.LabelSa=int(Opt.LabelSa.get())
         Opt.SkeleSa=int(Opt.SkeleSa.get())
+        Opt.EDSa=int(Opt.EDSa.get())
         
         root.destroy()
 
@@ -468,8 +494,7 @@ for ImNum in range(0, len(FNFull) ):
     
     #%% FFT for period ref 
     # http://www.astrobetter.com/blog/2010/03/03/fourier-transforms-of-images-in-python/
-    # pyFAI ? AI=pyFAI.load(CropArray)
-    #PowerSpec1d=AI.integrate1d(CropArray,100)
+    # 
     
     if Opt.FFTToggle==1:
     
@@ -509,19 +534,17 @@ for ImNum in range(0, len(FNFull) ):
             PSD1D.set_title('1D Power Spectral Density')
             PSD1D.set_xlabel('q (1/nm)')
             PSD1D.set_ylabel('Intensity')
-            PSD1D.set_ylim([np.min(PowerSpec1d)*.5, np.max(PowerSpec1d)*10])
-            Fig.savefig(os.path.join(FPath,"output",BName + "PowerSpecFreq.png"))
-            PSD1D.annotate('Primary Peak at %f' %PFMax, xy=(PFMax, PHMax), xytext=(1.5*PFMax, 1.5*PHMax),
-                        arrowprops=dict(facecolor='black', width=2,headwidth=5),
-                        )
-            Fig.savefig(os.path.join(FPath,"output",BName + "PowerSpecFreqLabel.png"))
-            
-            
+            PSD1D.set_ylim([np.min(PowerSpec1d)*.5, np.max(PowerSpec1d)*10])          
             PS2DImage=Image.fromarray(255/np.max(np.log(PowerSpec2d))*np.log(PowerSpec2d))
             PS2DImage=PS2DImage.convert(mode="RGB")
             if Opt.FFTSh == 1:
                 PS2DImage.show()
             if Opt.FFTSa==1:
+                Fig.savefig(os.path.join(FPath,"output",BName + "PowerSpecFreq.png"))
+                PSD1D.annotate('Primary Peak at %f' %PFMax, xy=(PFMax, PHMax), xytext=(1.5*PFMax, 1.5*PHMax),
+                        arrowprops=dict(facecolor='black', width=2,headwidth=5),
+                        )
+                Fig.savefig(os.path.join(FPath,"output",BName + "PowerSpecFreqLabel.png"))
                 PS2DImage.save(os.path.join(FPath,"output",BName + "PowerSpec2d.tif"))
         
     
@@ -576,7 +599,7 @@ for ImNum in range(0, len(FNFull) ):
     #OtsuThresh.save(os.path.join(FPath,"output",BName + "LOtsu.tif") )
     
     #%% Adaptive Local Thresholding over 15 pixels, gauss
-    if Opt.ThreshToggle==1:
+    if Opt.ThreshToggle==1 or Opt.LWRToggle==1: # also needed if we do canny
         if Opt.AutoThresh==1:    
             Output.Thresh=Opt.ThreshWeight*(Output.l0/Opt.NmPP )
             Output.Thresh=np.floor( Output.Thresh )
@@ -584,6 +607,7 @@ for ImNum in range(0, len(FNFull) ):
         else:
             Output.Thresh=Opt.ThreshWeight
             
+    if Opt.ThreshToggle==1:
         LAdaptBin=skimage.filters.threshold_adaptive(ArrayIn,Output.Thresh ,'gaussian')
         ArrayIn=LAdaptBin;
         
@@ -692,8 +716,72 @@ for ImNum in range(0, len(FNFull) ):
             LASkelJ.show()
         if Opt.SkeleSa==1:
             LASkelJ.save(os.path.join(FPath,"output",BName+"LASkelJunc.tif"))
+    #%% ED
+    # Tamar recommended Canny edge so let's try it eh? 
+    # We don't use the guassian blur because the denoising/thresholding does this for us
     
-    #%% Autocorrel. LETS GO
+    if Opt.EDToggle==1:
+        class ED:
+            pass
+        
+        ED.Array=skimage.feature.canny(ArrayIn,sigma=0) # edge detect array
+        ED.Image = Image.fromarray(100*np.uint8(ED.Array))
+        ED.Image=ED.Image.convert(mode="RGB")
+        
+#        # 1st way find distance from each point to edge
+#        LDistA=scipy.ndimage.morphology.distance_transform_edt( (1-LEDA)) #
+#        LDistA=LDistA*LASkel #Mask out with skeleton so we only look at distances from center
+#        LDistHist, LDistBin=np.histogram(LDistA,bins=100)
+#        LDistHist=LDistHist[1:] # remove the 0 distance fake data
+#        LDistBin=LDistBin[1:]           
+        
+        #2nd way. Find distance from each point to center. mask w edge
+        ED.DistA2=scipy.ndimage.morphology.distance_transform_edt( (1-LASkel)) #
+        ED.DistA2=ED.DistA2*ED.Array #Mask out with edges. Look at distance from edge
+        ED.Dist, ED.DistCnt = np.unique(ED.DistA2,return_counts=True) # Save the distances, and their counts
+        ED.Dist=ED.Dist[1:];ED.DistCnt=ED.DistCnt[1:] # Ignore the number of zero distance points
+        ED.Dist=ED.Dist*Opt.NmPP # Make the distances nanometers
+        ED.Gmod=lmfit.models.GaussianModel()
+        ED.GPars=ED.Gmod.guess(ED.DistCnt, x=ED.Dist)
+        
+        ED.GFit=ED.Gmod.fit(ED.DistCnt,ED.GPars,x=ED.Dist)
+        Output.LER3Sig=3*ED.GFit.params.valuesdict()['sigma'] # extract the sigma
+        Output.LERMean=ED.GFit.params.valuesdict()['center'] # and mean of gauss fit
+        ED.Fig=plt.figure()
+        ED.FigPlt=ED.Fig.add_subplot(211)
+        ED.FigPlt.set_title('Line Edge Roughness fitting, \n Mean Line Dist is %.2f, 3$\sigma$ is %.2f' %(Output.LERMean, Output.LER3Sig))
+        ED.FigPlt.set_xlabel('Distance (nm)')
+        ED.FigPlt.set_ylabel('Counts (arbitrary)')        
+        ED.FigPlt.plot(ED.Dist, ED.DistCnt,         'bo')
+        ED.FigPlt.plot(ED.Dist, ED.GFit.best_fit, 'r-')
+        
+        ED.DistFlat=ED.DistA2.ravel()[np.flatnonzero(ED.DistA2)] # just collect all the distances into a 1d array, dropping any zero distances
+        ED.DistFlat*=Opt.NmPP # convert to nanometers
+        ED.DistKDE=scipy.stats.gaussian_kde(ED.DistFlat) # this smooths the data by dropping gaussians
+        ED.DistX=np.linspace(0,ED.DistFlat.max(),100)
+        ED.DistY=ED.DistKDE(ED.DistX) #smoothed obviously
+        ED.GFitS=ED.Gmod.fit(ED.DistY,ED.GPars,x=ED.DistX) #S FOR SMOOTHEDDDD
+        Output.LER3SigS=3*ED.GFitS.params.valuesdict()['sigma'] # extract the sigma
+        Output.LERMeanS=ED.GFitS.params.valuesdict()['center'] # and mean of gauss fit         
+        
+        ED.FigPlt2=ED.Fig.add_subplot(212)
+        ED.FigPlt2.set_title('Line Edge Roughness fitting (Smoothed), \n Mean Line Dist is %.2f, 3$\sigma$ is %.2f' %(Output.LERMeanS, Output.LER3SigS))
+        ED.FigPlt2.set_xlabel('Distance (nm)')
+        ED.FigPlt2.set_ylabel('Counts (arbitrary)')        
+        ED.FigPlt2.plot(ED.DistX, ED.GFitS.best_fit, 'r-')
+        ED.FigPlt2.plot(ED.DistX,ED.DistKDE(ED.DistX), 'bo')
+        ED.Fig.tight_layout()
+        
+
+        if Opt.EDSh == 1: #REPLACE show
+            ED.Fig.show()
+            ED.Image.show()
+        if Opt.EDSa==1: #Replace save
+            ED.Fig.savefig(os.path.join(FPath,"output",BName + "LER.png"))
+            ED.Image.save(os.path.join(FPath,"output",BName+"ED.tif"))
+            
+    
+    #%% Autocorrel. LETS GO, Currently Not Working
     if Opt.ACToggle==1:
     
         class AutoCor:
@@ -978,6 +1066,10 @@ for ImNum in range(0, len(FNFull) ):
             'LTerminals/nm^2',
             'LJunctions',
             'Ljunctions/nm^2',
+            'LER Dist nm',
+            'LER 3Sig nm',
+            'LER Dist KDE nm',
+            'LER 3Sig KDE nm',
             'Inverse Phase Images',
             'DDom Index',
             'DDom Fraction',
@@ -1006,6 +1098,10 @@ for ImNum in range(0, len(FNFull) ):
             LTCA,
             LJCount,
             LJCA,
+            Output.LERMean,
+            Output.LER3Sig,
+            Output.LERMeanS,
+            Output.LER3SigS,
             '(Names reference original!)',
             DDomI,
             DDomFrac,
