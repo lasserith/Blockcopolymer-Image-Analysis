@@ -8,6 +8,7 @@ Created on Wed Jan 20 15:29:51 2016
 Vers="0.1"
 
 #%%
+from PIL import Image
 import lmfit
 
 import os
@@ -23,13 +24,13 @@ import exifread #needed to read tif tags
 import scipy
 
 #%%
-def AutoDetect( FNFull ):
+def AutoDetect( FileName , Opt ):
     """
     Attempt to autodetect the instrument used to collect the image
     Currently supports the Zeiss Merlin
     V0.1
     """
-    SkimFile = open(FNFull[ImNum],'rb')
+    SkimFile = open( FileName ,'rb')
     MetaF=exifread.process_file(SkimFile)
     SkimFile.close()
     try:
@@ -43,6 +44,23 @@ def AutoDetect( FNFull ):
         print("Instrument was autodetected as %s, NmPP is %f \n" % (Opt.Machine ,Opt.NmPP) )
     else:
         print("Instrument was not detected, and NmPP was not set. Please set NmPP and rerun")
+    return;
+#%% Crop
+    """
+    Self explanatory
+    V0.1
+    """
+
+def Crop( imarray , Opt ):
+
+    
+    # Crop for zeiss as below
+    # 768 : 718 : 50
+    # 3072 : 2875 : ~200
+    (IMH, IMW) =imarray.shape
+    CropArray=imarray[int(0+Opt.CropT):int(IMH-Opt.CropB),int(Opt.CropL):int(IMW-Opt.CropR)]
+    (CIMH,CIMW)=CropArray.shape
+    return (CropArray, CIMH, CIMW);
     
 #%%
 def azimuthalAverage(image, center=None):
@@ -54,6 +72,7 @@ def azimuthalAverage(image, center=None):
              None, which then uses the center of the image (including 
              fracitonal pixels).
     http://www.astrobetter.com/blog/2010/03/03/fourier-transforms-of-images-in-python/
+    v0.1
     """
     # Calculate the indices from the image
     y, x = np.indices(image.shape)
@@ -83,3 +102,410 @@ def azimuthalAverage(image, center=None):
     radial_prof = tbin / nr
 
     return radial_prof
+
+#%%
+def FFT( im, Opt):
+    """
+    Calculate the FFT, and the PSD to find l0
+    
+    Fixed the offset
+    v0.2
+    """
+   # FSize=np.min( im.shape )
+    FSize=500;
+    FourierArray=np.fft.fft2( im, s=(FSize,FSize) );
+    FreqA=np.fft.fftfreq(FSize, d=Opt.NmPP);
+#
+    F2Array=np.fft.fftshift(FourierArray);    SpaceA=1/FreqA;
+    PowerSpec2d= np.abs( F2Array )**2;
+    PowerSpec1d= azimuthalAverage(PowerSpec2d);
+    
+    Peak=scipy.signal.find_peaks_cwt(PowerSpec1d[0:int( np.floor(FSize/2))], np.arange(5,10),);  
+    PFreq=np.zeros(np.size(Peak))
+    Pspace=np.zeros(np.size(Peak));
+    PHeight=np.zeros(np.size(Peak));
+    for i in range(0, np.size(Peak)):
+        PFreq[i]=FreqA[Peak[i]]
+        Pspace[i]=1/FreqA[Peak[i]]
+        PHeight[i]=PowerSpec1d[Peak[i]]
+        print("Peak %d found at %f \n" % (i, Pspace[i]))
+    if Peak[0] < 4: # if first peak is found at L= infty
+        PHeight[0]=0; # dont consider it for characteristic peak
+
+    
+    
+    PHMax=PHeight.max()
+    PFMax=(PFreq*(PHMax==PHeight)).max()
+    PSMax=1/PFMax;
+    # Now save plots
+    if Opt.FFTSh==1 or Opt.FFTSa==1:
+        Fig=plt.figure()
+        PSD1D=Fig.add_subplot(111)
+        PSD1D.plot(FreqA[0:int(np.floor(FSize/2))], PowerSpec1d[0:int( np.floor(FSize/2))])
+        PSD1D.set_yscale('log')
+        PSD1D.set_title('1D Power Spectral Density')
+        PSD1D.set_xlabel('q (1/nm)')
+        PSD1D.set_ylabel('Intensity')
+        PSD1D.set_ylim([np.min(PowerSpec1d)*.5, np.max(PowerSpec1d)*10])          
+        PS2DImage=Image.fromarray(255/np.max(np.log(PowerSpec2d))*np.log(PowerSpec2d))
+        PS2DImage=PS2DImage.convert(mode="RGB")
+        if Opt.FFTSh == 1:
+            PS2DImage.show()
+        if Opt.FFTSa==1:
+            Fig.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "PowerSpecFreq.png"))
+            PSD1D.annotate('Primary Peak at %f' %PFMax, xy=(PFMax, PHMax), xytext=(1.5*PFMax, 1.5*PHMax),
+                    arrowprops=dict(facecolor='black', width=2,headwidth=5),
+                    )
+            Fig.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "PowerSpecFreqLabel.png"))
+            PS2DImage.save(os.path.join(Opt.FPath,"output",Opt.BName + "PowerSpec2d.tif"))
+    return(PSMax);
+#%%
+def Denoising(im, Opt, l0):
+    """
+    Use TV Bregman to denoise the image
+    v0.1
+    """
+    if Opt.AutoDenoise==1:
+        DenoiseWeight=( Opt.DenWeight/ (l0/Opt.NmPP )); # 
+    else:
+        DenoiseWeight=Opt.DenWeight
+
+    DenArray = skimage.restoration.denoise_tv_bregman(im,DenoiseWeight ) # smaller = more denoise
+    DenArray *= 255
+
+    
+    DenImage=Image.fromarray(DenArray)
+    DenImage=DenImage.convert(mode="RGB")
+    
+    if Opt.DenSh == 1:
+        DenImage.show()
+    if Opt.DenSa == 1:   
+        DenImage.save(os.path.join(Opt.FPath,"output",Opt.BName + "Den.tif"))
+    
+    return( DenArray , DenoiseWeight )
+#%%
+def Thresholding(im, Opt, l0):
+    """
+    Adaptive Local thresholding
+    returns the thresholded image and the actual weight used
+    v0.1
+    """
+    if Opt.AutoThresh==1:    
+        Thresh=Opt.ThreshWeight*(l0/Opt.NmPP )
+        Thresh=np.floor( Thresh )
+        Thresh=np.max( ( Thresh, 1))
+    else:
+        Thresh=Opt.ThreshWeight
+        
+    AdaptBin=skimage.filters.threshold_adaptive(im,Thresh ,'gaussian')
+    
+    
+    AdaptThresh = Image.fromarray(100*np.uint8(AdaptBin))
+    AdaptThresh=AdaptThresh.convert(mode="RGB")
+    if Opt.ThreshSh == 1:
+        AdaptThresh.show()
+    if Opt.ThreshSa==1:
+        AdaptThresh.save(os.path.join(Opt.FPath,"output",Opt.BName+"AThresh.tif"))
+    return(AdaptBin,Thresh)
+#%%
+def RSO(im, Opt):
+    """
+    Remove small Objects under size SPCutoff
+    v0.1
+    """
+    RSO = skimage.morphology.remove_small_objects(im, Opt.SPCutoff)
+    RSOI = Image.fromarray(100*np.uint8(RSO)).convert(mode="RGB")
+    if Opt.RSOSh == 1:
+        RSOI.show()
+    if Opt.RSOSa==1:
+        RSOI.save(os.path.join(Opt.FPath,"output",Opt.BName+"LADRSO.tif"))
+    return(RSO);
+        
+#%% Following is Analysis as Opposed to image prep, may split in future
+def Label(im, Opt):
+    """
+    Label connected domains, calculate area fractions of dominant domain
+    v0.1
+    """
+    BCount=(im==0).sum()
+    WCount=(im.size-BCount)
+    BFrac=BCount/(im.size)
+    WFrac=WCount/(im.size)
+    LabArray, LNumFeat = scipy.ndimage.measurements.label(im)
+    WDomFrac=(LabArray==1).sum()/(WCount)
+    WDomI=1
+    for i in range(2,LNumFeat):
+        TestFrac=(LabArray==i).sum()/(WCount)
+        if TestFrac > WDomFrac:
+            WDomFrac=TestFrac
+            WDomI=i
+            
+    #print("Dominant index %d is %f of total" % (LDomI, LDomFrac))
+    WDomMask= ( LabArray==WDomI )*255;
+    WDomMaskI=Image.fromarray(WDomMask)
+    WDomMaskI=WDomMaskI.convert(mode="L")
+    
+    (CIMH,CIMW)=im.shape
+    
+    RImage=Image.new('RGB',(CIMW,CIMH),'Red')
+
+    WLabI=scipy.misc.toimage(LabArray).convert(mode="RGB") 
+    WDomCI=Image.composite(RImage,Image.fromarray(100*np.uint8(im)).convert(mode="RGB"),WDomMaskI)
+    WLabDomCI=Image.composite(RImage,WLabI,WDomMaskI)
+    if Opt.LabelSh == 1:        
+        WLabI.show()
+        WDomCI.show()
+        WLabDomCI.show()
+    if Opt.LabelSa == 1:
+        WLabI.save(os.path.join(Opt.FPath,"output",Opt.BName+"Lab.tif"))
+        WDomCI.save(os.path.join(Opt.FPath,"output",Opt.BName+"DomC.tif"))
+        WDomCI.save(os.path.join(Opt.FPath,"output",Opt.BName+"LabDomC.tif"))    
+    return(WFrac, BFrac, WDomI, WDomFrac);
+    
+#%%
+def Skeleton(im,Opt):
+    """
+    Returns a skeleton array for future use, as well as performs defect analysis
+    (Diagonals count as connected)
+    v0.1
+    """
+    (CIMH,CIMW)=im.shape
+    SkelArray= skimage.morphology.skeletonize(im)
+    LASkelI= Image.fromarray(100*SkelArray)
+    LASkelI=LASkelI.convert(mode="RGB")
+    if Opt.SkeleSh == 1:
+        LASkelI.show()
+    if Opt.SkeleSa==1:
+        LASkelI.save(os.path.join(Opt.FPath,"output",Opt.BName+"Skel.tif"))
+
+    
+    AdCount=scipy.signal.convolve(SkelArray, np.ones((3,3)),mode='same')
+    # Remove Opt.DefEdge pixels at edge to prevent edge effects. be sure to account for area difference
+    
+    AdCount[0:int(Opt.DefEdge-1),:]=0; AdCount[int(CIMH+1-Opt.DefEdge):int(CIMH),:]=0; 
+    AdCount[:,0:int(Opt.DefEdge-1)]=0; AdCount[:,int(CIMW+1-Opt.DefEdge):int(CIMW)]=0; 
+    DefArea=( CIMW-2*Opt.DefEdge)*( CIMH-2*Opt.DefEdge)*Opt.NmPP*Opt.NmPP; # Area in nm^2
+    
+    # Terminal
+    TLog = ((AdCount==2) * (SkelArray== 1)) # if next to 1 + on skel
+    TCount = (TLog==1).sum()
+    TCA=TCount/DefArea
+    TLog = scipy.signal.convolve(TLog, np.ones((3,3)),mode='same')
+    
+    
+    SkelT= Image.fromarray(30*SkelArray+100*TLog)
+    if Opt.SkeleSh == 1:
+        SkelT.show()
+    if Opt.SkeleSa==1:
+        SkelT.save(os.path.join(Opt.FPath,"output",Opt.BName+"SkelTerm.tif"))
+    
+    # Junctions
+    
+    JLog = ((AdCount > 3) * (SkelArray== 1)) # if next to >2 + on skel
+    
+    SkelAC = SkelArray-JLog # Pruned Skel to use for autocorrelation
+    
+    JCount = (JLog==1).sum()
+    JCA=JCount/DefArea
+    JLog = scipy.signal.convolve(JLog, np.ones((3,3)),mode='same')
+    
+    
+    SkelJ= Image.fromarray(30*SkelArray+100*JLog)
+    if Opt.SkeleSh == 1:
+        SkelJ.show()
+    if Opt.SkeleSa==1:
+        SkelJ.save(os.path.join(Opt.FPath,"output",Opt.BName+"SkelJunc.tif"))
+    
+    return(SkelArray, SkelAC, TCount, TCA, JCount, JCA)
+#%% Edge Detect
+def EdgeDetect(im, Opt, SkeleArray):
+    """
+    Detects edges using a canny edge detector with no blur. Then calculates LER
+    v0.1
+    """
+    
+    EDArray=(im-skimage.morphology.binary_erosion(im, np.ones((3,3)))) #find my edges (erode image and subtract from orig image)
+    EDImage = Image.fromarray(100*np.uint8(EDArray))
+    EDImage=EDImage.convert(mode="RGB")
+    
+#        # 1st way find distance from each point to edge
+#        LDistA=scipy.ndimage.morphology.distance_transform_edt( (1-LEDA)) #
+#        LDistA=LDistA*LASkel #Mask out with skeleton so we only look at distances from center
+#        LDistHist, LDistBin=np.histogram(LDistA,bins=100)
+#        LDistHist=LDistHist[1:] # remove the 0 distance fake data
+#        LDistBin=LDistBin[1:]           
+    
+    #2nd way. Find distance from each point to center. mask w edge
+    EDDistA2=scipy.ndimage.morphology.distance_transform_edt( (1-SkeleArray)) #
+    EDDistA2=EDDistA2*EDArray #Mask out with edges. Look at distance from edge
+    EDDist, EDDistCnt = np.unique(EDDistA2,return_counts=True) # Save the distances, and their counts
+    EDDist=EDDist[1:];EDDistCnt=EDDistCnt[1:] # Ignore the number of zero distance points
+    EDDist=EDDist*Opt.NmPP # Make the distances nanometers
+    EDGmod=lmfit.models.GaussianModel()
+    EDGPars=EDGmod.guess(EDDistCnt, x=EDDist)
+    
+    EDGFit=EDGmod.fit(EDDistCnt,EDGPars,x=EDDist)
+    LER3Sig=3*EDGFit.params.valuesdict()['sigma'] # extract the sigma
+    LERMean=EDGFit.params.valuesdict()['center'] # and mean of gauss fit
+    EDFig=plt.figure()
+    EDFigPlt=EDFig.add_subplot(211)
+    EDFigPlt.set_title('Line Width Roughness fitting, \n Mean Line Dist is %.2f, 3$\sigma$ is %.2f' %(LERMean, LER3Sig))
+    EDFigPlt.set_xlabel('Distance (nm)')
+    EDFigPlt.set_ylabel('Counts (arbitrary)')        
+    EDFigPlt.plot(EDDist, EDDistCnt,         'bo')
+    EDFigPlt.plot(EDDist, EDGFit.best_fit, 'r-')
+    
+    EDDistFlat=EDDistA2.ravel()[np.flatnonzero(EDDistA2)] # just collect all the distances into a 1d array, dropping any zero distances
+    EDDistFlat*=Opt.NmPP # convert to nanometers
+    EDDistKDE=scipy.stats.gaussian_kde(EDDistFlat) # this smooths the data by dropping gaussians
+    EDDistX=np.linspace(0,EDDistFlat.max(),100)
+    EDDistY=EDDistKDE(EDDistX) #smoothed obviously
+    EDGFitS=EDGmod.fit(EDDistY,EDGPars,x=EDDistX) #S FOR SMOOTHEDDDD
+    LER3SigS=3*EDGFitS.params.valuesdict()['sigma'] # extract the sigma
+    LERMeanS=EDGFitS.params.valuesdict()['center'] # and mean of gauss fit         
+    
+    EDFigPlt2=EDFig.add_subplot(212)
+    EDFigPlt2.set_title('1/2th Line Width Roughness fitting (Smoothed), \n Mean Line Dist is %.2f, 3$\sigma$ is %.2f' %(LERMeanS, LER3SigS))
+    EDFigPlt2.set_xlabel('Distance (nm)')
+    EDFigPlt2.set_ylabel('Counts (arbitrary)')        
+    EDFigPlt2.plot(EDDistX, EDGFitS.best_fit, 'r-')
+    EDFigPlt2.plot(EDDistX,EDDistKDE(EDDistX), 'bo')
+    EDFig.tight_layout()
+    
+
+    if Opt.EDSh == 1: #REPLACE show
+        EDFig.show()
+        EDImage.show()
+    if Opt.EDSa==1: #Replace save
+        EDFig.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "LER.png"))
+        EDImage.save(os.path.join(Opt.FPath,"output",Opt.BName+"ED.tif"))
+    return(LERMean,LER3Sig,LERMeanS,LER3SigS);
+    
+#%% Autocorrelation T_T
+def Autocorrelation(im,Opt, SkeleArray):
+    """
+    Autocorrelation is a WIP still
+    V0
+    """
+    class AutoCor:
+        pass
+    # Struct Tens
+#    LStructTen=skimage.feature.structure_tensor(CropArray, sigma=1) # Take original image and calc derivatives
+#    
+#    LAng=np.arctan2(LStructTen[2],LStructTen[0]) # use arctan dy/dx to find direction of line Rads
+#    LAngS=LAng*LSkelAC #Mask out with Skeleton
+    LC1stDy = scipy.ndimage.sobel(im, axis=0, mode='constant', cval=0)
+    LC1stDx = scipy.ndimage.sobel(im, axis=1, mode='constant', cval=0) 
+    
+    LAngD=np.float32(np.arctan2(LC1stDy,LC1stDx))
+    LAnGDS=LAngD*SkeleArray
+
+    
+    
+    """
+    Note that angles are 0<->pi/2 will use trick later to correct for  
+    """
+    
+    AutoCor.SkI, AutoCor.SkJ=np.nonzero(SkeleArray); #Get indexes of nonzero try LASkel/LSKelAC
+    AutoCor.n=np.zeros(Opt.ACCutoff)
+    
+    AutoCor.RandoList=np.random.choice(len(AutoCor.SkI), len(AutoCor.SkI), replace=False)
+    AutoCor.h=np.zeros(Opt.ACCutoff)
+    AutoCor.Indexes=np.array([[-1,-1],[0,-1],[1,-1],[-1,0],[1,0],[-1,1],[0,1],[1,1]]) # for picking nearby
+    AutoCor.IndAngles=np.array([135,90,45,180,0,-135,-90,-45]) #angle of the above in degrees
+    AutoCor.IndAngles=AutoCor.IndAngles*np.pi/180 # radians
+    AutoCor.Ind=0;
+    
+    while AutoCor.Ind < Opt.ACSize : # How many points to start at to calc auto correlate
+        # The following is the AutoCor Loop
+        AutoCor.ntemp=np.zeros(Opt.ACCutoff) # How many times have calculated the n=Index+1 correlation?
+        AutoCor.htemp=np.zeros( Opt.ACCutoff ) # what is the current sum value of the correlation(divide by ntemp at end)
+        AutoCor.angtemp=np.zeros(Opt.ACCutoff+1) # What is the current angle, 1 prev angle, etc etc
+        AutoCor.BBI = 0 # not necessary but helpful to remind us start = BBI 0
+        AutoCor.SAD=0;
+        #First pick a point, find it's angle
+        AutoCor.CCOORD=[AutoCor.SkI[AutoCor.RandoList[AutoCor.Ind]] ,
+                        AutoCor.SkJ[AutoCor.RandoList[AutoCor.Ind]] ]
+        
+        AutoCor.angtemp[0]=LAnGDS[ tuple(AutoCor.CCOORD) ]
+        
+        AutoCor.BBI=1 #now we at first point... 
+        AutoCor.PastN=9 # No previous point to worry about moving back to
+                      
+        while AutoCor.BBI <= 2*(Opt.ACCutoff): # How far to walk BackBoneIndex total points is 2*Cuttoff+1 (1st point)
+            np.roll(AutoCor.angtemp,1) # now 1st angle is index 1 instead of 0 etc
+            #what is our next points Cooard?
+            print('%F' % AutoCor.BBI)
+            AutoCor.WalkDirect=np.random.choice(8,8,replace=False) # pick a spot to move
+            for TestNeighbor in np.arange(8):
+                AutoCor.COORD=AutoCor.Indexes[AutoCor.WalkDirect[TestNeighbor]]+AutoCor.CCOORD
+                if np.array( (AutoCor.COORD < SkeleArray.shape) ).all(): # If we are still in bounds
+                    if (SkeleArray[ tuple(AutoCor.COORD)] == 1 & AutoCor.WalkDirect[TestNeighbor] != 7-AutoCor.PastN): # if we have a valid move
+                        if AutoCor.BBI==1: # And its the first move we need to fix 1st angle
+                            if AutoCor.angtemp[1] <=0: # if angle is neg
+                                if( np.abs( (AutoCor.angtemp[1]+np.pi)-AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]]) <=
+                            np.abs(AutoCor.angtemp[1]-AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]])):
+                                    #is angle + pi closer?
+                                    AutoCor.angtemp[1]+=np.pi;
+                            else: # if angle is postive
+                                if( np.abs( (AutoCor.angtemp[1]-np.pi)-AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]]) <=
+                            np.abs(AutoCor.angtemp[1]-AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]])):
+                                    #is angle + pi closer?
+                                    AutoCor.angtemp[1]+=np.pi;
+                        AutoCor.PastN=AutoCor.WalkDirect[TestNeighbor];
+                        del TestNeighbor;
+                        AutoCor.CCOORD=AutoCor.COORD; # move there
+                        AutoCor.angtemp[0]=LAnGDS[tuple(AutoCor.CCOORD)] # set angle to new angle
+                        break # break the for loop
+            else:
+                # Need to break out of the backbone loop as well...
+                AutoCor.SAD=1; # because
+                del TestNeighbor
+                    
+            if AutoCor.SAD==1:
+                # Decide if I count this or not...
+                AutoCor.SAD=0;
+                break
+            
+            # BUT WAIT WE NEED TO FIX THE NEW ANGLE TOO! Keep it within pi of previous
+            if AutoCor.angtemp[0] <=0 and ( np.abs( (AutoCor.angtemp[0]+np.pi)-AutoCor.angtemp[1]) <=
+            np.abs(AutoCor.angtemp[0]-AutoCor.angtemp[1])):
+                    #is angle + pi closer?
+                    AutoCor.angtemp[0]+=np.pi;
+            elif AutoCor.angtemp[0] > 0 and (np.abs( (AutoCor.angtemp[0]-np.pi)-AutoCor.angtemp[1]) <=
+            np.abs(AutoCor.angtemp[0]-AutoCor.angtemp[1])):
+                    #is angle + pi closer?
+                    AutoCor.angtemp[1]+=np.pi;           
+                        
+#            print(np.array_str(AutoCor.CCOORD))        
+            for AutoCor.PI in range (0,Opt.ACCutoff): # Persistance Index, 0 = 1 dist etc
+                #Calculating autocorrelation loop
+                if (AutoCor.BBI > 0 & AutoCor.BBI%(AutoCor.PI+1)==0):
+                    
+                    AutoCor.htemp[AutoCor.PI]+=np.cos(AutoCor.angtemp[0]-AutoCor.angtemp[AutoCor.PI+1]) # dotproduct is cos
+                    AutoCor.ntemp[AutoCor.PI]+=1
+            
+                    
+            #FinD next point
+            AutoCor.BBI+=1
+            
+            if AutoCor.BBI==2*(Opt.ACCutoff): # we found all our points!
+                AutoCor.h +=AutoCor.htemp
+                AutoCor.n +=AutoCor.ntemp
+                AutoCor.Ind += 1
+    return;
+#%% Param Optimizer
+def ParamOptimizer(ArrayIn, Opt, l0, Params):
+    Opt.DenWeight=Params[0]
+    Opt.ThreshWeight=Params[1]
+    Array=ArrayIn
+    if Opt.DenToggle==1:
+        Array=Denoising(Array, Opt, l0)[0]
+    if Opt.ThreshToggle==1:
+        Array=Thresholding(Array, Opt, l0)[0]
+    if Opt.RSOToggle==1:
+        Array=RSO(Array, Opt)
+    (SkelArray, SkelAC, TCount, TCA, JCount, JCA)=Skeleton(Array, Opt)
+#    TCount+=JCount
+    print('Denoising weight %.2f Thresholding Weight %.2f, Defect Count %f' %(Params[0], Params[1], TCount))
+    return(TCount);

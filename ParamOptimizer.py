@@ -1,18 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Jan 19 14:38:16 2016
+Created on Wed Jan 20 18:17:02 2016
 
 @author: Moshe Dolejsi MosheDolejsi@uchicago.edu
 """
 
 # -*- coding: utf-8 -*-
 """
-Block Copolymer Analysis Package by Moshe Dolejsi
-Done in Spyder/VStudio2015 Community with Anaconda.
-ToDO: Classify independent function blocks
+Parameter Optimizer. Test before rolling into Image Analys
 """
 #%%
-Vers="0.23"
+Vers="0.1"
 
 #%% Imports
 
@@ -45,8 +43,7 @@ class Output:
 
 Opt.AutoDenoise=1;
 Opt.AutoThresh=1;
-
-Opt.RSFactor=4;#Not yet implemented
+Opt.RSFactor=2;#Not yet implemented
 Opt.RSToggle=0; # nyi
 Opt.Inversion=1;
 Opt.ACToggle=0; #autocorrelation (currently broken)
@@ -175,7 +172,7 @@ class GUI:
         self.l3.pack(side=tk.LEFT)
         self.e6 = tk.Entry(self.Denf)
         self.e6.pack(side=tk.LEFT)
-        self.e6.insert(0,"130") #130
+        self.e6.insert(0,"140") #130
         self
         
         self.Threshf= tk.ttk.Labelframe(Page1)
@@ -190,7 +187,7 @@ class GUI:
         self.l4.pack(side=tk.LEFT)
         self.e7 = tk.Entry(self.Threshf)
         self.e7.pack(side=tk.LEFT)
-        self.e7.insert(0,"2")
+        self.e7.insert(0,"2.5")
         
         self.RSOf= tk.ttk.Labelframe(Page1)
         self.RSOf.pack()
@@ -222,7 +219,7 @@ class GUI:
         
         self.EDF=tk.ttk.Labelframe(Page1)
         self.EDF.pack()
-        self.EDTog=tk.Checkbutton(self.EDF,text="Enable Edge Detection/LWR",variable=Opt.EDToggle)
+        self.EDTog=tk.Checkbutton(self.EDF,text="Enable Edge Detection/LER",variable=Opt.EDToggle)
         self.EDTog.pack()
         self.EDTog.select()
         
@@ -372,7 +369,7 @@ class GUI:
 
 
 root = tk.Tk()
-root.title("Image Analysis Software by Moshe V"+Vers)
+root.title("Parameter Optimizer Software by Moshe V"+Vers)
 gui=GUI(root)
 
 root.mainloop()
@@ -418,7 +415,7 @@ for ImNum in range(0, len(FNFull) ):
     if Opt.RSToggle==1:
         Output.CIMH*=Opt.RSFactor;
         Output.CIMW*=Opt.RSFactor;
-        RSArray=skimage.transform.resize(ArrayIn,(Output.CIMH,Output.CIMW))
+        RSArray=skimage.transform.resize(CropArray,(Output.CIMH,Output.CIMW))
         Opt.NmPP*=1/Opt.RSFactor;
         ArrayIn=RSArray
     else:
@@ -430,163 +427,47 @@ for ImNum in range(0, len(FNFull) ):
     # http://www.astrobetter.com/blog/2010/03/03/fourier-transforms-of-images-in-python/
     
     if Opt.FFTToggle==1:   
-        Output.l0=IAFun.FFT( ArrayIn, Opt)   
-    
-    #%% Denoise
-    if Opt.DenToggle==1:
-        (DenArray, Output.Denoise)=IAFun.Denoising(ArrayIn, Opt, Output.l0)
-        ArrayIn=DenArray
-
-    #%% Adaptive Local Thresholding over X pixels, gauss                
-    if Opt.ThreshToggle==1:
-        (ThreshArray,Output.Thresh)=IAFun.Thresholding(ArrayIn, Opt, Output.l0)
-        ArrayIn=ThreshArray
-
-    #%% Remove Small Objects
-    
-    if Opt.RSOToggle==1:
-        RSOArray=IAFun.RSO(ArrayIn, Opt)
-        ArrayIn=RSOArray
-    #%% Feature Finding
-    
-    
-    if Opt.LabelToggle==1:
-        (Output.WFrac, Output.BFrac, Output.WDomI, Output.WDomFrac)=IAFun.Label(ArrayIn,Opt)
+        Output.l0=IAFun.FFT( ArrayIn, Opt)
         
-    
-    #%% Skeletonization / Defect could be split but that can be done later
-    
-    if Opt.SkeleToggle==1:
-        (SkelArray, SkelAC, Output.TCount, Output.TCA, Output.JCount, Output.JCA)=IAFun.Skeleton(ArrayIn,Opt)
-    #%% ED
-    # Tamar recommended Canny edge so let's try it eh? 
-    # We don't use the guassian blur because the denoising/thresholding does this for us
-    
-    if Opt.EDToggle==1:
-        (Output.LERMean,Output.LER3Sig,Output.LERMeanS,Output.LER3SigS)=IAFun.EdgeDetect(ArrayIn,Opt,SkelArray)
-            
-    
-    #%% Autocorrel. LETS GO, Currently Not Working
-    if Opt.ACToggle==1:
-        IAFun.AutoCorrelation
-    
-    #%% Find the inverse or 'Dark' Image repeat as above
-    if Opt.Inversion==1:
-        imarray=255-imarray
-        Opt.BName=Opt.BName+"Inv" #change base nameee
-
-    #%% Crop
-    (CropArray, Output.CIMH, Output.CIMW)=IAFun.Crop( imarray , Opt )
-    ArrayIn=CropArray
-    
-    #%% Data Rescaling Not Yet Implemented correctly
-    
-    if Opt.RSToggle==1:
-        Output.CIMH*=Opt.RSFactor;
-        Output.CIMW*=Opt.RSFactor;
-        RSArray=skimage.transform.resize(CropArray,(Output.CIMH,Output.CIMW))
-        Opt.NmPP*=1/Opt.RSFactor;
-        ArrayIn=RSArray
-    else:
-        Opt.RSFactor=1; 
-    
-    #%% Denoise
-    if Opt.DenToggle==1:
-        (DenArray, Output.Denoise)=IAFun.Denoising(ArrayIn, Opt, Output.l0)
-        ArrayIn=DenArray
-
-    #%% Adaptive Local Thresholding over X pixels, gauss                
-    if Opt.ThreshToggle==1:
-        (ThreshArray,Output.Thresh)=IAFun.Thresholding(ArrayIn, Opt, Output.l0)
-        ArrayIn=ThreshArray
-
-    #%% Remove Small Objects
-    
-    if Opt.RSOToggle==1:
-        RSOArray=IAFun.RSO(ArrayIn, Opt)
-        ArrayIn=RSOArray
-    #%% Feature Finding
-    
-    
-    if Opt.LabelToggle==1:
-        (Output.InvWFrac, Output.InvBFrac, Output.InvWDomI, Output.InvWDomFrac)=IAFun.Label(ArrayIn,Opt)
-        
-    
-    #%% Skeletonization / Defect could be split but that can be done later
-    
-    if Opt.SkeleToggle==1:
-        (SkelArray, SkelAC, Output.InvTCount, Output.InvTCA, Output.InvJCount, Output.InvJCA)=IAFun.Skeleton(ArrayIn,Opt)
-   
+    OptBnds=[(10,300),(1,5)]
+    OptX0=[Opt.DenWeight , Opt.ThreshWeight]
+    OptFun= lambda Params: (IAFun.ParamOptimizer(ArrayIn, Opt, Output.l0, Params))
+#    Res=scipy.optimize.minimize(OptFun, OptX0, method='Powell')
+#    Opt.DenWeight=Res.x[0]
+#    Opt.ThreshWeight=Res.x[1]
+    Res=scipy.optimize.brute(OptFun, OptBnds ,Ns=10)
+    Opt.DenWeight=Res[0]
+    Opt.ThreshWeight=Res[1]
+#    
+    Output.ThreshW=np.floor(Opt.ThreshWeight*(Output.l0/Opt.NmPP))
+    OutputThreshW=np.max( (Output.ThreshW,1))
+    Output.DenW=Opt.DenWeight/(Output.l0/Opt.NmPP)
     #%% Logging
     # Check if a log exists, if not, but we want to log: write titles.
     # If we want to wipe the log each time, we also need to write titles
-    if (os.path.isfile(os.path.join(Opt.FPath, "output", "output.csv"))==False and CombLog == 1) or CombLog == 2:
-        with open(os.path.join(Opt.FPath, "output", "output.csv"), 'w') as Log:
+    if (os.path.isfile(os.path.join(Opt.FPath, "output", "Params.csv"))==False and CombLog == 1) or CombLog == 2:
+        with open(os.path.join(Opt.FPath, "output", "Params.csv"), 'w') as Log:
             LogW= csv.writer(Log, dialect='excel', lineterminator='\n')
             LogW.writerow(['Filename',
             'Primary Peak (nm)',
-            'Lighter',
-            'LPhase Area Fraction',
-            'LPhase Area Fraction(FromINV)',
-            'LPhase Area Frac AVG',
-            'DPhase Area Fraction',
-            'DPhase Area Fraction(FromINV)',
-            'DPhase Area Frac AVG',
-            'LDom Index',
-            'LDom Fraction',
-            'LTerminals',
-            'LTerminals/nm^2',
-            'LJunctions',
-            'Ljunctions/nm^2',
-            'LER Dist nm',
-            'LER 3Sig nm',
-            'LER Dist KDE nm',
-            'LER 3Sig KDE nm',
-            'Inverse Phase Images',
-            'DDom Index',
-            'DDom Fraction',
-            'DTerminals',
-            'DTerminals/nm^2',
-            'DJunctions',
-            'DJunctions/nm^2',
-            'Denoise',
-            'Threshold',
-            'Denoise Used',
-            'Thresh Used'])
+            'NmPP',
+            'ND Denoise Wt',
+            'ND Thresh Wt',
+            'Denoise Wt',
+            'Thresh Wt'
+            ])
     
     if CombLog > 0:
-        with open(os.path.join(Opt.FPath, "output", "output.csv"), 'a') as Log:
+        with open(os.path.join(Opt.FPath, "output", "Params.csv"), 'a') as Log:
             LogW= csv.writer(Log, dialect='excel', lineterminator='\n')
             LogW.writerow([Opt.BName,
             Output.l0,
-            'Phase',
-            Output.WFrac,
-            Output.InvBFrac,
-            (Output.WFrac+Output.InvBFrac)/2,
-            Output.BFrac,
-            Output.InvWFrac,
-            (Output.BFrac+Output.InvWFrac)/2,
-            Output.WDomI,
-            Output.WDomFrac,
-            Output.TCount,
-            Output.TCA,
-            Output.JCount,
-            Output.JCA,
-            Output.LERMean,
-            Output.LER3Sig,
-            Output.LERMeanS,
-            Output.LER3SigS,
-            '(Names reference original!)',
-            Output.InvWDomI,
-            Output.InvWDomFrac,
-            Output.InvTCount,
-            Output.InvTCA,
-            Output.InvJCount,
-            Output.InvJCA,
+            Opt.NmPP,
             Opt.DenWeight,
             Opt.ThreshWeight,
-            Output.Denoise,
-            Output.Thresh])
+            Output.DenW,
+            Output.ThreshW            
+            ])
         
     
     
