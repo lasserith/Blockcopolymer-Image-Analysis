@@ -380,9 +380,47 @@ def EdgeDetect(im, Opt, SkeleArray):
         EDFig.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "LER.png"))
         EDImage.save(os.path.join(Opt.FPath,"output",Opt.BName+"ED.tif"))
     return(LERMean,LER3Sig,LERMeanS,LER3SigS);
+#%% Angle Detection
+def OrientationDetect(im):
+    
+    class AngDet:
+        pass
+    
+    AngDet.A1stDY=np.absolute(scipy.ndimage.sobel(im, axis=0,mode='constant', cval=0))
+    AngDet.A1stDX=np.absolute(scipy.ndimage.sobel(im, axis=1, mode='constant', cval=0))
+    AngDet.AngArray=np.float32(np.arctan2(AngDet.A1stDY,AngDet.A1stDX))    
+        
+    
+    
+    return(AngDet.AngArray)
+    
+    
+#%% Angle Mapping
+def AngMap(angarray,maskarray=1):
+    class AngMap:
+        pass
+        
+    
+    angarray=np.absolute(np.pi/4-angarray) #Renormalize to between 0 and pi/4
+    angmask=angarray[maskarray != 0]# Mask out the data
+
+        
+    
+    AngMap.Plot=plt.figure();
+    AngMap.Plt1=AngMap.Plot.add_subplot(211)
+    AngMap.Plt1.hist(angarray.flatten(), bins=100)
+    AngMap.plt.set_title('Orientation distribution Unmasked')
+    AngMap.Plt2=AngMap.Plot.add_subplot(212)
+    AngMap.Plt2.hist(angmask.flatten(), bins=100)
+    AngMap.plt2.set_title('Orientation Distribution Masked')    
+    
+    AngMap.Plot.show()
+    
+    
+    return()
     
 #%% Autocorrelation T_T
-def Autocorrelation(im,Opt, SkeleArray):
+def AutoCorrelation(im,Opt, AngArray, SkelArray):
     """
     Autocorrelation is a WIP still
     V0
@@ -394,11 +432,10 @@ def Autocorrelation(im,Opt, SkeleArray):
 #    
 #    LAng=np.arctan2(LStructTen[2],LStructTen[0]) # use arctan dy/dx to find direction of line Rads
 #    LAngS=LAng*LSkelAC #Mask out with Skeleton
-    LC1stDy = scipy.ndimage.sobel(im, axis=0, mode='constant', cval=0)
-    LC1stDx = scipy.ndimage.sobel(im, axis=1, mode='constant', cval=0) 
+
     
-    LAngD=np.float32(np.arctan2(LC1stDy,LC1stDx))
-    LAnGDS=LAngD*SkeleArray
+
+    AngSkel=AngArray*SkelArray
 
     
     
@@ -406,7 +443,7 @@ def Autocorrelation(im,Opt, SkeleArray):
     Note that angles are 0<->pi/2 will use trick later to correct for  
     """
     
-    AutoCor.SkI, AutoCor.SkJ=np.nonzero(SkeleArray); #Get indexes of nonzero try LASkel/LSKelAC
+    AutoCor.SkI, AutoCor.SkJ=np.nonzero(SkelArray); #Get indexes of nonzero try LASkel/LSKelAC
     AutoCor.n=np.zeros(Opt.ACCutoff)
     
     AutoCor.RandoList=np.random.choice(len(AutoCor.SkI), len(AutoCor.SkI), replace=False)
@@ -439,8 +476,8 @@ def Autocorrelation(im,Opt, SkeleArray):
             AutoCor.WalkDirect=np.random.choice(8,8,replace=False) # pick a spot to move
             for TestNeighbor in np.arange(8):
                 AutoCor.COORD=AutoCor.Indexes[AutoCor.WalkDirect[TestNeighbor]]+AutoCor.CCOORD
-                if np.array( (AutoCor.COORD < SkeleArray.shape) ).all(): # If we are still in bounds
-                    if (SkeleArray[ tuple(AutoCor.COORD)] == 1 & AutoCor.WalkDirect[TestNeighbor] != 7-AutoCor.PastN): # if we have a valid move
+                if np.array( (AutoCor.COORD < SkelArray.shape) ).all(): # If we are still in bounds
+                    if (SkelArray[ tuple(AutoCor.COORD)] == 1 & AutoCor.WalkDirect[TestNeighbor] != 7-AutoCor.PastN): # if we have a valid move
                         if AutoCor.BBI==1: # And its the first move we need to fix 1st angle
                             if AutoCor.angtemp[1] <=0: # if angle is neg
                                 if( np.abs( (AutoCor.angtemp[1]+np.pi)-AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]]) <=
@@ -493,7 +530,7 @@ def Autocorrelation(im,Opt, SkeleArray):
                 AutoCor.h +=AutoCor.htemp
                 AutoCor.n +=AutoCor.ntemp
                 AutoCor.Ind += 1
-    return;
+    return(AutoCor)
 #%% Param Optimizer
 def ParamOptimizer(ArrayIn, Opt, l0, Params):
     Opt.DenWeight=Params[0]

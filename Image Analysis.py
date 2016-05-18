@@ -12,7 +12,7 @@ Done in Spyder/VStudio2015 Community with Anaconda.
 ToDO: Classify independent function blocks
 """
 #%%
-Vers="0.23"
+Vers="0.24"
 
 #%% Imports
 
@@ -48,9 +48,9 @@ Opt.AutoThresh=1;
 
 Opt.RSFactor=4;#Not yet implemented
 Opt.RSToggle=0; # nyi
-Opt.Inversion=1;
-Opt.ACToggle=0; #autocorrelation (currently broken)
-Opt.ACCutoff=10;
+Opt.Inversion=0;
+Opt.ACToggle=1; #autocorrelation (currently broken)
+Opt.ACCutoff=0; 
 Opt.ACSize=50;
 
 #IndividualLog =1; # Write a log for each sample?
@@ -64,6 +64,7 @@ Opt.ThreshToggle=1; #thresh
 Opt.RSOToggle=1; #remove small objects
 Opt.LabelToggle=1; # label domains
 Opt.SkeleToggle=1; # Skeleton/Defect analysis
+Opt.AngDetToggle=1; # Angle Detection
 
 
 Opt.Machine="Unknown";
@@ -153,14 +154,14 @@ class GUI:
         self.fftTog=tk.Checkbutton(
             self.fftf,text="Enable FFT",variable=self.fftTVAR)
         self.fftTog.pack(side=tk.LEFT)
-        self.fftTog.select()
+#        self.fftTog.select()
         self.fftl=tk.Label(
             self.fftf, text="Enter L0 (nm) if not using FFT"
             )
         self.fftl.pack(side=tk.LEFT) 
         self.L0 =tk.Entry(self.fftf)
         self.L0.pack(side=tk.LEFT)
-        self.L0.insert(0,"0")
+        self.L0.insert(0,"28")
         
         
         self.Denf= tk.ttk.Labelframe(Page1)
@@ -411,20 +412,21 @@ for ImNum in range(0, len(FNFull) ):
     
     #%% Crop
     (CropArray, Output.CIMH, Output.CIMW)=IAFun.Crop( imarray , Opt )
-    ArrayIn=CropArray
-    
-    #%% Data Rescaling Not Yet Implemented correctly
+    imarray=CropArray
+
+    #%% Data Rescaling STUPIDLY INTENSIVE
     
     if Opt.RSToggle==1:
         Output.CIMH*=Opt.RSFactor;
         Output.CIMW*=Opt.RSFactor;
-        RSArray=skimage.transform.resize(ArrayIn,(Output.CIMH,Output.CIMW))
+        RSArray=skimage.transform.resize(imarray,(Output.CIMH,Output.CIMW))
         Opt.NmPP*=1/Opt.RSFactor;
-        ArrayIn=RSArray
+        imarray=RSArray
     else:
         Opt.RSFactor=1;
 
-    
+    #$$ Set ArrayIn
+    ArrayIn=imarray; 
     
     #%% FFT for period ref 
     # http://www.astrobetter.com/blog/2010/03/03/fourier-transforms-of-images-in-python/
@@ -447,6 +449,9 @@ for ImNum in range(0, len(FNFull) ):
     if Opt.RSOToggle==1:
         RSOArray=IAFun.RSO(ArrayIn, Opt)
         ArrayIn=RSOArray
+        
+
+        
     #%% Feature Finding
     
     
@@ -458,6 +463,11 @@ for ImNum in range(0, len(FNFull) ):
     
     if Opt.SkeleToggle==1:
         (SkelArray, SkelAC, Output.TCount, Output.TCA, Output.JCount, Output.JCA)=IAFun.Skeleton(ArrayIn,Opt)
+    
+    #%% Angle Detection
+    if Opt.AngDetToggle==1:
+        AngDetA=IAFun.OrientationDetect(DenArray)
+    
     #%% ED
     # Tamar recommended Canny edge so let's try it eh? 
     # We don't use the guassian blur because the denoising/thresholding does this for us
@@ -465,10 +475,11 @@ for ImNum in range(0, len(FNFull) ):
     if Opt.EDToggle==1:
         (Output.LERMean,Output.LER3Sig,Output.LERMeanS,Output.LER3SigS)=IAFun.EdgeDetect(ArrayIn,Opt,SkelArray)
             
+
     
     #%% Autocorrel. LETS GO, Currently Not Working
-    if Opt.ACToggle==1:
-        IAFun.AutoCorrelation
+    if Opt.ACToggle==5:
+        AutoCor=IAFun.AutoCorrelation(ArrayIn, Opt, SkelArray)
     
     #%% Find the inverse or 'Dark' Image repeat as above
     if Opt.Inversion==1:
@@ -476,46 +487,46 @@ for ImNum in range(0, len(FNFull) ):
         Opt.BName=Opt.BName+"Inv" #change base nameee
 
     #%% Crop
-    (CropArray, Output.CIMH, Output.CIMW)=IAFun.Crop( imarray , Opt )
-    ArrayIn=CropArray
+        (CropArray, Output.CIMH, Output.CIMW)=IAFun.Crop( imarray , Opt )
+        ArrayIn=CropArray
     
     #%% Data Rescaling Not Yet Implemented correctly
     
-    if Opt.RSToggle==1:
-        Output.CIMH*=Opt.RSFactor;
-        Output.CIMW*=Opt.RSFactor;
-        RSArray=skimage.transform.resize(CropArray,(Output.CIMH,Output.CIMW))
-        Opt.NmPP*=1/Opt.RSFactor;
-        ArrayIn=RSArray
-    else:
-        Opt.RSFactor=1; 
+        if Opt.RSToggle==1:
+            Output.CIMH*=Opt.RSFactor;
+            Output.CIMW*=Opt.RSFactor;
+            RSArray=skimage.transform.resize(CropArray,(Output.CIMH,Output.CIMW))
+            Opt.NmPP*=1/Opt.RSFactor;
+            ArrayIn=RSArray
+        else:
+                Opt.RSFactor=1; 
     
     #%% Denoise
-    if Opt.DenToggle==1:
-        (DenArray, Output.Denoise)=IAFun.Denoising(ArrayIn, Opt, Output.l0)
-        ArrayIn=DenArray
+        if Opt.DenToggle==1:
+            (DenArray, Output.Denoise)=IAFun.Denoising(ArrayIn, Opt, Output.l0)
+            ArrayIn=DenArray
 
     #%% Adaptive Local Thresholding over X pixels, gauss                
-    if Opt.ThreshToggle==1:
-        (ThreshArray,Output.Thresh)=IAFun.Thresholding(ArrayIn, Opt, Output.l0)
-        ArrayIn=ThreshArray
+        if Opt.ThreshToggle==1:
+            (ThreshArray,Output.Thresh)=IAFun.Thresholding(ArrayIn, Opt, Output.l0)
+            ArrayIn=ThreshArray
 
     #%% Remove Small Objects
     
-    if Opt.RSOToggle==1:
-        RSOArray=IAFun.RSO(ArrayIn, Opt)
-        ArrayIn=RSOArray
+        if Opt.RSOToggle==1:
+            RSOArray=IAFun.RSO(ArrayIn, Opt)
+            ArrayIn=RSOArray
     #%% Feature Finding
     
     
-    if Opt.LabelToggle==1:
-        (Output.InvWFrac, Output.InvBFrac, Output.InvWDomI, Output.InvWDomFrac)=IAFun.Label(ArrayIn,Opt)
+        if Opt.LabelToggle==1:
+            (Output.InvWFrac, Output.InvBFrac, Output.InvWDomI, Output.InvWDomFrac)=IAFun.Label(ArrayIn,Opt)
         
     
     #%% Skeletonization / Defect could be split but that can be done later
     
-    if Opt.SkeleToggle==1:
-        (SkelArray, SkelAC, Output.InvTCount, Output.InvTCA, Output.InvJCount, Output.InvJCA)=IAFun.Skeleton(ArrayIn,Opt)
+        if Opt.SkeleToggle==1:
+            (SkelArray, SkelAC, Output.InvTCount, Output.InvTCA, Output.InvJCount, Output.InvJCA)=IAFun.Skeleton(ArrayIn,Opt)
    
     #%% Logging
     # Check if a log exists, if not, but we want to log: write titles.
