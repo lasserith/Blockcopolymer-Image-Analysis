@@ -65,15 +65,17 @@ def Crop( imarray , Opt ):
 #%% YKMagic Crop to detect IDE
 def YKDetect(image, Opt):
     DY=scipy.ndimage.sobel(image, axis=0)
-    DYIm=Image.fromarray(DY*10)
     DX=scipy.ndimage.sobel(image, axis=1)
-    DXIm=Image.fromarray(DX*10)
+    
+    # These values seem optimum for a nice image, but can obviously be adjusted to suit
+    DYIm=Image.fromarray(np.absolute(DY)*10/np.absolute(DY).max())
+    DXIm=Image.fromarray(np.absolute(DX)*10/np.absolute(DX).max())
     
     Lap=scipy.ndimage.filters.laplace(image)
     LapIm=Image.fromarray( Lap*100)
     
     #% Add toggle here for show/save
-    DYIm.show();DXIm.show();LapIm.show();
+    #DYIm.show();DXIm.show();LapIm.show();
     
     DXIm.save(os.path.join(Opt.FPath,"output",Opt.BName+"DX.tif"))
     DYIm.save(os.path.join(Opt.FPath,"output",Opt.BName+"DY.tif"))

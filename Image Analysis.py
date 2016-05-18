@@ -57,7 +57,7 @@ Opt.ACCutoff=0;
 Opt.ACSize=50;
 
 #IndividualLog =1; # Write a log for each sample?
-CombLog = 1; # If One write a combined log, if two clean it out each time(don't append)
+CombLog = 0; # If One write a combined log, if two clean it out each time(don't append)
 ShowImage = 0; # Show images?
 # Following is GUI supported
 Opt.EDToggle=0; #WIP ED/LER
@@ -457,7 +457,7 @@ for ImNum in range(0, len(FNFull) ):
 
     #%% Masking
     if Opt.IDEToggle==1:
-        IAFun.YKDetect(ArrayIn, Opt)
+        IAFun.YKDetect(DenArray, Opt)
     #%% Feature Finding
     
     
