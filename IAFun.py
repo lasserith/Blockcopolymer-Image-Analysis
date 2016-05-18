@@ -419,7 +419,7 @@ def AngMap(angarray,maskarray=1):
         pass
         
     
-    angarray=np.absolute(np.pi/4-angarray) #Renormalize to between 0 and pi/4
+    #angarray=np.absolute(np.pi/4-angarray) #Renormalize to between 0 and pi/4
     angmask=angarray[maskarray != 0]# Mask out the data
 
         
