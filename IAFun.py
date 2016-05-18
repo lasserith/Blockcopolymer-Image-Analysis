@@ -62,7 +62,25 @@ def Crop( imarray , Opt ):
     (CIMH,CIMW)=CropArray.shape
     return (CropArray, CIMH, CIMW);
     
-#%%
+#%% YKMagic Crop to detect IDE
+def YKDetect(image, Opt):
+    DY=scipy.ndimage.sobel(image, axis=0)
+    DYIm=Image.fromarray(DY*10)
+    DX=scipy.ndimage.sobel(image, axis=1)
+    DXIm=Image.fromarray(DX*10)
+    
+    Lap=scipy.ndimage.filters.laplace(image)
+    LapIm=Image.fromarray( Lap*100)
+    
+    #% Add toggle here for show/save
+    DYIm.show();DXIm.show();LapIm.show();
+    
+    DXIm.save(os.path.join(Opt.FPath,"output",Opt.BName+"DX.tif"))
+    DYIm.save(os.path.join(Opt.FPath,"output",Opt.BName+"DY.tif"))
+    LapIm.save(os.path.join(Opt.FPath,"output",Opt.BName+"Lap.tif"))
+    return()
+
+#%% Azimuthal Averaging
 def azimuthalAverage(image, center=None):
     """
     Calculate the azimuthally averaged radial profile.
@@ -192,7 +210,7 @@ def Thresholding(im, Opt, l0):
     """
     if Opt.AutoThresh==1:    
         Thresh=Opt.ThreshWeight*(l0/Opt.NmPP )
-        Thresh=np.floor( Thresh )
+        Thresh=2*np.floor( Thresh/2 )+1;
         Thresh=np.max( ( Thresh, 1))
     else:
         Thresh=Opt.ThreshWeight
@@ -386,8 +404,8 @@ def OrientationDetect(im):
     class AngDet:
         pass
     
-    AngDet.A1stDY=np.absolute(scipy.ndimage.sobel(im, axis=0,mode='constant', cval=0))
-    AngDet.A1stDX=np.absolute(scipy.ndimage.sobel(im, axis=1, mode='constant', cval=0))
+    AngDet.A1stDY=np.absolute(scipy.ndimage.sobel(im, axis=0))
+    AngDet.A1stDX=np.absolute(scipy.ndimage.sobel(im, axis=1))
     AngDet.AngArray=np.float32(np.arctan2(AngDet.A1stDY,AngDet.A1stDX))    
         
     

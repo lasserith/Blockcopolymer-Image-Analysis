@@ -9,7 +9,10 @@ Created on Tue Jan 19 14:38:16 2016
 """
 Block Copolymer Analysis Package by Moshe Dolejsi
 Done in Spyder/VStudio2015 Community with Anaconda.
+Heavily Uses Numpy, Scipy, Mpltlib, and the rest of the usual
+
 ToDO: Classify independent function blocks
+Allow the code to run  without inverse
 """
 #%%
 Vers="0.24"
@@ -49,7 +52,7 @@ Opt.AutoThresh=1;
 Opt.RSFactor=4;#Not yet implemented
 Opt.RSToggle=0; # nyi
 Opt.Inversion=0;
-Opt.ACToggle=1; #autocorrelation (currently broken)
+Opt.ACToggle=0; #autocorrelation (currently broken)
 Opt.ACCutoff=0; 
 Opt.ACSize=50;
 
@@ -57,11 +60,12 @@ Opt.ACSize=50;
 CombLog = 1; # If One write a combined log, if two clean it out each time(don't append)
 ShowImage = 0; # Show images?
 # Following is GUI supported
-Opt.EDToggle=1; #WIP ED/LER
-Opt.FFTToggle=1; #fft
+Opt.EDToggle=0; #WIP ED/LER
+Opt.FFTToggle=0; #fft
 Opt.DenToggle=1; #Denoising ON
 Opt.ThreshToggle=1; #thresh
 Opt.RSOToggle=1; #remove small objects
+Opt.IDEToggle=1; # Mask out the electrodes for YK
 Opt.LabelToggle=1; # label domains
 Opt.SkeleToggle=1; # Skeleton/Defect analysis
 Opt.AngDetToggle=1; # Angle Detection
@@ -176,7 +180,7 @@ class GUI:
         self.l3.pack(side=tk.LEFT)
         self.e6 = tk.Entry(self.Denf)
         self.e6.pack(side=tk.LEFT)
-        self.e6.insert(0,"130") #130
+        self.e6.insert(0,"100") #130
         self
         
         self.Threshf= tk.ttk.Labelframe(Page1)
@@ -451,7 +455,9 @@ for ImNum in range(0, len(FNFull) ):
         ArrayIn=RSOArray
         
 
-        
+    #%% Masking
+    if Opt.IDEToggle==1:
+        IAFun.YKDetect(ArrayIn, Opt)
     #%% Feature Finding
     
     
