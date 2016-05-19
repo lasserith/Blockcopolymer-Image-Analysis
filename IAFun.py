@@ -64,6 +64,12 @@ def Crop( imarray , Opt ):
     
 #%% YKMagic Crop to detect IDE
 def YKDetect(image, Opt):
+    # Hardcoded cus reasons
+    PWidth=np.arange(10,15)  
+    Pdist=20 # Real peaks ought to be > 20 nm apart
+    Pdist=PDist/Opt.NmPP # convert to pixels
+    #
+    
     DY=scipy.ndimage.sobel(image, axis=0)
     DX=scipy.ndimage.sobel(image, axis=1)
     
@@ -71,15 +77,37 @@ def YKDetect(image, Opt):
     DYIm=Image.fromarray(np.absolute(DY)*10/np.absolute(DY).max())
     DXIm=Image.fromarray(np.absolute(DX)*10/np.absolute(DX).max())
     
-    Lap=scipy.ndimage.filters.laplace(image)
-    LapIm=Image.fromarray( Lap*100)
+    SchArray=skimage.filters.scharr(image)
+    # Sum along rows
+    SchX=np.average(SchArray,0) # Each element is average of a column
+    SchY=np.average(SchArray, 1) # Each element is average of a row
+    
+    VEdge=scipy.signal.find_peaks_cwt(SchX, PWidth) # find peaks
+    HEdge=scipy.signal.find_peaks_cwt(SchY, PWidth)
+    # Remove close peaks multithread soon ^_-
+    Rem=np.empty(0)
+    for i in range(1, len(VEdge)-1):
+        if VEdge[i]-VEdge[i-1] < PDist:
+            if SchX[VEdge[i]] < SchX[VEdge[i-1]]:
+                Rem=np.append(Rem,i)
+            else:
+                Rem=np.append(Rem,i-1)
+    VEdge.remove(Rem)
+    
+        
+    SchAvg=np.average(SchArray)
+    #Find Top/Bottom
+    
+    
+    
+    SchIm=Image.fromarray( SchArray*100)
     
     #% Add toggle here for show/save
     #DYIm.show();DXIm.show();LapIm.show();
     
     DXIm.save(os.path.join(Opt.FPath,"output",Opt.BName+"DX.tif"))
     DYIm.save(os.path.join(Opt.FPath,"output",Opt.BName+"DY.tif"))
-    LapIm.save(os.path.join(Opt.FPath,"output",Opt.BName+"Lap.tif"))
+    SchIm.save(os.path.join(Opt.FPath,"output",Opt.BName+"Sch.tif"))
     return()
 
 #%% Azimuthal Averaging

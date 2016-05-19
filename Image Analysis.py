@@ -56,6 +56,10 @@ Opt.ACToggle=0; #autocorrelation (currently broken)
 Opt.ACCutoff=0; 
 Opt.ACSize=50;
 
+Opt.SchCO=5; # Step in from 'Ide' in nm
+
+
+
 #IndividualLog =1; # Write a log for each sample?
 CombLog = 0; # If One write a combined log, if two clean it out each time(don't append)
 ShowImage = 0; # Show images?
