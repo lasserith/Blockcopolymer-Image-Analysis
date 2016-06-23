@@ -65,9 +65,10 @@ def Crop( imarray , Opt ):
 #%% YKMagic Crop to detect IDE
 def YKDetect(image, Opt):
     # Hardcoded cus reasons
-    PWidth=np.arange(10,15)  
+    VWidth=np.arange(10,15)  # Vertical lines are narrow (10-15 pixels)
+    HWidth=np.arange(100,110) # horizontal lines are large. (>100 pixels)
     Pdist=20 # Real peaks ought to be > 20 nm apart
-    Pdist=PDist/Opt.NmPP # convert to pixels
+    Pdist=Pdist/Opt.NmPP # convert to pixels
     #
     
     DY=scipy.ndimage.sobel(image, axis=0)
@@ -82,21 +83,38 @@ def YKDetect(image, Opt):
     SchX=np.average(SchArray,0) # Each element is average of a column
     SchY=np.average(SchArray, 1) # Each element is average of a row
     
-    VEdge=scipy.signal.find_peaks_cwt(SchX, PWidth) # find peaks
-    HEdge=scipy.signal.find_peaks_cwt(SchY, PWidth)
+    VEdge=scipy.signal.find_peaks_cwt(SchX, VWidth) # find peaks
+    HEdge=scipy.signal.find_peaks_cwt(SchY, HWidth)
     # Remove close peaks multithread soon ^_-
     Rem=np.empty(0)
     for i in range(1, len(VEdge)-1):
-        if VEdge[i]-VEdge[i-1] < PDist:
-            if SchX[VEdge[i]] < SchX[VEdge[i-1]]:
+        if VEdge[i]-VEdge[i-1] < Pdist: # if points too close
+            if SchX[VEdge[i]] < SchX[VEdge[i-1]]: # remove the point with lower mag
                 Rem=np.append(Rem,i)
             else:
                 Rem=np.append(Rem,i-1)
-    VEdge.remove(Rem)
+    try: #we may not have any extra points to clean up
+        VEdge.remove(Rem)
+    except:
+        pass
+    Rem=np.empty(0)
+    for i in range(1, len(VEdge)-1):
+        if HEdge[i]-HEdge[i-1] < Pdist*5: # horizontal lines are > 100 nm
+            if SchX[HEdge[i]] < SchX[HEdge[i-1]]:
+                Rem=np.append(Rem,i)
+            else:
+                Rem=np.append(Rem,i-1)
+    try: #we may not have any extra points to clean up
+        HEdge.remove(Rem)
+    except:
+        pass
+    # Default behavior is after 1st peak is first zone 
+    # so 1-2 = real, 3-4 = real 2-3 = background etc etc
+    # future work is to automate this. Dunno how atm
+    
     
         
-    SchAvg=np.average(SchArray)
-    #Find Top/Bottom
+
     
     
     
