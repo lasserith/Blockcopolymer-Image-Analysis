@@ -184,7 +184,7 @@ class GUI:
         self.l3.pack(side=tk.LEFT)
         self.e6 = tk.Entry(self.Denf)
         self.e6.pack(side=tk.LEFT)
-        self.e6.insert(0,"100") #130
+        self.e6.insert(0,"130") #130 # 100 was prev YK
         self
         
         self.Threshf= tk.ttk.Labelframe(Page1)
@@ -199,7 +199,7 @@ class GUI:
         self.l4.pack(side=tk.LEFT)
         self.e7 = tk.Entry(self.Threshf)
         self.e7.pack(side=tk.LEFT)
-        self.e7.insert(0,"2")
+        self.e7.insert(0,"2.5") # normally 2
         
         self.RSOf= tk.ttk.Labelframe(Page1)
         self.RSOf.pack()
@@ -446,7 +446,11 @@ for ImNum in range(0, len(FNFull) ):
     if Opt.DenToggle==1:
         (DenArray, Output.Denoise)=IAFun.Denoising(ArrayIn, Opt, Output.l0)
         ArrayIn=DenArray
-
+    #%% Masking
+    if Opt.IDEToggle==1:
+        IDEArray=IAFun.YKDetect(DenArray, Opt)
+        ArrayIn=IDEArray*ArrayIn
+        
     #%% Adaptive Local Thresholding over X pixels, gauss                
     if Opt.ThreshToggle==1:
         (ThreshArray,Output.Thresh)=IAFun.Thresholding(ArrayIn, Opt, Output.l0)
@@ -459,9 +463,7 @@ for ImNum in range(0, len(FNFull) ):
         ArrayIn=RSOArray
         
 
-    #%% Masking
-    if Opt.IDEToggle==1:
-        IAFun.YKDetect(DenArray, Opt)
+
     #%% Feature Finding
     
     
