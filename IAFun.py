@@ -214,13 +214,14 @@ def FFT( im, Opt):
     Fixed the offset
     v0.2
     """
-   # FSize=np.min( im.shape )
-    FSize=500;
+    FSize=np.min( im.shape )
+    #FSize=500;
     FourierArray=np.fft.fft2( im, s=(FSize,FSize) );
     FreqA=np.fft.fftfreq(FSize, d=Opt.NmPP);
 #
     F2Array=np.fft.fftshift(FourierArray);    SpaceA=1/FreqA;
     PowerSpec2d= np.abs( F2Array )**2;
+    
     PowerSpec1d= azimuthalAverage(PowerSpec2d);
     
     Peak=scipy.signal.find_peaks_cwt(PowerSpec1d[0:int( np.floor(FSize/2))], np.arange(5,10),);  
@@ -231,7 +232,7 @@ def FFT( im, Opt):
         PFreq[i]=FreqA[Peak[i]]
         Pspace[i]=1/FreqA[Peak[i]]
         PHeight[i]=PowerSpec1d[Peak[i]]
-        print("Peak %d found at %f \n" % (i, Pspace[i]))
+        #print("Peak %d found at %f \n" % (i, Pspace[i]))
     if Peak[0] < 4: # if first peak is found at L= infty
         PHeight[0]=0; # dont consider it for characteristic peak
 
@@ -499,7 +500,7 @@ def OrientationDetect(im):
     
     
 #%% Angle Mapping
-def AngMap(angarray,maskarray=1):
+def AngMap(angarray,Opt, maskarray=1, weightarray=1):
     class AngMap:
         pass
         
@@ -511,14 +512,17 @@ def AngMap(angarray,maskarray=1):
     
     AngMap.Plot=plt.figure();
     AngMap.Plt1=AngMap.Plot.add_subplot(211)
-    AngMap.Plt1.hist(angarray.flatten(), bins=100)
-    AngMap.plt.set_title('Orientation distribution Unmasked')
+    AngMap.Plt1.hist(angarray, bins=100)
+    AngMap.Plt1.set_title('Orientation distribution Unmasked')
     AngMap.Plt2=AngMap.Plot.add_subplot(212)
-    AngMap.Plt2.hist(angmask.flatten(), bins=100)
-    AngMap.plt2.set_title('Orientation Distribution Masked')    
+    AngMap.Plt2.hist(angmask, bins=100)
+    AngMap.Plt2.set_title('Orientation Distribution Masked')    
     
-    AngMap.Plot.show()
-    
+    if 1 == 1: #REPLACE show
+        AngMap.Plot.show()
+    if 1==1: #Replace save
+        AngMap.Plot.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "AngMap.png"))
+
     
     return()
     
