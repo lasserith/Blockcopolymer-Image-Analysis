@@ -329,7 +329,8 @@ def RSO(im, Opt):
 def Label(im, Opt):
     """
     Label connected domains, calculate area fractions of dominant domain
-    v0.1
+    Also marks domains that are present on both sides with BLUE
+    v0.2
     """
     BCount=(im==0).sum()
     WCount=(im.size-BCount)
@@ -347,23 +348,37 @@ def Label(im, Opt):
     #print("Dominant index %d is %f of total" % (LDomI, LDomFrac))
     WDomMask= ( LabArray==WDomI )*255;
     WDomMaskI=Image.fromarray(WDomMask).convert(mode="L")
-   
+    """
+    Part 2 doing domains top.bottom
+    """
+    Size=int(Opt.NmPP*10) # what is the top zone height? here 10 nm
+    TLab=np.unique(LabArray[:Size]);BLab=np.unique(LabArray[-Size:]); # What areas are at top? Which are at bottom?   
+    ThroughLab=np.intersect1d(TLab,BLab, assume_unique=True);
+    ThroughLab=ThroughLab[ThroughLab!=0]; # remove zero as it is background
+    ThroughMask=np.in1d(LabArray, ThroughLab).reshape(LabArray.shape)
+    ThroughMaskI=Image.fromarray(ThroughMask*255).convert(mode="L")    
     
+    """
+    Part 3 makign images
+    """
     (CIMH,CIMW)=im.shape
     
     RImage=Image.new('RGB',(CIMW,CIMH),'Red')
-
-    WLabI=scipy.misc.toimage(LabArray).convert(mode="RGB") 
-    WDomCI=Image.composite(RImage,Image.fromarray(100*np.uint8(im)).convert(mode="RGB"),WDomMaskI)
-    WLabDomCI=Image.composite(RImage,WLabI,WDomMaskI)
+    BImage=Image.new('RGB',(CIMW,CIMH),'Blue')
+    WLabI=scipy.misc.toimage(LabArray).convert(mode="RGB")  # Labeled image
+    WDomCI=Image.composite(RImage,Image.fromarray(100*np.uint8(im)).convert(mode="RGB"),WDomMaskI) # Red Dom on Original
+    WLabDomCI=Image.composite(RImage,WLabI,WDomMaskI) # red dom on mask image
+    WThroughCI=Image.composite(BImage,Image.fromarray(100*np.uint8(im)).convert(mode="RGB"),ThroughMaskI)
     if Opt.LabelSh == 1:        
         WLabI.show()
         WDomCI.show()
         WLabDomCI.show()
+        WThroughCI.show()
     if Opt.LabelSa == 1:
         WLabI.save(os.path.join(Opt.FPath,"output",Opt.BName+"Lab.tif"))
         WDomCI.save(os.path.join(Opt.FPath,"output",Opt.BName+"DomC.tif"))
-        WDomCI.save(os.path.join(Opt.FPath,"output",Opt.BName+"LabDomC.tif"))    
+        WDomCI.save(os.path.join(Opt.FPath,"output",Opt.BName+"LabDomC.tif"))
+        WThroughCI.save(os.path.join(Opt.FPath,"output",Opt.BName+"ThroughDomC.tif"))
     return(WFrac, BFrac, WDomI, WDomFrac);
     
 #%%
@@ -504,19 +519,41 @@ def AngMap(angarray,Opt, maskarray=1, weightarray=1):
     class AngMap:
         pass
         
-    
-    #angarray=np.absolute(np.pi/4-angarray) #Renormalize to between 0 and pi/4
-    angmask=angarray[maskarray != 0]# Mask out the data
-
         
-    
+    #angarray=np.absolute(np.pi/4-angarray) #Renormalize to between 0 and pi/4
+#    angmask=angarray[maskarray != 0]# Mask out the data note this way flattens
+    angmask=angarray*maskarray
+#    angmask1=scipy.ndimage.binary_erosion(maskarray,structure=np.ones((3,3)))
+#    angmask2=scipy.ndimage.binary_erosion(maskarray)  
+
+
     AngMap.Plot=plt.figure();
-    AngMap.Plt1=AngMap.Plot.add_subplot(211)
-    AngMap.Plt1.hist(angarray, bins=100)
-    AngMap.Plt1.set_title('Orientation distribution Unmasked')
-    AngMap.Plt2=AngMap.Plot.add_subplot(212)
-    AngMap.Plt2.hist(angmask, bins=100)
-    AngMap.Plt2.set_title('Orientation Distribution Masked')    
+    AngMap.Plt1=AngMap.Plot.add_subplot(221)
+    hist,bins = np.histogram(angarray, bins=100)
+    width=0.7*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
+    AngMap.Plt1.bar(center,hist,align='center',width=width)
+    AngMap.Plt1.set_title('OD')
+    
+    AngMap.Plt2=AngMap.Plot.add_subplot(222)
+    hist,bins = np.histogram(angmask, bins=100)
+    width=0.7*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
+    AngMap.Plt2.bar(center,hist,align='center',width=width)
+    AngMap.Plt2.set_title('OD+Mask') 
+    
+    
+    AngMap.Plt3=AngMap.Plot.add_subplot(223)
+    hist,bins = np.histogram(angarray, bins=100, weights=weightarray)
+    width=0.7*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
+    AngMap.Plt3.bar(center,hist,align='center',width=width)
+    AngMap.Plt3.set_title('OD+Weight')
+    
+    
+    AngMap.Plt4=AngMap.Plot.add_subplot(224)
+    hist,bins = np.histogram(angmask, bins=100, weights=weightarray)
+    width=0.7*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
+    AngMap.Plt4.bar(center,hist,align='center',width=width)
+    AngMap.Plt4.set_title('OD+Mask+Weight')    
+    plt.tight_layout(pad=0.5, w_pad=0.5, h_pad=0.5)    
     
     if 1 == 1: #REPLACE show
         AngMap.Plot.show()
