@@ -10,7 +10,7 @@ Vers="0.1"
 #%%
 from PIL import Image
 import lmfit
-
+from tkinter import messagebox
 import os
 import csv
 import numpy as np
@@ -64,23 +64,106 @@ def Crop( imarray , Opt ):
     
 #%% YKMagic Crop to detect IDE
 def YKDetect(image, Opt):
-    DY=scipy.ndimage.sobel(image, axis=0)
-    DX=scipy.ndimage.sobel(image, axis=1)
+    class Ide:
+        pass
+    
+    # Hardcoded cus reasons
+    VWidth=np.arange( np.floor(20/Opt.NmPP) , np.floor(30/Opt.NmPP) )  # Vertical lines are narrow (10-15 pixels)
+    HWidth=np.arange( np.floor(200/Opt.NmPP) , np.floor(300/Opt.NmPP) ) # horizontal lines are large. (>100 pixels)
+    Pdist=20 # Real peaks ought to be > 20 nm apart
+    Pdist=np.floor(Pdist/Opt.NmPP) # convert to pixels
+   
+    
+#    Ide.DY=scipy.ndimage.sobel(image, axis=0)
+#    Ide.DX=scipy.ndimage.sobel(image, axis=1)
     
     # These values seem optimum for a nice image, but can obviously be adjusted to suit
-    DYIm=Image.fromarray(np.absolute(DY)*10/np.absolute(DY).max())
-    DXIm=Image.fromarray(np.absolute(DX)*10/np.absolute(DX).max())
+#    Ide.DYIm=Image.fromarray(np.absolute(Ide.DY)*10/np.absolute(Ide.DY).max())
+#    Ide.DXIm=Image.fromarray(np.absolute(Ide.DX)*10/np.absolute(Ide.DX).max())
     
-    Lap=scipy.ndimage.filters.laplace(image)
-    LapIm=Image.fromarray( Lap*100)
+    Ide.SchArray=skimage.filters.scharr(image)
+    # Sum along rows
+    Ide.SchX=np.average(Ide.SchArray,0) # Each element is average of a column
+    Ide.SchY=np.average(Ide.SchArray, 1) # Each element is average of a row
+    
+    Ide.VEdge=scipy.signal.find_peaks_cwt(Ide.SchX, VWidth) # find peaks
+    Ide.HEdge=scipy.signal.find_peaks_cwt(Ide.SchY, HWidth)
+    # Remove close peaks multithread soon ^_-
+    Rem=np.empty(0)
+    for i in range(1, len(Ide.VEdge)-1):
+        if Ide.VEdge[i]-Ide.VEdge[i-1] < Pdist: # if points too close
+            if Ide.SchX[Ide.VEdge[i]] < Ide.SchX[Ide.VEdge[i-1]]: # remove the point with lower mag
+                Rem=np.append(Rem,i)
+            else:
+                Rem=np.append(Rem,i-1)
+    try: #we may not have any extra points to clean up
+        Ide.VEdge.remove(Rem)
+    except:
+        pass
+    Rem=np.empty(0)
+    for i in range(1, len(Ide.HEdge)-1):
+        if Ide.HEdge[i]-Ide.HEdge[i-1] < Pdist*5: # horizontal lines are > 100 nm
+            if Ide.SchX[Ide.HEdge[i]] < Ide.SchX[Ide.HEdge[i-1]]:
+                Rem=np.append(Rem,i)
+            else:
+                Rem=np.append(Rem,i-1)
+    try: #we may not have any extra points to clean up
+        Ide.HEdge.remove(Rem)
+    except:
+        pass
+    # Default behavior is after 1st peak is first zone 
+    # so 1-2 = real, 3-4 = real 2-3 = background etc etc
+    # future work is to automate this. Dunno how atm
+    
+    Ide.Mask=np.ones(image.shape)
+    
+    # this part also crops a bit    
+    Ide.Mask[0:Ide.HEdge[0]+2*Pdist,:]=0 # Cut top
+    Ide.Mask[Ide.HEdge[1]-2*Pdist:,:]=0 # bottom
+    
+    
+    Ide.Mask[:,Ide.VEdge]=0 # cut lines where the IDE edges are
+    if Ide.VEdge[0]< Pdist:
+        Ide.Mask[:,0:Ide.VEdge[0]]=0 # Get rid of fluff at start of row region <~ 10 nm
+    if image.shape[1]-Ide.VEdge[-1] < Pdist:
+        Ide.Mask[:,Ide.VEdge[-1]:]=0 # get rid of last region if width is < 10 nm
+    
+    Ide.LabMask, Ide.MaskCnt = scipy.ndimage.measurements.label(Ide.Mask)
+    Ide.RMask=np.mod(Ide.LabMask,2) # tag alternating rectangles as 1
+    Ide.BMask=(1-Ide.RMask)*Ide.Mask # Tag the other alternating rectangles
+    # Make images of masks for compositing
+    Ide.RMaskI=Image.fromarray(50*Ide.RMask).convert(mode="L") # note the 50 controls the transparency of the color
+    Ide.BMaskI=Image.fromarray(50*Ide.BMask).convert(mode="L")
+
+    Ide.RImage=Image.new('RGB',Ide.RMaskI.size,'Red')
+    Ide.BImage=Image.new('RGB',Ide.BMaskI.size,'Blue')
+    
+    Ide.MImage=scipy.misc.toimage(image).convert(mode="RGB") 
+    Ide.CImage=Image.composite(Ide.RImage,Image.fromarray(image).convert(mode="RGB"),Ide.RMaskI)
+    Ide.CImage=Image.composite(Ide.BImage,Ide.CImage,Ide.BMaskI)
+    
+    Ide.CImage.show()
+    Ide.RTog=messagebox.askyesno(title="IDE Select",message="Is the IDE RED")
+    if Ide.RTog==1:
+        Ide.Mask=Ide.RMask
+    else:
+        Ide.Mask=Ide.BMask
+    
+#    WDomCI=Image.composite(RImage,Image.fromarray(100*np.uint8(image)).convert(mode="RGB"),WDomMaskI)
+#    WLabDomCI=Image.composite(RImage,WLabI,WDomMaskI)
+    
+#    WDomMaskI=Image.fromarray(WDomMask).convert(mode="L")
+    
+    
+#    Ide.SchIm=Image.fromarray( Ide.SchArray*100)
     
     #% Add toggle here for show/save
     #DYIm.show();DXIm.show();LapIm.show();
     
-    DXIm.save(os.path.join(Opt.FPath,"output",Opt.BName+"DX.tif"))
-    DYIm.save(os.path.join(Opt.FPath,"output",Opt.BName+"DY.tif"))
-    LapIm.save(os.path.join(Opt.FPath,"output",Opt.BName+"Lap.tif"))
-    return()
+#    DXIm.save(os.path.join(Opt.FPath,"output",Opt.BName+"DX.tif"))
+#    DYIm.save(os.path.join(Opt.FPath,"output",Opt.BName+"DY.tif"))
+#    SchIm.save(os.path.join(Opt.FPath,"output",Opt.BName+"Sch.tif"))
+    return(Ide)
 
 #%% Azimuthal Averaging
 def azimuthalAverage(image, center=None):
@@ -131,13 +214,14 @@ def FFT( im, Opt):
     Fixed the offset
     v0.2
     """
-   # FSize=np.min( im.shape )
-    FSize=500;
+    FSize=np.min( im.shape )
+    #FSize=500;
     FourierArray=np.fft.fft2( im, s=(FSize,FSize) );
     FreqA=np.fft.fftfreq(FSize, d=Opt.NmPP);
 #
     F2Array=np.fft.fftshift(FourierArray);    SpaceA=1/FreqA;
     PowerSpec2d= np.abs( F2Array )**2;
+    
     PowerSpec1d= azimuthalAverage(PowerSpec2d);
     
     Peak=scipy.signal.find_peaks_cwt(PowerSpec1d[0:int( np.floor(FSize/2))], np.arange(5,10),);  
@@ -148,7 +232,7 @@ def FFT( im, Opt):
         PFreq[i]=FreqA[Peak[i]]
         Pspace[i]=1/FreqA[Peak[i]]
         PHeight[i]=PowerSpec1d[Peak[i]]
-        print("Peak %d found at %f \n" % (i, Pspace[i]))
+        #print("Peak %d found at %f \n" % (i, Pspace[i]))
     if Peak[0] < 4: # if first peak is found at L= infty
         PHeight[0]=0; # dont consider it for characteristic peak
 
@@ -245,7 +329,8 @@ def RSO(im, Opt):
 def Label(im, Opt):
     """
     Label connected domains, calculate area fractions of dominant domain
-    v0.1
+    Also marks domains that are present on both sides with BLUE
+    v0.2
     """
     BCount=(im==0).sum()
     WCount=(im.size-BCount)
@@ -262,24 +347,38 @@ def Label(im, Opt):
             
     #print("Dominant index %d is %f of total" % (LDomI, LDomFrac))
     WDomMask= ( LabArray==WDomI )*255;
-    WDomMaskI=Image.fromarray(WDomMask)
-    WDomMaskI=WDomMaskI.convert(mode="L")
+    WDomMaskI=Image.fromarray(WDomMask).convert(mode="L")
+    """
+    Part 2 doing domains top.bottom
+    """
+    Size=int(Opt.NmPP*10) # what is the top zone height? here 10 nm
+    TLab=np.unique(LabArray[:Size]);BLab=np.unique(LabArray[-Size:]); # What areas are at top? Which are at bottom?   
+    ThroughLab=np.intersect1d(TLab,BLab, assume_unique=True);
+    ThroughLab=ThroughLab[ThroughLab!=0]; # remove zero as it is background
+    ThroughMask=np.in1d(LabArray, ThroughLab).reshape(LabArray.shape)
+    ThroughMaskI=Image.fromarray(ThroughMask*255).convert(mode="L")    
     
+    """
+    Part 3 makign images
+    """
     (CIMH,CIMW)=im.shape
     
     RImage=Image.new('RGB',(CIMW,CIMH),'Red')
-
-    WLabI=scipy.misc.toimage(LabArray).convert(mode="RGB") 
-    WDomCI=Image.composite(RImage,Image.fromarray(100*np.uint8(im)).convert(mode="RGB"),WDomMaskI)
-    WLabDomCI=Image.composite(RImage,WLabI,WDomMaskI)
+    BImage=Image.new('RGB',(CIMW,CIMH),'Blue')
+    WLabI=scipy.misc.toimage(LabArray).convert(mode="RGB")  # Labeled image
+    WDomCI=Image.composite(RImage,Image.fromarray(100*np.uint8(im)).convert(mode="RGB"),WDomMaskI) # Red Dom on Original
+    WLabDomCI=Image.composite(RImage,WLabI,WDomMaskI) # red dom on mask image
+    WThroughCI=Image.composite(BImage,Image.fromarray(100*np.uint8(im)).convert(mode="RGB"),ThroughMaskI)
     if Opt.LabelSh == 1:        
         WLabI.show()
         WDomCI.show()
         WLabDomCI.show()
+        WThroughCI.show()
     if Opt.LabelSa == 1:
         WLabI.save(os.path.join(Opt.FPath,"output",Opt.BName+"Lab.tif"))
         WDomCI.save(os.path.join(Opt.FPath,"output",Opt.BName+"DomC.tif"))
-        WDomCI.save(os.path.join(Opt.FPath,"output",Opt.BName+"LabDomC.tif"))    
+        WDomCI.save(os.path.join(Opt.FPath,"output",Opt.BName+"LabDomC.tif"))
+        WThroughCI.save(os.path.join(Opt.FPath,"output",Opt.BName+"ThroughDomC.tif"))
     return(WFrac, BFrac, WDomI, WDomFrac);
     
 #%%
@@ -416,26 +515,54 @@ def OrientationDetect(im):
     
     
 #%% Angle Mapping
-def AngMap(angarray,maskarray=1):
+def AngMap(angarray,Opt, maskarray=1, weightarray=1):
     class AngMap:
         pass
         
-    
-    #angarray=np.absolute(np.pi/4-angarray) #Renormalize to between 0 and pi/4
-    angmask=angarray[maskarray != 0]# Mask out the data
-
         
-    
+    #angarray=np.absolute(np.pi/4-angarray) #Renormalize to between 0 and pi/4
+#    angmask=angarray[maskarray != 0]# Mask out the data note this way flattens
+    angmask=angarray*maskarray
+#    angmask1=scipy.ndimage.binary_erosion(maskarray,structure=np.ones((3,3)))
+#    angmask2=scipy.ndimage.binary_erosion(maskarray)  
+
+
     AngMap.Plot=plt.figure();
-    AngMap.Plt1=AngMap.Plot.add_subplot(211)
-    AngMap.Plt1.hist(angarray.flatten(), bins=100)
-    AngMap.plt.set_title('Orientation distribution Unmasked')
-    AngMap.Plt2=AngMap.Plot.add_subplot(212)
-    AngMap.Plt2.hist(angmask.flatten(), bins=100)
-    AngMap.plt2.set_title('Orientation Distribution Masked')    
+    AngMap.Plt1=AngMap.Plot.add_subplot(221)
+    hist,bins = np.histogram(angarray, bins=100, range=(0,np.pi/2))
+    #going to dump this one here
+    np.savetxt(os.path.join(Opt.FPath,"output",Opt.BName + "Hist.csv"),hist,delimiter=',')
     
-    AngMap.Plot.show()
+    width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
+    AngMap.Plt1.bar(center,hist,align='center',width=width)
+    AngMap.Plt1.set_title('OD')
     
+    AngMap.Plt2=AngMap.Plot.add_subplot(222)
+    hist,bins = np.histogram(angmask, bins=100, range=(0,np.pi/2))
+    width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
+    AngMap.Plt2.bar(center,hist,align='center',width=width)
+    AngMap.Plt2.set_title('OD+Mask') 
+    
+    
+    AngMap.Plt3=AngMap.Plot.add_subplot(223)
+    hist,bins = np.histogram(angarray, bins=100, weights=weightarray, range=(0,np.pi/2))
+    width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
+    AngMap.Plt3.bar(center,hist,align='center',width=width)
+    AngMap.Plt3.set_title('OD+Weight')
+    
+    
+    AngMap.Plt4=AngMap.Plot.add_subplot(224)
+    hist,bins = np.histogram(angmask, bins=100, weights=weightarray, range=(0,np.pi/2))
+    width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
+    AngMap.Plt4.bar(center,hist,align='center',width=width)
+    AngMap.Plt4.set_title('OD+Mask+Weight')    
+    plt.tight_layout(pad=0.5, w_pad=0.5, h_pad=0.5)    
+    
+    if 1 == 1: #REPLACE show
+        AngMap.Plot.show()
+    if 1==1: #Replace save
+        AngMap.Plot.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "AngMap.png"))
+
     
     return()
     

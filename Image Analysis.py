@@ -56,6 +56,10 @@ Opt.ACToggle=0; #autocorrelation (currently broken)
 Opt.ACCutoff=0; 
 Opt.ACSize=50;
 
+Opt.SchCO=5; # Step in from 'Ide' in nm
+
+
+
 #IndividualLog =1; # Write a log for each sample?
 CombLog = 0; # If One write a combined log, if two clean it out each time(don't append)
 ShowImage = 0; # Show images?
@@ -65,7 +69,7 @@ Opt.FFTToggle=0; #fft
 Opt.DenToggle=1; #Denoising ON
 Opt.ThreshToggle=1; #thresh
 Opt.RSOToggle=1; #remove small objects
-Opt.IDEToggle=1; # Mask out the electrodes for YK
+Opt.IDEToggle=0; # Mask out the electrodes for YK
 Opt.LabelToggle=1; # label domains
 Opt.SkeleToggle=1; # Skeleton/Defect analysis
 Opt.AngDetToggle=1; # Angle Detection
@@ -127,7 +131,7 @@ class GUI:
         self.l1.pack(side=tk.LEFT)
         self.e1 = tk.Entry(self.f1)
         self.e1.pack(side=tk.LEFT)
-        self.e1.insert(0, "0")  
+        self.e1.insert(0, "1.953125")  
         
         self.f2 = tk.ttk.Labelframe(Page1)
         self.f2.pack()
@@ -158,7 +162,7 @@ class GUI:
         self.fftTog=tk.Checkbutton(
             self.fftf,text="Enable FFT",variable=self.fftTVAR)
         self.fftTog.pack(side=tk.LEFT)
-#        self.fftTog.select()
+        self.fftTog.select()
         self.fftl=tk.Label(
             self.fftf, text="Enter L0 (nm) if not using FFT"
             )
@@ -180,7 +184,7 @@ class GUI:
         self.l3.pack(side=tk.LEFT)
         self.e6 = tk.Entry(self.Denf)
         self.e6.pack(side=tk.LEFT)
-        self.e6.insert(0,"100") #130
+        self.e6.insert(0,"100") #130 # 100 was prev YK
         self
         
         self.Threshf= tk.ttk.Labelframe(Page1)
@@ -195,7 +199,7 @@ class GUI:
         self.l4.pack(side=tk.LEFT)
         self.e7 = tk.Entry(self.Threshf)
         self.e7.pack(side=tk.LEFT)
-        self.e7.insert(0,"2")
+        self.e7.insert(0,"2.5") # normally 2 #2.5 was prev YK
         
         self.RSOf= tk.ttk.Labelframe(Page1)
         self.RSOf.pack()
@@ -436,13 +440,20 @@ for ImNum in range(0, len(FNFull) ):
     # http://www.astrobetter.com/blog/2010/03/03/fourier-transforms-of-images-in-python/
     
     if Opt.FFTToggle==1:   
-        Output.l0=IAFun.FFT( ArrayIn, Opt)   
+        Output.Calcl0=IAFun.FFT( ArrayIn, Opt)
+        if Output.l0 == 0:
+            Output.l0 = Output.Calcl0;
+        
     
     #%% Denoise
     if Opt.DenToggle==1:
         (DenArray, Output.Denoise)=IAFun.Denoising(ArrayIn, Opt, Output.l0)
         ArrayIn=DenArray
-
+    #%% Masking
+    if Opt.IDEToggle==1:
+        IDEArray=IAFun.YKDetect(DenArray, Opt)
+        ArrayIn=IDEArray*ArrayIn
+        
     #%% Adaptive Local Thresholding over X pixels, gauss                
     if Opt.ThreshToggle==1:
         (ThreshArray,Output.Thresh)=IAFun.Thresholding(ArrayIn, Opt, Output.l0)
@@ -455,9 +466,7 @@ for ImNum in range(0, len(FNFull) ):
         ArrayIn=RSOArray
         
 
-    #%% Masking
-    if Opt.IDEToggle==1:
-        IAFun.YKDetect(DenArray, Opt)
+
     #%% Feature Finding
     
     
@@ -473,6 +482,7 @@ for ImNum in range(0, len(FNFull) ):
     #%% Angle Detection
     if Opt.AngDetToggle==1:
         AngDetA=IAFun.OrientationDetect(DenArray)
+        IAFun.AngMap(AngDetA, Opt, ArrayIn, DenArray)
     
     #%% ED
     # Tamar recommended Canny edge so let's try it eh? 

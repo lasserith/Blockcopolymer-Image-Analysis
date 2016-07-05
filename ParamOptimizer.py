@@ -119,7 +119,7 @@ class GUI:
         self.l1.pack(side=tk.LEFT)
         self.e1 = tk.Entry(self.f1)
         self.e1.pack(side=tk.LEFT)
-        self.e1.insert(0, "0")  
+        self.e1.insert(0, "1.953125")  
         
         self.f2 = tk.ttk.Labelframe(Page1)
         self.f2.pack()
@@ -157,7 +157,7 @@ class GUI:
         self.fftl.pack(side=tk.LEFT) 
         self.L0 =tk.Entry(self.fftf)
         self.L0.pack(side=tk.LEFT)
-        self.L0.insert(0,"0")
+        self.L0.insert(0,"28")
         
         
         self.Denf= tk.ttk.Labelframe(Page1)
@@ -172,7 +172,7 @@ class GUI:
         self.l3.pack(side=tk.LEFT)
         self.e6 = tk.Entry(self.Denf)
         self.e6.pack(side=tk.LEFT)
-        self.e6.insert(0,"140") #130
+        self.e6.insert(0,"130") #130 # 100 was prev YK
         self
         
         self.Threshf= tk.ttk.Labelframe(Page1)
@@ -187,7 +187,7 @@ class GUI:
         self.l4.pack(side=tk.LEFT)
         self.e7 = tk.Entry(self.Threshf)
         self.e7.pack(side=tk.LEFT)
-        self.e7.insert(0,"2.5")
+        self.e7.insert(0,"2") # normally 2 #2.5 was prev YK
         
         self.RSOf= tk.ttk.Labelframe(Page1)
         self.RSOf.pack()
@@ -219,7 +219,7 @@ class GUI:
         
         self.EDF=tk.ttk.Labelframe(Page1)
         self.EDF.pack()
-        self.EDTog=tk.Checkbutton(self.EDF,text="Enable Edge Detection/LER",variable=Opt.EDToggle)
+        self.EDTog=tk.Checkbutton(self.EDF,text="Enable Edge Detection/LWR",variable=Opt.EDToggle)
         self.EDTog.pack()
         self.EDTog.select()
         
@@ -369,7 +369,7 @@ class GUI:
 
 
 root = tk.Tk()
-root.title("Parameter Optimizer Software by Moshe V"+Vers)
+root.title("Param Opt Software by Moshe V"+Vers)
 gui=GUI(root)
 
 root.mainloop()
@@ -427,9 +427,11 @@ for ImNum in range(0, len(FNFull) ):
     # http://www.astrobetter.com/blog/2010/03/03/fourier-transforms-of-images-in-python/
     
     if Opt.FFTToggle==1:   
-        Output.l0=IAFun.FFT( ArrayIn, Opt)
+        Output.Calcl0=IAFun.FFT( ArrayIn, Opt)
+        if Output.l0 == 0:
+            Output.l0 = Output.Calcl0;
         
-    OptBnds=[(10,300),(1,5)]
+    OptBnds=[(10,300),(0.5,5)]
     OptX0=[Opt.DenWeight , Opt.ThreshWeight]
     OptFun= lambda Params: (IAFun.ParamOptimizer(ArrayIn, Opt, Output.l0, Params))
 #    Res=scipy.optimize.minimize(OptFun, OptX0, method='Powell')
