@@ -529,28 +529,31 @@ def AngMap(angarray,Opt, maskarray=1, weightarray=1):
 
     AngMap.Plot=plt.figure();
     AngMap.Plt1=AngMap.Plot.add_subplot(221)
-    hist,bins = np.histogram(angarray, bins=100)
-    width=0.7*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
+    hist,bins = np.histogram(angarray, bins=100, range=(0,np.pi/2))
+    #going to dump this one here
+    np.savetxt(os.path.join(Opt.FPath,"output",Opt.BName + "Hist.csv"),hist,delimiter=',')
+    
+    width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
     AngMap.Plt1.bar(center,hist,align='center',width=width)
     AngMap.Plt1.set_title('OD')
     
     AngMap.Plt2=AngMap.Plot.add_subplot(222)
-    hist,bins = np.histogram(angmask, bins=100)
-    width=0.7*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
+    hist,bins = np.histogram(angmask, bins=100, range=(0,np.pi/2))
+    width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
     AngMap.Plt2.bar(center,hist,align='center',width=width)
     AngMap.Plt2.set_title('OD+Mask') 
     
     
     AngMap.Plt3=AngMap.Plot.add_subplot(223)
-    hist,bins = np.histogram(angarray, bins=100, weights=weightarray)
-    width=0.7*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
+    hist,bins = np.histogram(angarray, bins=100, weights=weightarray, range=(0,np.pi/2))
+    width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
     AngMap.Plt3.bar(center,hist,align='center',width=width)
     AngMap.Plt3.set_title('OD+Weight')
     
     
     AngMap.Plt4=AngMap.Plot.add_subplot(224)
-    hist,bins = np.histogram(angmask, bins=100, weights=weightarray)
-    width=0.7*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
+    hist,bins = np.histogram(angmask, bins=100, weights=weightarray, range=(0,np.pi/2))
+    width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
     AngMap.Plt4.bar(center,hist,align='center',width=width)
     AngMap.Plt4.set_title('OD+Mask+Weight')    
     plt.tight_layout(pad=0.5, w_pad=0.5, h_pad=0.5)    
