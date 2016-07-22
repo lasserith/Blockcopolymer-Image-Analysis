@@ -522,6 +522,8 @@ def AngMap(angarray,Opt, maskarray=1, weightarray=1):
         
     #angarray=np.absolute(np.pi/4-angarray) #Renormalize to between 0 and pi/4
 #    angmask=angarray[maskarray != 0]# Mask out the data note this way flattens
+    maskarray=1.0*maskarray
+    maskarray[maskarray==0]=float('nan') 
     angmask=angarray*maskarray
 #    angmask1=scipy.ndimage.binary_erosion(maskarray,structure=np.ones((3,3)))
 #    angmask2=scipy.ndimage.binary_erosion(maskarray)  

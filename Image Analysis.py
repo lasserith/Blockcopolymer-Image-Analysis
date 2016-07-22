@@ -65,7 +65,7 @@ CombLog = 0; # If One write a combined log, if two clean it out each time(don't 
 ShowImage = 0; # Show images?
 # Following is GUI supported
 Opt.EDToggle=0; #WIP ED/LER
-Opt.FFTToggle=0; #fft
+Opt.FFTToggle=1; #fft
 Opt.DenToggle=1; #Denoising ON
 Opt.ThreshToggle=1; #thresh
 Opt.RSOToggle=1; #remove small objects
@@ -481,7 +481,7 @@ for ImNum in range(0, len(FNFull) ):
     
     #%% Angle Detection
     if Opt.AngDetToggle==1:
-        AngDetA=IAFun.OrientationDetect(DenArray)
+        AngDetA=IAFun.OrientationDetect(SkelArray)
         IAFun.AngMap(AngDetA, Opt, ArrayIn, DenArray)
     
     #%% ED
