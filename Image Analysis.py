@@ -450,6 +450,7 @@ for ImNum in range(0, len(FNFull) ):
         (DenArray, Output.Denoise)=IAFun.Denoising(ArrayIn, Opt, Output.l0)
         ArrayIn=DenArray
     #%% Masking
+        # Works ok at detecting features in large fields
     if Opt.IDEToggle==1:
         IDEArray=IAFun.YKDetect(DenArray, Opt)
         ArrayIn=IDEArray*ArrayIn
@@ -481,7 +482,11 @@ for ImNum in range(0, len(FNFull) ):
     
     #%% Angle Detection
     if Opt.AngDetToggle==1:
-        AngDetA=IAFun.OrientationDetect(SkelArray)
+        try:
+            AngDetA=IAFun.OrientationDetect( DenArray)
+        except:
+            AngDetA=IAFun.OrientationDetect( imarray)
+              
         IAFun.AngMap(AngDetA, Opt, ArrayIn, DenArray)
     
     #%% ED
