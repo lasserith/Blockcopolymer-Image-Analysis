@@ -61,7 +61,15 @@ def Crop( imarray , Opt ):
     CropArray=imarray[int(0+Opt.CropT):int(IMH-Opt.CropB),int(Opt.CropL):int(IMW-Opt.CropR)]
     (CIMH,CIMW)=CropArray.shape
     return (CropArray, CIMH, CIMW);
+#%% Flood Fill
+def FFill(imarray, structure=np.ones(3,3)):
+    lcount = 0; # going to keep track of loop number. if it gets too high we need to stop
+    while imarray.min() == 0 & lcount < 500:
+        lcount += 1
+        
+        
     
+        
 #%% YKMagic Crop to detect IDE
 def YKDetect(image, Opt):
     class Ide:
