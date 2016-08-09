@@ -3,15 +3,12 @@
 Created on Tue Jan 19 14:38:16 2016
 
 @author: Moshe Dolejsi MosheDolejsi@uchicago.edu
-"""
 
-# -*- coding: utf-8 -*-
-"""
 Block Copolymer Analysis Package by Moshe Dolejsi
 Done in Spyder/VStudio2015 Community with Anaconda.
 Heavily Uses Numpy, Scipy, Mpltlib, and the rest of the usual
 
-ToDO: Classify independent function blocks
+TODO: Classify independent function blocks
 Allow the code to run  without inverse
 """
 #%%
@@ -458,13 +455,13 @@ for ImNum in range(0, len(FNFull) ):
     #%% Adaptive Local Thresholding over X pixels, gauss                
     if Opt.ThreshToggle==1:
         (ThreshArray,Output.Thresh)=IAFun.Thresholding(ArrayIn, Opt, Output.l0)
-        ArrayIn=ThreshArray
+        BinArray=ThreshArray
 
     #%% Remove Small Objects
     
     if Opt.RSOToggle==1:
-        RSOArray=IAFun.RSO(ArrayIn, Opt)
-        ArrayIn=RSOArray
+        RSOArray=IAFun.RSO(BinArray, Opt)
+        BinArray=RSOArray
         
 
 
@@ -472,35 +469,34 @@ for ImNum in range(0, len(FNFull) ):
     
     
     if Opt.LabelToggle==1:
-        (Output.WFrac, Output.BFrac, Output.WDomI, Output.WDomFrac)=IAFun.Label(ArrayIn,Opt)
+        (Output.WFrac, Output.BFrac, Output.WDomI, Output.WDomFrac)=IAFun.Label(BinArray,Opt)
         
     
     #%% Skeletonization / Defect could be split but that can be done later
     
     if Opt.SkeleToggle==1:
-        (SkelArray, SkelAC, Output.TCount, Output.TCA, Output.JCount, Output.JCA)=IAFun.Skeleton(ArrayIn,Opt)
+        (SkelArray, SkelAC, Output.TCount, Output.TCA, Output.JCount, Output.JCA)=IAFun.Skeleton(BinArray,Opt)
     
     #%% Angle Detection
+    
+    # todo fix so that AngEC is default
+    if Opt.AngDetToggle==2:
+            AngDetA=IAFun.OrientationDetect( DenArray) # old method
     if Opt.AngDetToggle==1:
-        try:
-            AngDetA=IAFun.OrientationDetect( DenArray)
-        except:
-            AngDetA=IAFun.OrientationDetect( imarray)
-              
-        IAFun.AngMap(AngDetA, Opt, ArrayIn, DenArray)
+            AngDetA=IAFun.AngEC( BinArray, Opt)          # new method
+    IAFun.AngMap(np.abs(AngDetA), Opt, maskarray=BinArray, weightarray=ArrayIn)
     
     #%% ED
     # Tamar recommended Canny edge so let's try it eh? 
     # We don't use the guassian blur because the denoising/thresholding does this for us
     
     if Opt.EDToggle==1:
-        (Output.LERMean,Output.LER3Sig,Output.LERMeanS,Output.LER3SigS)=IAFun.EdgeDetect(ArrayIn,Opt,SkelArray)
+        (Output.LERMean,Output.LER3Sig,Output.LERMeanS,Output.LER3SigS)=IAFun.EdgeDetect(BinArray,Opt,SkelArray)
             
 
-    
     #%% Autocorrel. LETS GO, Currently Not Working
     if Opt.ACToggle==5:
-        AutoCor=IAFun.AutoCorrelation(ArrayIn, Opt, SkelArray)
+        AutoCor=IAFun.AutoCorrelation(BinArray, Opt, SkelArray)
     
     #%% Find the inverse or 'Dark' Image repeat as above
     if Opt.Inversion==1:

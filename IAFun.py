@@ -62,11 +62,17 @@ def Crop( imarray , Opt ):
     (CIMH,CIMW)=CropArray.shape
     return (CropArray, CIMH, CIMW);
 #%% Flood Fill
-def FFill(imarray, structure=np.ones(3,3)):
+    """
+    We need to pass this function an image array in which 0 is the area not yet filled
+    We may need to arbitrarily offset the original data (EG instead of 0-90 we feed in 90-180 and then substract 90 after)
+    """
+def FFill(imarray, size_=(3,3)):
     lcount = 0; # going to keep track of loop number. if it gets too high we need to stop
     while imarray.min() == 0 & lcount < 500:
         lcount += 1
-        
+        FillArray=scipy.ndimage.morphology.grey_dilation(imarray, size=size_ )
+        imarray+=FillArray*(imarray==0)
+    return(imarray)
         
     
         
@@ -509,6 +515,10 @@ def EdgeDetect(im, Opt, SkeleArray):
     return(LERMean,LER3Sig,LERMeanS,LER3SigS);
 #%% Angle Detection
 def OrientationDetect(im):
+    """
+    Uses sobel derivatives to calculate the maximum gradient direction allowing for 
+    rough but noisy orientation detection, DEPRECATED use AngEC
+    """
     
     class AngDet:
         pass
@@ -520,13 +530,44 @@ def OrientationDetect(im):
     
     
     return(AngDet.AngArray)
+
+def AngEC(im, Opt, EDArray='none', SkelArray='none'):
+    """
+    Angle detection using the angle from edge of binary image to center of image
+    this requires the skeleton to be passed but it will recalculate the edge
+    TODO : Try to pass edge array to save time. Probably not worth any time but still.
+    """
+    if EDArray=='none':
+        EDArray=(im-skimage.morphology.binary_erosion(im, np.ones((3,3)))) 
+    if SkelArray=='none':
+        SkelArray=skimage.morphology.skeletonize(im)
+        
+    #find my edges (erode image and subtract from orig image)
+    EDDistA2=scipy.ndimage.morphology.distance_transform_edt( (1-SkelArray), return_distances=False, return_indices=True)
     
+    
+    Yind,Xind=np.mgrid[0:im.shape[0],0:im.shape[1]]
+    XDist=(EDDistA2[1,:,:]-Xind)
+    YDist=(EDDistA2[0,:,:]-Yind)
+    AngArray=np.arctan2(YDist,XDist)*180/np.pi
+    
+    #masking
+    EDArray=1.0*EDArray
+    EDArray[EDArray==0]=float('nan')
+    AngArray*=EDArray 
+    
+    # note that due to the algo the angle is not defined aside from the edges
+    # this masking insures the array conveys this fact
+    
+    return(AngArray)    
     
 #%% Angle Mapping
-def AngMap(angarray,Opt, maskarray=1, weightarray=1):
+def AngMap(angarray,Opt, maskarray=1, weightarray='none'):
     class AngMap:
         pass
         
+    if weightarray=='none':
+        weightarray=np.ones_like(angarray)
         
     #angarray=np.absolute(np.pi/4-angarray) #Renormalize to between 0 and pi/4
 #    angmask=angarray[maskarray != 0]# Mask out the data note this way flattens
@@ -541,8 +582,8 @@ def AngMap(angarray,Opt, maskarray=1, weightarray=1):
 
 
     AngMap.Plot=plt.figure();
-    AngMap.Plt1=AngMap.Plot.add_subplot(221)
-    hist,bins = np.histogram(angarray, bins=91, range=(0,90))
+    AngMap.Plt1=AngMap.Plot.add_subplot(221) # , range=(0,90)
+    hist,bins = np.histogram(angarray, bins=91)
     #going to dump this one here
     np.savetxt(os.path.join(Opt.FPath,"output",Opt.BName + "Hist.csv"),hist,delimiter=',')
     
@@ -551,21 +592,21 @@ def AngMap(angarray,Opt, maskarray=1, weightarray=1):
     AngMap.Plt1.set_title('OD')
     
     AngMap.Plt2=AngMap.Plot.add_subplot(222)
-    hist,bins = np.histogram(angmask, bins=91, range=(0,90))
+    hist,bins = np.histogram(angmask, bins=91)
     width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
     AngMap.Plt2.bar(center,hist,align='center',width=width)
     AngMap.Plt2.set_title('OD+Mask') 
     
     
     AngMap.Plt3=AngMap.Plot.add_subplot(223)
-    hist,bins = np.histogram(angarray, bins=91, weights=weightarray, range=(0,90))
+    hist,bins = np.histogram(angarray, bins=91, weights=weightarray)
     width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
     AngMap.Plt3.bar(center,hist,align='center',width=width)
     AngMap.Plt3.set_title('OD+Weight')
     
     
     AngMap.Plt4=AngMap.Plot.add_subplot(224)
-    hist,bins = np.histogram(angmask, bins=91, weights=weightarray, range=(0,90))
+    hist,bins = np.histogram(angmask, bins=91, weights=weightarray)
     width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
     AngMap.Plt4.bar(center,hist,align='center',width=width)
     AngMap.Plt4.set_title('OD+Mask+Weight')    
@@ -578,6 +619,8 @@ def AngMap(angarray,Opt, maskarray=1, weightarray=1):
 
     
     return()
+
+
     
 #%% Autocorrelation T_T
 def AutoCorrelation(im,Opt, AngArray, SkelArray):
