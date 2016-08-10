@@ -551,15 +551,26 @@ def AngEC(im, Opt, EDArray='none', SkelArray='none'):
     YDist=(EDDistA2[0,:,:]-Yind)
     AngArray=np.arctan2(YDist,XDist)*180/np.pi
     
+    #AngArray is -180- - > +180 lets make it 0<x<=180
+    AngArray[AngArray<=0]+=180
+
     #masking
     EDArray=1.0*EDArray
-    EDArray[EDArray==0]=float('nan')
+    EDArray[EDArray==0]=float('nan') # we can mask with NAN if needed
     AngArray*=EDArray 
     
     # note that due to the algo the angle is not defined aside from the edges
     # this masking insures the array conveys this fact
-    
-    return(AngArray)    
+    AngPlot=plt.figure()
+    AngPlot1=AngPlot.add_subplot(111)
+    AngPlot1.imshow(AngArray)
+
+    if 1 == 1: #REPLACE show
+        AngPlot.show() #TODO figure out how to fix this so it doesn't have to be showed
+    if 1==1: #Replace save
+        AngPlot.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "AngEC.png"))
+    plt.close()
+    return(AngArray)
     
 #%% Angle Mapping
 def AngMap(angarray,Opt, maskarray=1, weightarray='none'):
@@ -583,7 +594,7 @@ def AngMap(angarray,Opt, maskarray=1, weightarray='none'):
 
     AngMap.Plot=plt.figure();
     AngMap.Plt1=AngMap.Plot.add_subplot(221) # , range=(0,90)
-    hist,bins = np.histogram(angarray, bins=91)
+    hist,bins = np.histogram(angarray, bins=19, range=(0,180))
     #going to dump this one here
     np.savetxt(os.path.join(Opt.FPath,"output",Opt.BName + "Hist.csv"),hist,delimiter=',')
     
@@ -592,21 +603,21 @@ def AngMap(angarray,Opt, maskarray=1, weightarray='none'):
     AngMap.Plt1.set_title('OD')
     
     AngMap.Plt2=AngMap.Plot.add_subplot(222)
-    hist,bins = np.histogram(angmask, bins=91)
+    hist,bins = np.histogram(angmask, bins=181, range=(0,180))
     width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
     AngMap.Plt2.bar(center,hist,align='center',width=width)
     AngMap.Plt2.set_title('OD+Mask') 
     
     
     AngMap.Plt3=AngMap.Plot.add_subplot(223)
-    hist,bins = np.histogram(angarray, bins=91, weights=weightarray)
+    hist,bins = np.histogram(angarray, bins=181, range=(0,180), weights=weightarray)
     width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
     AngMap.Plt3.bar(center,hist,align='center',width=width)
     AngMap.Plt3.set_title('OD+Weight')
     
     
     AngMap.Plt4=AngMap.Plot.add_subplot(224)
-    hist,bins = np.histogram(angmask, bins=91, weights=weightarray)
+    hist,bins = np.histogram(angmask, bins=181, range=(0,180), weights=weightarray)
     width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
     AngMap.Plt4.bar(center,hist,align='center',width=width)
     AngMap.Plt4.set_title('OD+Mask+Weight')    
@@ -616,7 +627,7 @@ def AngMap(angarray,Opt, maskarray=1, weightarray='none'):
         AngMap.Plot.show()
     if 1==1: #Replace save
         AngMap.Plot.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "AngMap.png"))
-
+    plt.close()
     
     return()
 

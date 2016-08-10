@@ -75,6 +75,7 @@ Opt.AngDetToggle=1; # Angle Detection
 Opt.Machine="Unknown";
 Output.Denoise='NA';
 
+plt.ioff() # turn off interactive plotting
 
 
 
@@ -128,7 +129,7 @@ class GUI:
         self.l1.pack(side=tk.LEFT)
         self.e1 = tk.Entry(self.f1)
         self.e1.pack(side=tk.LEFT)
-        self.e1.insert(0, "1.953125")  
+        self.e1.insert(0, "0")  
         
         self.f2 = tk.ttk.Labelframe(Page1)
         self.f2.pack()
@@ -151,7 +152,7 @@ class GUI:
         
         self.e5 = tk.Entry(self.f2)
         self.e5.pack(side=tk.LEFT)
-        self.e5.insert(0, "50")          
+        self.e5.insert(0, "100")          
         
         self.fftf=tk.ttk.Labelframe(Page1)
         self.fftf.pack()
@@ -166,7 +167,7 @@ class GUI:
         self.fftl.pack(side=tk.LEFT) 
         self.L0 =tk.Entry(self.fftf)
         self.L0.pack(side=tk.LEFT)
-        self.L0.insert(0,"28")
+        self.L0.insert(0,"0")
         
         
         self.Denf= tk.ttk.Labelframe(Page1)
@@ -181,7 +182,7 @@ class GUI:
         self.l3.pack(side=tk.LEFT)
         self.e6 = tk.Entry(self.Denf)
         self.e6.pack(side=tk.LEFT)
-        self.e6.insert(0,"100") #130 # 100 was prev YK
+        self.e6.insert(0,"130")
         self
         
         self.Threshf= tk.ttk.Labelframe(Page1)
@@ -196,7 +197,7 @@ class GUI:
         self.l4.pack(side=tk.LEFT)
         self.e7 = tk.Entry(self.Threshf)
         self.e7.pack(side=tk.LEFT)
-        self.e7.insert(0,"2.5") # normally 2 #2.5 was prev YK
+        self.e7.insert(0,"2") # normally 2 #2.5 was prev YK
         
         self.RSOf= tk.ttk.Labelframe(Page1)
         self.RSOf.pack()
@@ -481,10 +482,10 @@ for ImNum in range(0, len(FNFull) ):
     
     # todo fix so that AngEC is default
     if Opt.AngDetToggle==2:
-            AngDetA=IAFun.OrientationDetect( DenArray) # old method
+            AngDetA=IAFun.OrientationDetect( ArrayIn ) # old method
     if Opt.AngDetToggle==1:
             AngDetA=IAFun.AngEC( BinArray, Opt)          # new method
-    IAFun.AngMap(np.abs(AngDetA), Opt, maskarray=BinArray, weightarray=ArrayIn)
+    IAFun.AngMap(AngDetA, Opt, maskarray=BinArray, weightarray=ArrayIn)
     
     #%% ED
     # Tamar recommended Canny edge so let's try it eh? 
