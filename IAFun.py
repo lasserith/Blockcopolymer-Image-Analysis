@@ -47,7 +47,7 @@ def AutoDetect( FileName , Opt ):
     return;
 #%% Crop
     """
-    Self explanatory
+    Crops image
     V0.1
     """
 
@@ -65,6 +65,8 @@ def Crop( imarray , Opt ):
     """
     We need to pass this function an image array in which 0 is the area not yet filled
     We may need to arbitrarily offset the original data (EG instead of 0-90 we feed in 90-180 and then substract 90 after)
+    Might consider adding a mask function, but currently is not in use so it is not important
+    V=0.1
     """
 def FFill(imarray, size_=(3,3)):
     lcount = 0; # going to keep track of loop number. if it gets too high we need to stop
@@ -76,8 +78,13 @@ def FFill(imarray, size_=(3,3)):
         
     
         
-#%% YKMagic Crop to detect IDE
+#%% YKMDetect
 def YKDetect(image, Opt):
+    """
+    Tries to detect IDE areas by looking at sudden changes in derivatives 
+    it works ok currently but needs improvement prior to deployment
+    V:PreAlpha
+    """
     class Ide:
         pass
     
@@ -373,7 +380,7 @@ def Label(im, Opt):
     ThroughMaskI=Image.fromarray(ThroughMask*255).convert(mode="L")    
     
     """
-    Part 3 makign images
+    Part 3 making images
     """
     (CIMH,CIMW)=im.shape
     
@@ -520,7 +527,8 @@ def EdgeDetect(im, Opt, SkeleArray):
 def AngSobel(im):
     """
     Uses sobel derivatives to calculate the maximum gradient direction allowing for 
-    rough but noisy orientation detection, DEPRECATED use AngEC
+    rough but noisy orientation detection.
+    V0.1
     """
     
     class AngDet:
@@ -531,7 +539,6 @@ def AngSobel(im):
     AngDet.AngArray=np.float32(np.arctan2(AngDet.A1stDY,AngDet.A1stDX))    
     AngDet.AngArray*=180/np.pi
     
-    
     return(AngDet.AngArray)
 
 def AngEC(im, Opt, EDArray='none', SkelArray='none'):
@@ -539,6 +546,7 @@ def AngEC(im, Opt, EDArray='none', SkelArray='none'):
     Angle detection using the angle from edge of binary image to center of image
     this requires the skeleton to be passed but it will recalculate the edge
     TODO : Try to pass edge array to save time. Probably not worth any time but still.
+    V0.1
     """
     if EDArray=='none':
         EDArray=(im-skimage.morphology.binary_erosion(im, np.ones((3,3)))) 
@@ -571,10 +579,10 @@ def AngEC(im, Opt, EDArray='none', SkelArray='none'):
     AngPlot=plt.figure()
     AngPlot1=AngPlot.add_subplot(111)
     AngPlot1.imshow(AngArray)
+    if Opt.AECSh == 1: #REPLACE show
 
-    if 1 == 1: #REPLACE show
-        AngPlot.show() #TODO add to GUI
-    if 1==1: #Replace save
+        AngPlot.show() #
+    if Opt.AECSa==1: #Replace save
         AngPlot.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "AngEC.png"), dpi=300)
     plt.close(AngPlot)
     return(AngArray)
@@ -583,6 +591,13 @@ def AngEC(im, Opt, EDArray='none', SkelArray='none'):
     
 #%% Angle Hist: Creates histograms of angles
 def AngHist(AngArray,Opt, MaskArray=1, WeightArray='none'):
+    """
+    Simply takes an array and computes the histograms with 1 degree bins from 0-180
+    Also weights pixels with weight array if given, and masks with mask array if given
+    Currently only dumps to text the unweighted un masked histogram
+    Outputs the number of pixels with angles at the highest peak and second highest as well as total pixels counted
+    Which can be used to track progress of alignment or percent alignment
+    """
     class AngHist:
         pass
         
@@ -685,7 +700,7 @@ def AngHist(AngArray,Opt, MaskArray=1, WeightArray='none'):
 def AutoCorrelation(im,Opt, AngArray, SkelArray):
     """
     Autocorrelation is a WIP still
-    V0
+    VALPHA
     """
     class AutoCor:
         pass

@@ -46,8 +46,8 @@ class Output:
 Opt.AutoDenoise=1;
 Opt.AutoThresh=1;
 
-Opt.RSFactor=4;# Implemented: TODO add to GUI
-Opt.RSToggle=0; # 
+Opt.SSFactor=4;# Implemented: TODO add to GUI
+Opt.SSToggle=0; # 
 Opt.Inversion=0;
 Opt.ACToggle=0; #autocorrelation (currently broken)
 Opt.ACCutoff=0; 
@@ -84,13 +84,15 @@ class GUI:
     def __init__(self, master):
       
         
-        
-        self.fftTVAR=tk.IntVar()
-        self.DenTVAR=tk.IntVar()
-        self.ThreshTVAR=tk.IntVar()
-        self.RSOTVAR=tk.IntVar()
-        self.SkeleTVAR=tk.IntVar()
-        Opt.EDToggle=tk.IntVar()        
+        Opt.SSToggle=tk.IntVar()
+        Opt.FFTToggle=tk.IntVar()
+        Opt.DenToggle=tk.IntVar()
+        Opt.ThreshToggle=tk.IntVar()
+        Opt.RSOToggle=tk.IntVar()
+        Opt.SkeleToggle=tk.IntVar()
+        Opt.EDToggle=tk.IntVar()   
+        Opt.AngDetToggle=tk.IntVar()
+
         
         #show images?
         Opt.CropSh=tk.IntVar()
@@ -101,6 +103,7 @@ class GUI:
         Opt.LabelSh=tk.IntVar()
         Opt.SkeleSh=tk.IntVar()
         Opt.EDSh=tk.IntVar()
+        Opt.AECSh=tk.IntVar()
         #save images?
         Opt.CropSa=tk.IntVar()
         Opt.FFTSa=tk.IntVar()
@@ -110,6 +113,7 @@ class GUI:
         Opt.LabelSa=tk.IntVar()
         Opt.SkeleSa=tk.IntVar()
         Opt.EDSa=tk.IntVar()
+        Opt.AECSa=tk.IntVar()
         
         Note=tk.ttk.Notebook(master)
         
@@ -120,6 +124,8 @@ class GUI:
         Note.add(Page1,text='Options')
         Note.add(Page2,text='Image Options')
         Note.select(Page1)
+        
+
         
         self.f1 = tk.ttk.Labelframe(Page1)
         self.f1.pack()              
@@ -138,32 +144,38 @@ class GUI:
             )
         self.l2.pack(side=tk.TOP)
         
-        self.e2 = tk.Entry(self.f2)
-        self.e2.pack(side=tk.LEFT)
-        self.e2.insert(0, "0")  
+        self.CropT = tk.Entry(self.f2)
+        self.CropT.pack(side=tk.LEFT)
+        self.CropT.insert(0, "0")  
         
-        self.e3 = tk.Entry(self.f2)
-        self.e3.pack(side=tk.LEFT)
-        self.e3.insert(0, "0")
+        self.CropL = tk.Entry(self.f2)
+        self.CropL.pack(side=tk.LEFT)
+        self.CropL.insert(0, "0")
         
-        self.e4 = tk.Entry(self.f2)
-        self.e4.pack(side=tk.LEFT)
-        self.e4.insert(0, "0")
+        self.CropR = tk.Entry(self.f2)
+        self.CropR.pack(side=tk.LEFT)
+        self.CropR.insert(0, "0")
         
-        self.e5 = tk.Entry(self.f2)
-        self.e5.pack(side=tk.LEFT)
-        self.e5.insert(0, "100")          
+        self.CropB = tk.Entry(self.f2)
+        self.CropB.pack(side=tk.LEFT)
+        self.CropB.insert(0, "100")          
+        
+        self.ssampf=tk.ttk.Labelframe(Page1)
+        self.ssampf.pack()
+        self.ssTog=tk.Checkbutton(self.ssampf,text="Enable Super Sampling (INTENSIVE)",variable=Opt.SSToggle)
+        self.ssTog.pack(side=tk.LEFT)
+        self.ssTog.deselect()
+        self.ssl=tk.Label(self.ssampf, text="Scaling factor, integer (4=16x total pixels)").pack(side=tk.LEFT)
+        self.sse=tk.Entry(self.ssampf)
+        self.sse.pack(side=tk.LEFT)
+        self.sse.insert(0,"4")
         
         self.fftf=tk.ttk.Labelframe(Page1)
         self.fftf.pack()
-
-        self.fftTog=tk.Checkbutton(
-            self.fftf,text="Enable FFT",variable=self.fftTVAR)
+        self.fftTog=tk.Checkbutton(self.fftf,text="Enable FFT",variable=Opt.FFTToggle)
         self.fftTog.pack(side=tk.LEFT)
         self.fftTog.select()
-        self.fftl=tk.Label(
-            self.fftf, text="Enter L0 (nm) if not using FFT"
-            )
+        self.fftl=tk.Label(self.fftf, text="Enter L0 (nm) if not using FFT")
         self.fftl.pack(side=tk.LEFT) 
         self.L0 =tk.Entry(self.fftf)
         self.L0.pack(side=tk.LEFT)
@@ -173,7 +185,7 @@ class GUI:
         self.Denf= tk.ttk.Labelframe(Page1)
         self.Denf.pack()
         self.DenTog=tk.Checkbutton(
-            self.Denf,text="Enable Denoising",variable=self.DenTVAR)
+            self.Denf,text="Enable Denoising",variable=Opt.DenToggle)
         self.DenTog.pack(side=tk.LEFT)
         self.DenTog.select()
         self.l3=tk.Label(
@@ -183,12 +195,12 @@ class GUI:
         self.e6 = tk.Entry(self.Denf)
         self.e6.pack(side=tk.LEFT)
         self.e6.insert(0,"130")
-        self
+
         
         self.Threshf= tk.ttk.Labelframe(Page1)
         self.Threshf.pack()
         self.ThreshTog=tk.Checkbutton(
-            self.Threshf,text="Enable Thresholding",variable=self.ThreshTVAR)
+            self.Threshf,text="Enable Thresholding",variable=Opt.ThreshToggle)
         self.ThreshTog.pack(side=tk.LEFT)
         self.ThreshTog.select()
         self.l4=tk.Label(
@@ -202,7 +214,7 @@ class GUI:
         self.RSOf= tk.ttk.Labelframe(Page1)
         self.RSOf.pack()
         self.RSOTog=tk.Checkbutton(
-            self.RSOf,text="Remove small features",variable=self.RSOTVAR)
+            self.RSOf,text="Remove small features",variable=Opt.RSOToggle)
         self.RSOTog.pack(side=tk.LEFT)
         self.RSOTog.select()
         self.l5=tk.Label(
@@ -211,12 +223,21 @@ class GUI:
         self.l5.pack(side=tk.LEFT)
         self.e8 = tk.Entry(self.RSOf)
         self.e8.pack(side=tk.LEFT)
-        self.e8.insert(0,"10")        
+        self.e8.insert(0,"10")  
+        
+        
+        self.Angf= tk.ttk.Labelframe(Page1)
+        self.Angf.pack()
+        self.Angfl=tk.Label(self.Angf, text="Angle Detection algorithm").pack(side=tk.LEFT)
+        self.AngTogN=tk.Radiobutton(self.Angf,text="None",variable=Opt.AngDetToggle, value=0).pack(side=tk.LEFT)
+        self.AngTogEC=tk.Radiobutton(self.Angf,text="Edge/Center",variable=Opt.AngDetToggle, value=1).pack(side=tk.LEFT)
+        self.AngTogS=tk.Radiobutton(self.Angf,text="Sobel", variable=Opt.AngDetToggle, value=2).pack(side=tk.LEFT)
+        Opt.AngDetToggle.set(1) # pick EC as default
         
         self.Skelef= tk.ttk.Labelframe(Page1)
         self.Skelef.pack()
         self.SkeleTog=tk.Checkbutton(
-            self.Skelef,text="Enable Skeleton/Defect Analysis",variable=self.SkeleTVAR)
+            self.Skelef,text="Enable Skeleton/Defect Analysis",variable=Opt.SkeleToggle)
         self.SkeleTog.pack(side=tk.LEFT)
         self.SkeleTog.select()
         self.l6=tk.Label(
@@ -276,20 +297,26 @@ class GUI:
         self.RSOSaC.grid(row=25,columnspan=2,column=2)
         #label domains
         self.LabelShC=tk.Checkbutton(Page2,text='Show Labeled Image',variable=Opt.LabelSh)
-        self.LabelShC.grid(row=26,columnspan=2,column=0)
+        self.LabelShC.grid(row=30,columnspan=2,column=0)
         self.LabelSaC=tk.Checkbutton(Page2,text='Save Labeled Image',variable=Opt.LabelSa)
-        self.LabelSaC.grid(row=26,columnspan=2,column=2)
+        self.LabelSaC.grid(row=30,columnspan=2,column=2)
         #Skele
         self.SkeleShC=tk.Checkbutton(Page2,text='Show Skeletonized Image',variable=Opt.SkeleSh)
-        self.SkeleShC.grid(row=30,columnspan=2,column=0)
+        self.SkeleShC.grid(row=35,columnspan=2,column=0)
         self.SkeleSaC=tk.Checkbutton(Page2,text='Save Skeletonized Image',variable=Opt.SkeleSa)
-        self.SkeleSaC.grid(row=30,columnspan=2,column=2)
+        self.SkeleSaC.grid(row=35,columnspan=2,column=2)
         #EdgeDetect
-        self.EDShC=tk.Checkbutton(Page2,text='Show Edge Detection/LER image',variable=Opt.EDSh)
-        self.EDShC.grid(row=35,columnspan=2,column=0)
-        self.EDSaC=tk.Checkbutton(Page2,text='Save Edge Detection/LER image',variable=Opt.EDSa)
-        self.EDSaC.grid(row=35,columnspan=2,column=2)
+        self.EDShC=tk.Checkbutton(Page2,text='Show Edge Detection/LWR image',variable=Opt.EDSh)
+        self.EDShC.grid(row=40,columnspan=2,column=0)
+        self.EDSaC=tk.Checkbutton(Page2,text='Save Edge Detection/LWR image',variable=Opt.EDSa)
+        self.EDSaC.grid(row=40,columnspan=2,column=2)
+        #Angle Detection Edge-Center
+        self.AECShC=tk.Checkbutton(Page2,text='Show Angle - Edge/Center image',variable=Opt.AECSh)
+        self.AECShC.grid(row=45,columnspan=2,column=0)
+        self.AECSaC=tk.Checkbutton(Page2,text='Save Angle - Edge/Center image',variable=Opt.AECSa)
+        self.AECSaC.grid(row=45,columnspan=2,column=2)
         
+        # make buttons to select/deselect all
     def ImShowFun(self):
         self.CropShC.select()
         self.FFTShC.select()
@@ -299,6 +326,7 @@ class GUI:
         self.LabelShC.select()
         self.SkeleShC.select()
         self.EDShC.select()
+        self.AECShC.select()
         
     def ImShowNoFun(self):
         self.CropShC.deselect()
@@ -309,6 +337,7 @@ class GUI:
         self.LabelShC.deselect()
         self.SkeleShC.deselect()
         self.EDShC.deselect()
+        self.AECShC.deselect()
         
     def ImSaveFun(self):
         self.CropSaC.select()
@@ -319,6 +348,7 @@ class GUI:
         self.LabelSaC.select()
         self.SkeleSaC.select()
         self.EDSaC.select()
+        self.AECSaC.select()
         
     def ImSaveNoFun(self):
         self.CropSaC.deselect()
@@ -329,6 +359,7 @@ class GUI:
         self.LabelSaC.deselect()
         self.SkeleSaC.deselect()
         self.EDSaC.deselect()
+        self.AECSaC.deselect()
         
     def begin(self):
         
@@ -341,21 +372,27 @@ class GUI:
         except:
             pass
         
-        Opt.FFTToggle=int(self.fftTVAR.get())
-        Opt.DenToggle=int(self.DenTVAR.get())
-        Opt.ThreshToggle=int(self.ThreshTVAR.get())
-        Opt.RSOToggle=int(self.RSOTVAR.get())
-        Opt.SkeleToggle=int(self.SkeleTVAR.get())
-        Opt.EDToggle=int(Opt.EDToggle.get())        
+        # convert everything to ints so they can be read outside
+        Opt.SSToggle=int(Opt.SSToggle.get())
+        Opt.FFTToggle=int(Opt.FFTToggle.get())
+        Opt.DenToggle=int(Opt.DenToggle.get())
+        Opt.ThreshToggle=int(Opt.ThreshToggle.get())
+        Opt.RSOToggle=int(Opt.RSOToggle.get())
+        Opt.SkeleToggle=int(Opt.SkeleToggle.get())
+        Opt.EDToggle=int(Opt.EDToggle.get())
+        Opt.AngDetToggle=int(Opt.AngDetToggle.get())        
         
-        Opt.CropT=float(self.e2.get())
-        Opt.CropL=float(self.e3.get())
-        Opt.CropR=float(self.e4.get())
-        Opt.CropB=float(self.e5.get())
+        Opt.SSFactor=int(self.sse.get())
+        Opt.CropT=float(self.CropT.get())
+        Opt.CropL=float(self.CropL.get())
+        Opt.CropR=float(self.CropR.get())
+        Opt.CropB=float(self.CropB.get())
         Opt.DenWeight=float(self.e6.get())
         Opt.ThreshWeight=float(self.e7.get())
         Opt.SPCutoff =float(self.e8.get())
         Opt.DefEdge=float(self.e9.get())
+        
+        
         
         Opt.CropSh=int(Opt.CropSh.get())
         Opt.FFTSh=int(Opt.FFTSh.get())
@@ -365,6 +402,7 @@ class GUI:
         Opt.LabelSh=int(Opt.LabelSh.get())
         Opt.SkeleSh=int(Opt.SkeleSh.get())
         Opt.EDSh=int(Opt.EDSh.get())
+        Opt.AECSh=int(Opt.AECSh.get())
         #save images?
         Opt.CropSa=int(Opt.CropSa.get())
         Opt.FFTSa=int(Opt.FFTSa.get())
@@ -374,6 +412,7 @@ class GUI:
         Opt.LabelSa=int(Opt.LabelSa.get())
         Opt.SkeleSa=int(Opt.SkeleSa.get())
         Opt.EDSa=int(Opt.EDSa.get())
+        Opt.AECSa=int(Opt.AECSa.get())
         
         root.destroy()
 
@@ -420,16 +459,16 @@ for ImNum in range(0, len(FNFull) ):
     (CropArray, Output.CIMH, Output.CIMW)=IAFun.Crop( imarray , Opt )
     imarray=CropArray
 
-    #%% Data Rescaling STUPIDLY INTENSIVE
+    #%% Data SuperSampling STUPIDLY INTENSIVE
     
-    if Opt.RSToggle==1:
-        Output.CIMH*=Opt.RSFactor;
-        Output.CIMW*=Opt.RSFactor;
+    if Opt.SSToggle==1:
+        Output.CIMH*=Opt.SSFactor;
+        Output.CIMW*=Opt.SSFactor;
         RSArray=skimage.transform.resize(imarray,(Output.CIMH,Output.CIMW))
-        Opt.NmPP*=1/Opt.RSFactor;
+        Opt.NmPP*=1/Opt.SSFactor;
         imarray=RSArray
     else:
-        Opt.RSFactor=1;
+        Opt.SSFactor=1;
 
     #$$ Set ArrayIn
     ArrayIn=imarray; 
@@ -512,14 +551,14 @@ for ImNum in range(0, len(FNFull) ):
     
     #%% Data Rescaling Not Yet Implemented correctly
     
-        if Opt.RSToggle==1:
-            Output.CIMH*=Opt.RSFactor;
-            Output.CIMW*=Opt.RSFactor;
+        if Opt.SSToggle==1:
+            Output.CIMH*=Opt.SSFactor;
+            Output.CIMW*=Opt.SSFactor;
             RSArray=skimage.transform.resize(CropArray,(Output.CIMH,Output.CIMW))
-            Opt.NmPP*=1/Opt.RSFactor;
+            Opt.NmPP*=1/Opt.SSFactor;
             ArrayIn=RSArray
         else:
-                Opt.RSFactor=1; 
+                Opt.SSFactor=1; 
     
     #%% Denoise
         if Opt.DenToggle==1:
