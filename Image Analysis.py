@@ -46,8 +46,8 @@ class Output:
 Opt.AutoDenoise=1;
 Opt.AutoThresh=1;
 
-Opt.RSFactor=4;#Not yet implemented
-Opt.RSToggle=0; # nyi
+Opt.RSFactor=4;# Implemented: TODO add to GUI
+Opt.RSToggle=0; # 
 Opt.Inversion=0;
 Opt.ACToggle=0; #autocorrelation (currently broken)
 Opt.ACCutoff=0; 
@@ -565,10 +565,10 @@ for ImNum in range(0, len(FNFull) ):
             'LTerminals/nm^2',
             'LJunctions',
             'Ljunctions/nm^2',
-            'LER Dist nm',
-            'LER 3Sig nm',
-            'LER Dist KDE nm',
-            'LER 3Sig KDE nm',
+            'LWR Dist nm',
+            'LWR 3Sig nm',
+            'LWR Dist KDE nm',
+            'LWR 3Sig KDE nm',
             'Denoise',
             'Threshold',
             'Denoise Used',

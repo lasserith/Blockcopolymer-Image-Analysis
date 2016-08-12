@@ -573,9 +573,9 @@ def AngEC(im, Opt, EDArray='none', SkelArray='none'):
     AngPlot1.imshow(AngArray)
 
     if 1 == 1: #REPLACE show
-        AngPlot.show() #TODO figure out how to fix this so it doesn't have to be showed 
+        AngPlot.show() #TODO add to GUI
     if 1==1: #Replace save
-        AngPlot.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "AngEC.png"))
+        AngPlot.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "AngEC.png"), dpi=300)
     plt.close(AngPlot)
     return(AngArray)
     
