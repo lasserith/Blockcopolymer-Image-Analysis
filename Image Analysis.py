@@ -58,7 +58,7 @@ Opt.SchCO=5; # Step in from 'Ide' in nm
 
 
 #IndividualLog =1; # Write a log for each sample?
-CombLog = 0; # If One write a combined log, if two clean it out each time(don't append)
+CombLog = 1; # If One write a combined log, if two clean it out each time(don't append)
 ShowImage = 0; # Show images?
 # Following is GUI supported
 Opt.EDToggle=0; #WIP ED/LER
@@ -75,7 +75,7 @@ Opt.AngDetToggle=1; # Angle Detection
 Opt.Machine="Unknown";
 Output.Denoise='NA';
 
-plt.ioff() # turn off interactive plotting
+#plt.ioff() # turn off interactive plotting
 
 
 
@@ -482,10 +482,12 @@ for ImNum in range(0, len(FNFull) ):
     
     # todo fix so that AngEC is default
     if Opt.AngDetToggle==2:
-            AngDetA=IAFun.OrientationDetect( ArrayIn ) # old method
+            AngDetA=IAFun.AngSobel( ArrayIn ) # old method
     if Opt.AngDetToggle==1:
             AngDetA=IAFun.AngEC( BinArray, Opt)          # new method
-    IAFun.AngMap(AngDetA, Opt, maskarray=BinArray, weightarray=ArrayIn)
+            
+    #%% What to do with angles? 
+    (Output.Peak1,Output.Cnt1,Output.Peak2,Output.Cnt2,Output.CntT)=IAFun.AngHist(AngDetA, Opt, MaskArray=BinArray, WeightArray=ArrayIn)
     
     #%% ED
     # Tamar recommended Canny edge so let's try it eh? 
@@ -554,13 +556,9 @@ for ImNum in range(0, len(FNFull) ):
             LogW= csv.writer(Log, dialect='excel', lineterminator='\n')
             LogW.writerow(['Filename',
             'Primary Peak (nm)',
-            'Lighter',
+            'Lighter phase',
             'LPhase Area Fraction',
-            'LPhase Area Fraction(FromINV)',
-            'LPhase Area Frac AVG',
             'DPhase Area Fraction',
-            'DPhase Area Fraction(FromINV)',
-            'DPhase Area Frac AVG',
             'LDom Index',
             'LDom Fraction',
             'LTerminals',
@@ -571,51 +569,71 @@ for ImNum in range(0, len(FNFull) ):
             'LER 3Sig nm',
             'LER Dist KDE nm',
             'LER 3Sig KDE nm',
+            'Denoise',
+            'Threshold',
+            'Denoise Used',
+            'Thresh Used',
+            'Peak 1 (Degrees)',
+            'Count 1',
+            'Peak 2 (Degrees)',
+            'Count 2',
+            'Cumulative Count',
             'Inverse Phase Images',
+            'LPhase Area Fraction(FromINV)',
+            'LPhase Area Frac AVG',
+            'DPhase Area Fraction(FromINV)',
+            'DPhase Area Frac AVG',
             'DDom Index',
             'DDom Fraction',
             'DTerminals',
             'DTerminals/nm^2',
             'DJunctions',
-            'DJunctions/nm^2',
-            'Denoise',
-            'Threshold',
-            'Denoise Used',
-            'Thresh Used'])
+            'DJunctions/nm^2'])
     
     if CombLog > 0:
         with open(os.path.join(Opt.FPath, "output", "output.csv"), 'a') as Log:
             LogW= csv.writer(Log, dialect='excel', lineterminator='\n')
-            LogW.writerow([Opt.BName,
-            Output.l0,
-            'Phase',
-            Output.WFrac,
-            Output.InvBFrac,
-            (Output.WFrac+Output.InvBFrac)/2,
-            Output.BFrac,
-            Output.InvWFrac,
-            (Output.BFrac+Output.InvWFrac)/2,
-            Output.WDomI,
-            Output.WDomFrac,
-            Output.TCount,
-            Output.TCA,
-            Output.JCount,
-            Output.JCA,
-            Output.LERMean,
-            Output.LER3Sig,
-            Output.LERMeanS,
-            Output.LER3SigS,
-            '(Names reference original!)',
-            Output.InvWDomI,
-            Output.InvWDomFrac,
-            Output.InvTCount,
-            Output.InvTCA,
-            Output.InvJCount,
-            Output.InvJCA,
-            Opt.DenWeight,
-            Opt.ThreshWeight,
-            Output.Denoise,
-            Output.Thresh])
+            try:
+                LogW.writerow([Opt.BName,
+                Output.l0,
+                '',
+                Output.WFrac,
+                Output.BFrac,
+                Output.WDomI,
+                Output.WDomFrac,
+                Output.TCount,
+                Output.TCA,
+                Output.JCount,
+                Output.JCA,
+                Output.LERMean,
+                Output.LER3Sig,
+                Output.LERMeanS,
+                Output.LER3SigS,
+                Opt.DenWeight,
+                Opt.ThreshWeight,
+                Output.Denoise,
+                Output.Thresh,
+                Output.Peak1,
+                Output.Cnt1,
+                Output.Peak2,
+                Output.Cnt2,
+                Output.CntT])
+            except:
+                pass;
+            try:
+                LogW.writerow(['(Names reference original!)',
+                Output.InvBFrac,
+                (Output.WFrac+Output.InvBFrac)/2,
+                Output.InvWFrac,
+                (Output.BFrac+Output.InvWFrac)/2,
+                Output.InvWDomI,
+                Output.InvWDomFrac,
+                Output.InvTCount,
+                Output.InvTCA,
+                Output.InvJCount,
+                Output.InvJCA])
+            except:
+                pass
         
     
     
