@@ -514,12 +514,18 @@ def EdgeDetect(im, Opt, SkeleArray):
     EDFig.tight_layout()
     
 
-    if Opt.EDSh == 1: # show
-        EDFig.show()
-        EDImage.show()
+
+
     if Opt.EDSa==1: #save
         EDFig.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "LWR.png"))
         EDImage.save(os.path.join(Opt.FPath,"output",Opt.BName+"ED.tif"))
+    
+    if Opt.EDSh == 1: # show
+        EDFig.show()
+        EDImage.show()
+    else:
+        plt.close(EDFig)
+    
     return(LERMean,LER3Sig,LERMeanS,LER3SigS);
 
 
