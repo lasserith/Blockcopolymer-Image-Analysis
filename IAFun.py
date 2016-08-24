@@ -232,9 +232,10 @@ def FFT( im, Opt):
     """
     Calculate the FFT, and the PSD to find l0
     
-    Fixed the offset
+    TODO: make peak finding more robust, 
     v0.2
     """
+    
     FSize=np.min( im.shape )
     #FSize=500;
     FourierArray=np.fft.fft2( im, s=(FSize,FSize) );
@@ -269,7 +270,7 @@ def FFT( im, Opt):
         PSD1D.plot(FreqA[0:int(np.floor(FSize/2))], PowerSpec1d[0:int( np.floor(FSize/2))])
         PSD1D.set_yscale('log')
         PSD1D.set_title('1D Power Spectral Density')
-        PSD1D.set_xlabel('q (1/nm)')
+        PSD1D.set_xlabel('Frequency (1/nm)') # NOTE THIS IS NOT Q
         PSD1D.set_ylabel('Intensity')
         PSD1D.set_ylim([np.min(PowerSpec1d)*.5, np.max(PowerSpec1d)*10])          
         PS2DImage=Image.fromarray(255/np.max(np.log(PowerSpec2d))*np.log(PowerSpec2d))
