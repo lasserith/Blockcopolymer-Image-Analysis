@@ -296,7 +296,7 @@ def Denoising(im, Opt, l0):
         DenoiseWeight=( Opt.DenWeight/ (l0/Opt.NmPP )); # 
     else:
         DenoiseWeight=Opt.DenWeight
-
+    
     DenArray = skimage.restoration.denoise_tv_bregman(im,DenoiseWeight ) # smaller = more denoise
     DenArray *= 255
 

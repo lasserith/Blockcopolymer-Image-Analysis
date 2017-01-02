@@ -450,11 +450,17 @@ for ImNum in range(0, len(FNFull) ):
         os.mkdir(os.path.join(Opt.FPath,"output"))
     if FExt == ".ibw": # file is igor
         Opt.Machine="Asylum AFM";
-        Labels = loadibw(FNFull[ImNum])['wave']['labels'][2]
+        RawData= loadibw(FNFull[ImNum])['wave']
+        Labels = RawData['labels'][2]
         Labels = [i.decode("utf-8") for i in Labels] # make it strings
         # Need to add a selector here for future height/phase
-        AFMIndex=[ i for i, s in enumerate(Labels) if 'Phase' in s]
-        imarray = loadibw('FNFull[ImNum]')['wave']['wData'][AFMIndex]
+        [AFMIndex]=[ i for i, s in enumerate(Labels) if 'Phase' in s] #they index from 1????
+        AFMIndex-=1 # fix that quick
+        imarray = RawData['wData'][:,:,AFMIndex]
+        #Brightness/Contrast RESET needed for denoising. Need to figure out how to keep track of this? add an opt?
+        imarray = imarray/imarray.max()
+        RawData['wave_header']['sFa']# TODO < NMPP integration
+        RawData.clear()
         
     else:
         im= Image.open(FNFull[ImNum])
