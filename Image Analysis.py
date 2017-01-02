@@ -364,7 +364,7 @@ class GUI:
     def begin(self):
         
         try:
-            Opt.NmPP=float(self.e1.get())
+            Opt.NmPPSet=float(self.e1.get()) # this holds it so if we iterate over images we can reset it each time so behavior is consistent
         except:
             pass
         try:
@@ -452,34 +452,38 @@ for ImNum in range(0, len(FNFull) ):
     
     
     #%% Autodetect per pixel scaling for merlin, don't have a nanosem image to figure that out
-    
+    try:
+        Opt.NmPP=Opt.NmPPSet
+    except:
+        pass
     IAFun.AutoDetect( FNFull[ImNum], Opt)
     
     #%% Crop
     (CropArray, Output.CIMH, Output.CIMW)=IAFun.Crop( imarray , Opt )
     imarray=CropArray
 
+    #%% FFT for period ref 
+    # http://www.astrobetter.com/blog/2010/03/03/fourier-transforms-of-images-in-python/
+    
+    if Opt.FFTToggle==1:   
+        Output.Calcl0=IAFun.FFT( imarray, Opt)
+        if Output.l0 == 0:
+            Output.l0 = Output.Calcl0;
     #%% Data SuperSampling STUPIDLY INTENSIVE
     
     if Opt.SSToggle==1:
         Output.CIMH*=Opt.SSFactor;
         Output.CIMW*=Opt.SSFactor;
         RSArray=skimage.transform.resize(imarray,(Output.CIMH,Output.CIMW))
-        Opt.NmPP*=1/Opt.SSFactor;
         imarray=RSArray
+        Opt.NmPP*=1/Opt.SSFactor;
     else:
         Opt.SSFactor=1;
 
     #$$ Set ArrayIn
     ArrayIn=imarray; 
     
-    #%% FFT for period ref 
-    # http://www.astrobetter.com/blog/2010/03/03/fourier-transforms-of-images-in-python/
-    
-    if Opt.FFTToggle==1:   
-        Output.Calcl0=IAFun.FFT( ArrayIn, Opt)
-        if Output.l0 == 0:
-            Output.l0 = Output.Calcl0;
+
         
     
     #%% Denoise
@@ -526,7 +530,8 @@ for ImNum in range(0, len(FNFull) ):
             AngDetA=IAFun.AngEC( BinArray, Opt)          # new method
             
     #%% What to do with angles? 
-    (Output.Peak1,Output.Cnt1,Output.Peak2,Output.Cnt2,Output.CntT)=IAFun.AngHist(AngDetA, Opt, MaskArray=BinArray, WeightArray=ArrayIn)
+    if Opt.AngDetToggle!=0:
+        (Output.Peak1,Output.Cnt1,Output.Peak2,Output.Cnt2,Output.CntT)=IAFun.AngHist(AngDetA, Opt, MaskArray=BinArray, WeightArray=ArrayIn)
     
     #%% ED
     # Tamar recommended Canny edge so let's try it eh? 

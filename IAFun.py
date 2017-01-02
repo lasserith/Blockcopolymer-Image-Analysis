@@ -278,6 +278,7 @@ def FFT( im, Opt):
         if Opt.FFTSh == 1:
             PS2DImage.show()
         if Opt.FFTSa==1:
+            np.savez(os.path.join(Opt.FPath,"output",Opt.BName + "FFT"),(FreqA[0:int(np.floor(FSize/2))], PowerSpec1d[0:int(np.floor(FSize/2))]))
             Fig.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "PowerSpecFreq.png"))
             PSD1D.annotate('Primary Peak at %f' %PFMax, xy=(PFMax, PHMax), xytext=(1.5*PFMax, 1.5*PHMax),
                     arrowprops=dict(facecolor='black', width=2,headwidth=5),
@@ -490,12 +491,13 @@ def EdgeDetect(im, Opt, SkeleArray):
     LER3Sig=3*EDGFit.params.valuesdict()['sigma'] # extract the sigma
     LERMean=EDGFit.params.valuesdict()['center'] # and mean of gauss fit
     EDFig=plt.figure()
-    EDFigPlt=EDFig.add_subplot(211)
-    EDFigPlt.set_title('Line Width Roughness fitting, \n Mean Line Dist is %.2f, 3$\sigma$ is %.2f' %(LERMean, LER3Sig))
-    EDFigPlt.set_xlabel('Distance (nm)')
-    EDFigPlt.set_ylabel('Counts (arbitrary)')        
-    EDFigPlt.plot(EDDist, EDDistCnt,         'bo')
-    EDFigPlt.plot(EDDist, EDGFit.best_fit, 'r-')
+    # First Figure : Unsmoothed Currently disabled as not relevant
+#    EDFigPlt=EDFig.add_subplot(211)
+#    EDFigPlt.set_title('Line Width Roughness fitting, \n Mean Line Dist is %.2f, 3$\sigma$ is %.2f' %(LERMean, LER3Sig))
+#    EDFigPlt.set_xlabel('Distance (nm)')
+#    EDFigPlt.set_ylabel('Counts (arbitrary)')        
+#    EDFigPlt.plot(EDDist, EDDistCnt,         'bo')
+#    EDFigPlt.plot(EDDist, EDGFit.best_fit, 'r-')
     
     EDDistFlat=EDDistA2.ravel()[np.flatnonzero(EDDistA2)] # just collect all the distances into a 1d array, dropping any zero distances
     EDDistFlat*=Opt.NmPP # convert to nanometers
