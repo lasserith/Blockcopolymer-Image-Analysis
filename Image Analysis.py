@@ -31,6 +31,11 @@ from skimage import restoration, morphology, filters, feature
 import re #dat regex
 import matplotlib.pyplot as plt
 import exifread #needed to read tif tags
+try:
+    from igor.binarywave import load as loadibw
+except: print('You will be unable to open Asylum data without igor')
+
+
 
 import scipy
 
@@ -434,20 +439,29 @@ FOpen.withdraw()
 
 for ImNum in range(0, len(FNFull) ):
     
-    im= Image.open(FNFull[ImNum])
-    FName = os.path.splitext(FNFull[ImNum])[0]
-    Opt.FPath, Opt.BName= os.path.split(FName) 
+    Opt.FPath, Opt.BName= os.path.split(FNFull[ImNum]) 
+    (FName, FExt) = os.path.splitext(Opt.BName)
+    
     
     # Make output folder if needed
     try:
         os.stat(os.path.join(Opt.FPath,"output"))
     except:
         os.mkdir(os.path.join(Opt.FPath,"output"))
+    if FExt == ".ibw": # file is igor
+        Opt.Machine="Asylum AFM";
+        Labels = loadibw(FNFull[ImNum])['wave']['labels'][2]
+        Labels = [i.decode("utf-8") for i in Labels] # make it strings
+        # Need to add a selector here for future height/phase
+        AFMIndex=[ i for i, s in enumerate(Labels) if 'Phase' in s]
+        imarray = loadibw('FNFull[ImNum]')['wave']['wData'][AFMIndex]
         
-    if im.mode!="P":
-        im=im.convert(mode='P')
-        print("Image was not in the original format, and has been converted back to grayscale. Consider using the original image.")    
-    imarray = np.array(im)
+    else:
+        im= Image.open(FNFull[ImNum])
+        if im.mode!="P":
+            im=im.convert(mode='P')
+            print("Image was not in the original format, and has been converted back to grayscale. Consider using the original image.")    
+        imarray = np.array(im)
     
     
     
