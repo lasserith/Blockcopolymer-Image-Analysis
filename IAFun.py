@@ -16,7 +16,10 @@ import csv
 import numpy as np
 import skimage
 from skimage import restoration, morphology, filters, feature
-
+import exifread #needed to read tif tags
+try:
+    from igor.binarywave import load as loadibw
+except: print('You will be unable to open Asylum data without igor')
 import re #dat regex
 import matplotlib.pyplot as plt
 import exifread #needed to read tif tags
@@ -28,23 +31,63 @@ def AutoDetect( FileName , Opt ):
     """
     Attempt to autodetect the instrument used to collect the image
     Currently supports the Zeiss Merlin
-    V0.1
-    """
-    SkimFile = open( FileName ,'rb')
-    MetaF=exifread.process_file(SkimFile)
-    SkimFile.close()
-    try:
-        Opt.FInfo=str(MetaF['Image Tag 0x8546'].values);
-        Opt.NmPP=float(Opt.FInfo[17:30])*10**9;
-        Opt.Machine="Merlin";
-    except:
-        pass
+    V0.2
     
+    0.1 - Orig
+    0.2 - Asylum AFM added
+    """
+    if Opt.FExt == ".ibw": # file is igor
+        Opt.Machine="Asylum AFM";
+        RawData= loadibw(Opt.Name)['wave']
+        Labels = RawData['labels'][2]
+        Labels = [i.decode("utf-8") for i in Labels] # make it strings
+        # Need to add a selector here for future height/phase
+        [AFMIndex]=[ i for i, s in enumerate(Labels) if Opt.AFMLayer in s] #they index from 1????
+        AFMIndex-=1 # fix that quick
+        imarray = RawData['wData'][:,:,AFMIndex]
+        TArray=imarray.transpose() # necessary so that slow scan Y and fast scan is X EG afm tip goes along row > < then down to next row etc
+        # AFM data has to be leveled :(
+        if Opt.AFMLevel == 1: #median leveling
+            MeanRow=TArray.mean(axis=1) # this calculates the mean of each row
+            Mean=TArray.mean() # mean of everything
+            MeanOffset=MeanRow-Mean # determine the offsets
+            imarray=imarray-MeanOffset # adjust the image
+            
+        elif Opt.AFMLevel==2: # median of dif leveling
+            DMean=np.diff(TArray,axis=0).mean(axis=1) 
+            # calc the 1st order diff from one row to next. Then average these differences 
+            DMean=np.insert(DMean,0,0) # the first row we don't want to adjust so pop in a 0
+            
+        
+        
+        #Brightness/Contrast RESET needed for denoising. Need to figure out how to keep track of this? add an opt?
+        imarray = imarray/imarray.max()
+        Opt.NmPP=RawData['wave_header']['sfA'][0]*1e9
+        #RawData.clear()
+        
+    else:
+        im= Image.open(Opt.Name)
+        if im.mode!="P":
+            im=im.convert(mode='P')
+            print("Image was not in the original format, and has been converted back to grayscale. Consider using the original image.")    
+        imarray = np.array(im)
+        
+        SkimFile = open( FileName ,'rb')
+        MetaF=exifread.process_file(SkimFile)
+        SkimFile.close()
+        try:
+            Opt.FInfo=str(MetaF['Image Tag 0x8546'].values);
+            Opt.NmPP=float(Opt.FInfo[17:30])*10**9;
+            Opt.Machine="Merlin";
+        except:
+            pass
+
+
     if Opt.NmPP!=0:
         print("Instrument was autodetected as %s, NmPP is %f \n" % (Opt.Machine ,Opt.NmPP) )
     else:
         print("Instrument was not detected, and NmPP was not set. Please set NmPP and rerun")
-    return;
+    return(imarray);
 #%% Crop
     """
     Crops image

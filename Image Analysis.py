@@ -25,19 +25,13 @@ from PIL import Image
 import os
 import csv
 import numpy as np
+import scipy
 import skimage
 from skimage import restoration, morphology, filters, feature
 
 import re #dat regex
 import matplotlib.pyplot as plt
-import exifread #needed to read tif tags
-try:
-    from igor.binarywave import load as loadibw
-except: print('You will be unable to open Asylum data without igor')
 
-
-
-import scipy
 
 import IAFun
 # Will hold options
@@ -51,8 +45,7 @@ class Output:
 Opt.AutoDenoise=1;
 Opt.AutoThresh=1;
 
-Opt.SSFactor=4;# Implemented: TODO add to GUI
-Opt.SSToggle=0; # 
+
 Opt.Inversion=0;
 Opt.ACToggle=0; #autocorrelation (currently broken)
 Opt.ACCutoff=0; 
@@ -65,16 +58,25 @@ Opt.SchCO=5; # Step in from 'Ide' in nm
 #IndividualLog =1; # Write a log for each sample?
 CombLog = 1; # If One write a combined log, if two clean it out each time(don't append)
 ShowImage = 0; # Show images?
-# Following is GUI supported
-Opt.EDToggle=0; #WIP ED/LER
-Opt.FFTToggle=1; #fft
-Opt.DenToggle=1; #Denoising ON
-Opt.ThreshToggle=1; #thresh
-Opt.RSOToggle=1; #remove small objects
+
+## TODO : ADD THE BELOW TO GUI
 Opt.IDEToggle=0; # Mask out the electrodes for YK
 Opt.LabelToggle=1; # label domains
-Opt.SkeleToggle=1; # Skeleton/Defect analysis
-Opt.AngDetToggle=1; # Angle Detection
+Opt.AFMLayer="ZSensor" #Matched Phase ZSensor
+Opt.AFMLevel=0  # 0 = none 1 = Median 2= Median of Dif
+
+# Following is GUI supported 
+#Opt.EDToggle=0; #ED/LER
+#Opt.FFTToggle=1; #fft
+#Opt.DenToggle=1; #Denoising ON
+#Opt.ThreshToggle=1; #thresh
+#Opt.RSOToggle=1; #remove small objects
+
+#Opt.SkeleToggle=1; # Skeleton/Defect analysis
+#Opt.AngDetToggle=1; # Angle Detection
+#Opt.SSFactor=4;#
+#Opt.SSToggle=0; # 
+
 
 
 Opt.Machine="Unknown";
@@ -438,9 +440,9 @@ FOpen.withdraw()
 #    print("You chose %s" % FNFull)
 
 for ImNum in range(0, len(FNFull) ):
-    
-    Opt.FPath, Opt.BName= os.path.split(FNFull[ImNum]) 
-    (FName, FExt) = os.path.splitext(Opt.BName)
+    Opt.Name=FNFull[ImNum] # this hold the full file name
+    Opt.FPath, Opt.BName= os.path.split(Opt.Name)  # File Path/ File Name
+    (Opt.FName, Opt.FExt) = os.path.splitext(Opt.BName) # File name/File Extension split
     
     
     # Make output folder if needed
@@ -448,35 +450,16 @@ for ImNum in range(0, len(FNFull) ):
         os.stat(os.path.join(Opt.FPath,"output"))
     except:
         os.mkdir(os.path.join(Opt.FPath,"output"))
-    if FExt == ".ibw": # file is igor
-        Opt.Machine="Asylum AFM";
-        RawData= loadibw(FNFull[ImNum])['wave']
-        Labels = RawData['labels'][2]
-        Labels = [i.decode("utf-8") for i in Labels] # make it strings
-        # Need to add a selector here for future height/phase
-        [AFMIndex]=[ i for i, s in enumerate(Labels) if 'Phase' in s] #they index from 1????
-        AFMIndex-=1 # fix that quick
-        imarray = RawData['wData'][:,:,AFMIndex]
-        #Brightness/Contrast RESET needed for denoising. Need to figure out how to keep track of this? add an opt?
-        imarray = imarray/imarray.max()
-        RawData['wave_header']['sFa']# TODO < NMPP integration
-        RawData.clear()
-        
-    else:
-        im= Image.open(FNFull[ImNum])
-        if im.mode!="P":
-            im=im.convert(mode='P')
-            print("Image was not in the original format, and has been converted back to grayscale. Consider using the original image.")    
-        imarray = np.array(im)
+
     
     
     
-    #%% Autodetect per pixel scaling for merlin, don't have a nanosem image to figure that out
+    #%% Autodetect per pixel scaling for merlin/asylum AFM. Return pixel size and raw data
     try:
         Opt.NmPP=Opt.NmPPSet
     except:
         pass
-    IAFun.AutoDetect( FNFull[ImNum], Opt)
+    imarray=IAFun.AutoDetect( FNFull[ImNum], Opt) # autodetect the machine, nmpp and return the raw data array
     
     #%% Crop
     (CropArray, Output.CIMH, Output.CIMW)=IAFun.Crop( imarray , Opt )
