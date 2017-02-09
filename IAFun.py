@@ -88,7 +88,7 @@ def AutoDetect( FileName , Opt ):
     else:
         print("Instrument was not detected, and NmPP was not set. Please set NmPP and rerun")
     return(imarray);
-#%% Crop
+#%% Croparayy = IAFun.bla( input)
     """
     Crops image
     V0.1
@@ -649,10 +649,12 @@ def AngHist(AngArray,Opt, MaskArray=1, WeightArray='none'):
     Currently only dumps to text the unweighted un masked histogram
     Outputs the number of pixels with angles at the highest peak and second highest as well as total pixels counted
     Which can be used to track progress of alignment or percent alignment
+    V.2 > Now normalizes so maximum peak is at 90 degrees
     """
     class AngHist:
         pass
-        
+    
+    
     if WeightArray=='none':
         WeightArray=np.ones_like(AngArray)
         
@@ -663,11 +665,27 @@ def AngHist(AngArray,Opt, MaskArray=1, WeightArray='none'):
         MaskArray[MaskArray==0]=float('nan')  # replaces 0 with nan in mask array, necessary for histograms to not be overfilled with 0
     except:
         pass
-    AngMask=AngArray*MaskArray
-#    angmask1=scipy.ndimage.binary_erosion(maskarray,structure=np.ones((3,3)))
-#    angmask2=scipy.ndimage.binary_erosion(maskarray)  
-
-
+    
+    # lets find the mode and set that to 90 to center our results
+    # first cast as int and flatten
+    
+    #TODO fix so -90 to 90
+    NANMask=np.logical_not(np.isnan(AngArray))
+    
+    AngMode=scipy.stats.mode((AngArray[NANMask].flatten()).astype(int))[0]
+    
+    AngArray+=0-AngMode 
+    # make it so max peak is at 90 for clarity
+    if AngMode > 90:
+        # if mode was over 90 we shifted down, so now we have neg vals
+        CMask=(AngArray[NANMask] <= -90)*NANMask
+        AngArray[CMask] += 180 # so fix it
+    elif AngMode < 90:
+        CMask=(AngArray[NANMask] >= 90)*NANMask
+               
+    
+    AngMask=AngArray*MaskArray # make the mask array
+            
     AngHist.Plot=plt.figure();
     AngHist.Plt1=AngHist.Plot.add_subplot(221) # , range=(0,90)
     hist,bins = np.histogram(AngArray, bins=181, range=(0,180))

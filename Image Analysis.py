@@ -12,24 +12,23 @@ TODO: Classify independent function blocks
 Allow the code to run  without inverse
 """
 #%%
-Vers="0.24"
+Vers = "0.24"
 
 #%% Imports
 
-# 
+#
 import tkinter as tk
 from tkinter import filedialog, ttk
-
-import lmfit
-from PIL import Image
 import os
 import csv
+import re
+import lmfit
+from PIL import Image
+
 import numpy as np
 import scipy
 import skimage
 from skimage import restoration, morphology, filters, feature
-
-import re #dat regex
 import matplotlib.pyplot as plt
 
 
@@ -42,30 +41,30 @@ class Output:
     pass
 #%% Default options
 
-Opt.AutoDenoise=1;
-Opt.AutoThresh=1;
+Opt.AutoDenoise = 1
+Opt.AutoThresh = 1
 
 
-Opt.Inversion=0;
-Opt.ACToggle=0; #autocorrelation (currently broken)
-Opt.ACCutoff=0; 
-Opt.ACSize=50;
+Opt.Inversion = 0
+Opt.ACToggle = 0 #autocorrelation (currently broken)
+Opt.ACCutoff = 0
+Opt.ACSize = 50
 
-Opt.SchCO=5; # Step in from 'Ide' in nm
+Opt.SchCO = 5 # Step in from 'Ide' in nm
 
 
 
 #IndividualLog =1; # Write a log for each sample?
-CombLog = 1; # If One write a combined log, if two clean it out each time(don't append)
-ShowImage = 0; # Show images?
+CombLog = 1 # If One write a combined log, if two clean it out each time(don't append)
+ShowImage = 0 # Show images?
 
 ## TODO : ADD THE BELOW TO GUI
-Opt.IDEToggle=0; # Mask out the electrodes for YK
-Opt.LabelToggle=1; # label domains
-Opt.AFMLayer="ZSensor" #Matched Phase ZSensor
-Opt.AFMLevel=0  # 0 = none 1 = Median 2= Median of Dif
+Opt.IDEToggle = 0 # Mask out the electrodes for YK
+Opt.LabelToggle = 0 # label domains
+Opt.AFMLayer = "ZSensor" #Matched Phase ZSensor
+Opt.AFMLevel = 0  # 0 = none 1 = Median 2= Median of Dif
 
-# Following is GUI supported 
+# Following is GUI supported
 #Opt.EDToggle=0; #ED/LER
 #Opt.FFTToggle=1; #fft
 #Opt.DenToggle=1; #Denoising ON
@@ -75,12 +74,11 @@ Opt.AFMLevel=0  # 0 = none 1 = Median 2= Median of Dif
 #Opt.SkeleToggle=1; # Skeleton/Defect analysis
 #Opt.AngDetToggle=1; # Angle Detection
 #Opt.SSFactor=4;#
-#Opt.SSToggle=0; # 
+#Opt.SSToggle=0;#
 
 
-
-Opt.Machine="Unknown";
-Output.Denoise='NA';
+Opt.Machine = "Unknown"
+Output.Denoise = 'NA'
 
 #plt.ioff() # turn off interactive plotting
 
@@ -90,17 +88,16 @@ Output.Denoise='NA';
 class GUI:
     def __init__(self, master):
       
-        
-        Opt.SSToggle=tk.IntVar()
-        Opt.FFTToggle=tk.IntVar()
-        Opt.DenToggle=tk.IntVar()
-        Opt.ThreshToggle=tk.IntVar()
-        Opt.RSOToggle=tk.IntVar()
+
+        Opt.SSToggle = tk.IntVar()
+        Opt.FFTToggle = tk.IntVar()
+        Opt.DenToggle = tk.IntVar()
+        Opt.ThreshToggle = tk.IntVar()
+        Opt.RSOToggle = tk.IntVar()
         Opt.SkeleToggle=tk.IntVar()
         Opt.EDToggle=tk.IntVar()   
         Opt.AngDetToggle=tk.IntVar()
 
-        
         #show images?
         Opt.CropSh=tk.IntVar()
         Opt.FFTSh=tk.IntVar()
@@ -201,7 +198,7 @@ class GUI:
         self.l3.pack(side=tk.LEFT)
         self.e6 = tk.Entry(self.Denf)
         self.e6.pack(side=tk.LEFT)
-        self.e6.insert(0,"130")
+        self.e6.insert(0,"43")
 
         
         self.Threshf= tk.ttk.Labelframe(Page1)
@@ -216,7 +213,7 @@ class GUI:
         self.l4.pack(side=tk.LEFT)
         self.e7 = tk.Entry(self.Threshf)
         self.e7.pack(side=tk.LEFT)
-        self.e7.insert(0,"2") # normally 2 #2.5 was prev YK
+        self.e7.insert(0,"2.5") # normally 2 #2.5 was prev YK
         
         self.RSOf= tk.ttk.Labelframe(Page1)
         self.RSOf.pack()
@@ -240,11 +237,11 @@ class GUI:
         self.AngTogEC=tk.Radiobutton(self.Angf,text="Edge/Center",variable=Opt.AngDetToggle, value=1).pack(side=tk.LEFT)
         self.AngTogS=tk.Radiobutton(self.Angf,text="Sobel", variable=Opt.AngDetToggle, value=2).pack(side=tk.LEFT)
         Opt.AngDetToggle.set(1) # pick EC as default
-        
+
         self.Skelef= tk.ttk.Labelframe(Page1)
         self.Skelef.pack()
         self.SkeleTog=tk.Checkbutton(
-            self.Skelef,text="Enable Skeleton/Defect Analysis",variable=Opt.SkeleToggle)
+        self.Skelef,text="Enable Skeleton/Defect Analysis",variable=Opt.SkeleToggle)
         self.SkeleTog.pack(side=tk.LEFT)
         self.SkeleTog.select()
         self.l6=tk.Label(
@@ -470,21 +467,20 @@ for ImNum in range(0, len(FNFull) ):
     
     if Opt.FFTToggle==1:   
         Output.Calcl0=IAFun.FFT( imarray, Opt)
-        if Output.l0 == 0:
-            Output.l0 = Output.Calcl0;
+        Output.l0 = Output.Calcl0
     #%% Data SuperSampling STUPIDLY INTENSIVE
     
     if Opt.SSToggle==1:
-        Output.CIMH*=Opt.SSFactor;
-        Output.CIMW*=Opt.SSFactor;
-        RSArray=skimage.transform.resize(imarray,(Output.CIMH,Output.CIMW))
-        imarray=RSArray
-        Opt.NmPP*=1/Opt.SSFactor;
+        Output.CIMH *= Opt.SSFactor
+        Output.CIMW *= Opt.SSFactor
+        RSArray = skimage.transform.resize(imarray,(Output.CIMH,Output.CIMW))
+        imarray = RSArray
+        Opt.NmPP *= 1/Opt.SSFactor
     else:
-        Opt.SSFactor=1;
+        Opt.SSFactor = 1
 
     #$$ Set ArrayIn
-    ArrayIn=imarray; 
+    ArrayIn=imarray
     
 
         
@@ -526,7 +522,6 @@ for ImNum in range(0, len(FNFull) ):
     
     #%% Angle Detection
     
-    # todo fix so that AngEC is default
     if Opt.AngDetToggle==2:
             AngDetA=IAFun.AngSobel( ArrayIn ) # old method
     if Opt.AngDetToggle==1:
@@ -642,7 +637,11 @@ for ImNum in range(0, len(FNFull) ):
             LogW= csv.writer(Log, dialect='excel', lineterminator='\n')
             try:
                 LogW.writerow([Opt.BName,
-                Output.l0,
+                Output.l0])
+            except:
+                pass
+            try:
+                LogW.writerow([
                 '',
                 Output.WFrac,
                 Output.BFrac,
