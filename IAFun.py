@@ -669,26 +669,25 @@ def AngHist(AngArray,Opt, MaskArray=1, WeightArray='none'):
     # lets find the mode and set that to 90 to center our results
     # first cast as int and flatten
     
-    #TODO fix so -90 to 90
+
     NANMask=np.logical_not(np.isnan(AngArray))
     
     AngMode=scipy.stats.mode((AngArray[NANMask].flatten()).astype(int))[0]
     
     AngArray+=0-AngMode 
     # make it so max peak is at 90 for clarity
-    if AngMode > 90:
+    if AngMode > 0:
         # if mode was over 90 we shifted down, so now we have neg vals
-        CMask=(AngArray[NANMask] <= -90)*NANMask
-        AngArray[CMask] += 180 # so fix it
-    elif AngMode < 90:
-        CMask=(AngArray[NANMask] >= 90)*NANMask
+        AngArray[AngArray<= -90] += 180 # so fix it
+    elif AngMode < 0: # this should never be the case with algorithms implemented currently for ang det. Leave in for robustness though
+        AngArray[AngArray > 90] -= 180
                
     
     AngMask=AngArray*MaskArray # make the mask array
             
     AngHist.Plot=plt.figure();
     AngHist.Plt1=AngHist.Plot.add_subplot(221) # , range=(0,90)
-    hist,bins = np.histogram(AngArray, bins=181, range=(0,180))
+    hist,bins = np.histogram(AngArray, bins=181, range=(-90,90))
     width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
     AngHist.Plt1.bar(center,hist,align='center',width=width)
     AngHist.Plt1.set_title('OD')
@@ -701,14 +700,14 @@ def AngHist(AngArray,Opt, MaskArray=1, WeightArray='none'):
     
     Peak1=hist.argmax()
     PLow=Peak1-10;PHigh=Peak1+10 # ten below, ten above are all combined
-    if PLow < 0: 
+    if PLow < -90: 
         PLow+=181; # wrap around if under
         Cnt1=np.sum(hist[:Peak1])+np.sum(hist[PLow:])
         hist[:Peak1]=0;hist[PLow:]=0; # set to zero so we don't find again     
     else:
         Cnt1=np.sum(hist[PLow:Peak1])
         hist[PLow:Peak1]=0;
-    if PHigh > 180:
+    if PHigh > 90:
         PHigh-=181; # or over
         Cnt1+=np.sum(hist[Peak1:])+np.sum(hist[:PHigh])
         hist[Peak1:]=0;hist[:PHigh]=0;
@@ -718,14 +717,14 @@ def AngHist(AngArray,Opt, MaskArray=1, WeightArray='none'):
     
     Peak2=hist.argmax()
     PLow=Peak2-10;PHigh=Peak2+10 # ten below, ten above are all combined
-    if PLow < 0: 
+    if PLow < -90: 
         PLow+=181; # wrap around if under
         Cnt2=np.sum(hist[:Peak2])+np.sum(hist[PLow:])
         hist[:Peak1]=0;hist[PLow:]=0; # set to zero so we don't find again     
     else:
         Cnt2=np.sum(hist[PLow:Peak2])
         hist[PLow:Peak2]=0;
-    if PHigh > 180:
+    if PHigh > 90:
         PHigh-=181; # or over
         Cnt2+=np.sum(hist[Peak2:])+np.sum(hist[:PHigh])
         hist[Peak1:]=0;hist[:PHigh]=0;
@@ -737,21 +736,21 @@ def AngHist(AngArray,Opt, MaskArray=1, WeightArray='none'):
     
     
     AngHist.Plt2=AngHist.Plot.add_subplot(222)
-    hist,bins = np.histogram(AngMask, bins=181, range=(0,180))
+    hist,bins = np.histogram(AngMask, bins=181, range=(-90,90))
     width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
     AngHist.Plt2.bar(center,hist,align='center',width=width)
     AngHist.Plt2.set_title('OD+Mask') 
     
     
     AngHist.Plt3=AngHist.Plot.add_subplot(223)
-    hist,bins = np.histogram(AngArray, bins=181, range=(0,180), weights=WeightArray)
+    hist,bins = np.histogram(AngArray, bins=181, range=(-90,90), weights=WeightArray)
     width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
     AngHist.Plt3.bar(center,hist,align='center',width=width)
     AngHist.Plt3.set_title('OD+Weight')
     
     
     AngHist.Plt4=AngHist.Plot.add_subplot(224)
-    hist,bins = np.histogram(AngMask, bins=181, range=(0,180), weights=WeightArray)
+    hist,bins = np.histogram(AngMask, bins=181, range=(-90,90), weights=WeightArray)
     width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
     AngHist.Plt4.bar(center,hist,align='center',width=width)
     AngHist.Plt4.set_title('OD+Mask+Weight')    
