@@ -634,10 +634,10 @@ for ImNum in range(0, len(FNFull) ):
     
     if CombLog > 0:
         with open(os.path.join(Opt.FPath, "output", "output.csv"), 'a') as Log:
-            LogW= csv.writer(Log, dialect='excel', lineterminator='\n')
+            LogW= csv.writer(Log, dialect='excel', lineterminator='')
             try:
                 LogW.writerow([Opt.BName,
-                Output.l0])
+                Output.l0,''])
             except:
                 pass
             try:
@@ -646,26 +646,39 @@ for ImNum in range(0, len(FNFull) ):
                 Output.WFrac,
                 Output.BFrac,
                 Output.WDomI,
-                Output.WDomFrac,
-                Output.TCount,
+                Output.WDomFrac,''])
+            except:
+                
+                pass
+            try:
+                LogW.writerow([Output.TCount,
                 Output.TCA,
                 Output.JCount,
-                Output.JCA,
-                Output.LERMean,
+                Output.JCA,''])
+            except:
+                pass
+            try:
+                LogW.writerow([Output.LERMean,
                 Output.LER3Sig,
                 Output.LERMeanS,
-                Output.LER3SigS,
-                Opt.DenWeight,
+                Output.LER3SigS,''])
+            except:
+                pass
+            try:
+                LogW.writerow([Opt.DenWeight,
                 Opt.ThreshWeight,
                 Output.Denoise,
-                Output.Thresh,
-                Output.Peak1,
+                Output.Thresh,''])
+            except:
+                pass
+            try:
+                LogW.writerow([Output.Peak1,
                 Output.Cnt1,
                 Output.Peak2,
                 Output.Cnt2,
-                Output.CntT])
+                Output.CntT,''])
             except:
-                pass;
+                pass
             try:
                 LogW.writerow(['(Names reference original!)',
                 Output.InvBFrac,
@@ -677,9 +690,12 @@ for ImNum in range(0, len(FNFull) ):
                 Output.InvTCount,
                 Output.InvTCA,
                 Output.InvJCount,
-                Output.InvJCA])
+                Output.InvJCA,''])
             except:
                 pass
+            with open(os.path.join(Opt.FPath, "output", "output.csv"), 'a') as Log:
+                LogW= csv.writer(Log, dialect='excel', lineterminator='\n')
+                LogW.writerow([''])
         
     
     
