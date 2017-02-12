@@ -139,7 +139,7 @@ class GUI:
         self.l1.pack(side=tk.LEFT)
         self.e1 = tk.Entry(self.f1)
         self.e1.pack(side=tk.LEFT)
-        self.e1.insert(0, "0")  
+        self.e1.insert(0, "2.79125")  
         
         self.f2 = tk.ttk.Labelframe(Page1)
         self.f2.pack()
@@ -183,7 +183,7 @@ class GUI:
         self.fftl.pack(side=tk.LEFT) 
         self.L0 =tk.Entry(self.fftf)
         self.L0.pack(side=tk.LEFT)
-        self.L0.insert(0,"0")
+        self.L0.insert(0,"28")
         
         
         self.Denf= tk.ttk.Labelframe(Page1)
@@ -598,7 +598,7 @@ for ImNum in range(0, len(FNFull) ):
             LogW= csv.writer(Log, dialect='excel', lineterminator='\n')
             LogW.writerow(['Filename',
             'Primary Peak (nm)',
-            'Lighter phase',
+            'Lighter Image',
             'LPhase Area Fraction',
             'DPhase Area Fraction',
             'LDom Index',
@@ -648,7 +648,7 @@ for ImNum in range(0, len(FNFull) ):
                 Output.WDomI,
                 Output.WDomFrac,''])
             except:
-                
+                LogW.writerow(['','','','','',''])
                 pass
             try:
                 LogW.writerow([Output.TCount,
@@ -656,6 +656,7 @@ for ImNum in range(0, len(FNFull) ):
                 Output.JCount,
                 Output.JCA,''])
             except:
+                LogW.writerow(['','','','',''])
                 pass
             try:
                 LogW.writerow([Output.LERMean,
@@ -663,6 +664,7 @@ for ImNum in range(0, len(FNFull) ):
                 Output.LERMeanS,
                 Output.LER3SigS,''])
             except:
+                LogW.writerow(['','','','',''])
                 pass
             try:
                 LogW.writerow([Opt.DenWeight,

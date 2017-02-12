@@ -654,6 +654,9 @@ def AngHist(AngArray,Opt, MaskArray=1, WeightArray='none'):
     class AngHist:
         pass
     
+    Rlow=0 # bottom of angles to look at, now 0 cus we are compressing to one quadrant
+    Rhigh=90           
+    HPW=10 # half peak width, how many angles to combine
     
     if WeightArray=='none':
         WeightArray=np.ones_like(AngArray)
@@ -681,13 +684,15 @@ def AngHist(AngArray,Opt, MaskArray=1, WeightArray='none'):
         AngArray[AngArray<= -90] += 180 # so fix it
     elif AngMode < 0: # this should never be the case with algorithms implemented currently for ang det. Leave in for robustness though
         AngArray[AngArray > 90] -= 180
+                
+    AngArray=np.abs(AngArray)
                
     
     AngMask=AngArray*MaskArray # make the mask array
             
     AngHist.Plot=plt.figure();
     AngHist.Plt1=AngHist.Plot.add_subplot(221) # , range=(0,90)
-    hist,bins = np.histogram(AngArray, bins=181, range=(-90,90))
+    hist,bins = np.histogram(AngArray, bins=181, range=(Rlow,Rhigh))
     width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
     AngHist.Plt1.bar(center,hist,align='center',width=width)
     AngHist.Plt1.set_title('OD')
@@ -698,8 +703,9 @@ def AngHist(AngArray,Opt, MaskArray=1, WeightArray='none'):
     
     CntT=np.sum(hist) # cumulative count
     
+
     Peak1=hist.argmax()
-    PLow=Peak1-10;PHigh=Peak1+10 # ten below, ten above are all combined
+    PLow=Peak1-HPW;PHigh=Peak1+HPW # ten below, ten above are all combined
     if PLow < -90: 
         PLow+=181; # wrap around if under
         Cnt1=np.sum(hist[:Peak1])+np.sum(hist[PLow:])
@@ -716,7 +722,7 @@ def AngHist(AngArray,Opt, MaskArray=1, WeightArray='none'):
         hist[Peak1:PHigh]=0
     
     Peak2=hist.argmax()
-    PLow=Peak2-10;PHigh=Peak2+10 # ten below, ten above are all combined
+    PLow=Peak2-HPW;PHigh=Peak2+HPW # ten below, ten above are all combined
     if PLow < -90: 
         PLow+=181; # wrap around if under
         Cnt2=np.sum(hist[:Peak2])+np.sum(hist[PLow:])
@@ -736,21 +742,21 @@ def AngHist(AngArray,Opt, MaskArray=1, WeightArray='none'):
     
     
     AngHist.Plt2=AngHist.Plot.add_subplot(222)
-    hist,bins = np.histogram(AngMask, bins=181, range=(-90,90))
+    hist,bins = np.histogram(AngMask, bins=181, range=(Rlow,Rhigh))
     width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
     AngHist.Plt2.bar(center,hist,align='center',width=width)
     AngHist.Plt2.set_title('OD+Mask') 
     
     
     AngHist.Plt3=AngHist.Plot.add_subplot(223)
-    hist,bins = np.histogram(AngArray, bins=181, range=(-90,90), weights=WeightArray)
+    hist,bins = np.histogram(AngArray, bins=181, range=(Rlow,Rhigh), weights=WeightArray)
     width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
     AngHist.Plt3.bar(center,hist,align='center',width=width)
     AngHist.Plt3.set_title('OD+Weight')
     
     
     AngHist.Plt4=AngHist.Plot.add_subplot(224)
-    hist,bins = np.histogram(AngMask, bins=181, range=(-90,90), weights=WeightArray)
+    hist,bins = np.histogram(AngMask, bins=181, range=(Rlow,Rhigh), weights=WeightArray)
     width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
     AngHist.Plt4.bar(center,hist,align='center',width=width)
     AngHist.Plt4.set_title('OD+Mask+Weight')    
