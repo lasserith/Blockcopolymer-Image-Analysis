@@ -655,7 +655,8 @@ def AngHist(AngArray,Opt, MaskArray=1, WeightArray='none'):
         pass
     
     Rlow=0 # bottom of angles to look at, now 0 cus we are compressing to one quadrant
-    Rhigh=90           
+    Rhigh=90
+    BCount=Rhigh-Rlow+1     
     HPW=10 # half peak width, how many angles to combine
     
     if WeightArray=='none':
@@ -692,7 +693,7 @@ def AngHist(AngArray,Opt, MaskArray=1, WeightArray='none'):
             
     AngHist.Plot=plt.figure();
     AngHist.Plt1=AngHist.Plot.add_subplot(221) # , range=(0,90)
-    hist,bins = np.histogram(AngArray, bins=181, range=(Rlow,Rhigh))
+    hist,bins = np.histogram(AngArray, bins=BCount, range=(Rlow,Rhigh))
     width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
     AngHist.Plt1.bar(center,hist,align='center',width=width)
     AngHist.Plt1.set_title('OD')
@@ -742,21 +743,21 @@ def AngHist(AngArray,Opt, MaskArray=1, WeightArray='none'):
     
     
     AngHist.Plt2=AngHist.Plot.add_subplot(222)
-    hist,bins = np.histogram(AngMask, bins=181, range=(Rlow,Rhigh))
+    hist,bins = np.histogram(AngMask, bins=BCount, range=(Rlow,Rhigh))
     width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
     AngHist.Plt2.bar(center,hist,align='center',width=width)
     AngHist.Plt2.set_title('OD+Mask') 
     
     
     AngHist.Plt3=AngHist.Plot.add_subplot(223)
-    hist,bins = np.histogram(AngArray, bins=181, range=(Rlow,Rhigh), weights=WeightArray)
+    hist,bins = np.histogram(AngArray, bins=BCount, range=(Rlow,Rhigh), weights=WeightArray)
     width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
     AngHist.Plt3.bar(center,hist,align='center',width=width)
     AngHist.Plt3.set_title('OD+Weight')
     
     
     AngHist.Plt4=AngHist.Plot.add_subplot(224)
-    hist,bins = np.histogram(AngMask, bins=181, range=(Rlow,Rhigh), weights=WeightArray)
+    hist,bins = np.histogram(AngMask, bins=BCount, range=(Rlow,Rhigh), weights=WeightArray)
     width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
     AngHist.Plt4.bar(center,hist,align='center',width=width)
     AngHist.Plt4.set_title('OD+Mask+Weight')    
