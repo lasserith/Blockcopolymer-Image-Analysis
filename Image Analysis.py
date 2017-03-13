@@ -139,7 +139,7 @@ class GUI:
         self.l1.pack(side=tk.LEFT)
         self.e1 = tk.Entry(self.f1)
         self.e1.pack(side=tk.LEFT)
-        self.e1.insert(0, "2.79125")  
+        self.e1.insert(0, "1.116")  
         
         self.f2 = tk.ttk.Labelframe(Page1)
         self.f2.pack()
@@ -198,7 +198,7 @@ class GUI:
         self.l3.pack(side=tk.LEFT)
         self.e6 = tk.Entry(self.Denf)
         self.e6.pack(side=tk.LEFT)
-        self.e6.insert(0,"43")
+        self.e6.insert(0,"150")
 
         
         self.Threshf= tk.ttk.Labelframe(Page1)
@@ -534,6 +534,7 @@ for ImNum in range(0, len(FNFull) ):
     #%% ED
     # Tamar recommended Canny edge so let's try it eh? 
     # We don't use the guassian blur because the denoising/thresholding does this for us
+    # Currently requires skeletonization
     
     if Opt.EDToggle==1:
         (Output.LERMean,Output.LER3Sig,Output.LERMeanS,Output.LER3SigS)=IAFun.EdgeDetect(BinArray,Opt,SkelArray)
@@ -552,7 +553,7 @@ for ImNum in range(0, len(FNFull) ):
         (CropArray, Output.CIMH, Output.CIMW)=IAFun.Crop( imarray , Opt )
         ArrayIn=CropArray
     
-    #%% Data Rescaling Not Yet Implemented correctly
+    #%% Data Supersampling
     
         if Opt.SSToggle==1:
             Output.CIMH*=Opt.SSFactor;

@@ -503,9 +503,9 @@ def Skeleton(im,Opt):
     
     return(SkelArray, SkelAC, TCount, TCA, JCount, JCA)
 #%% Edge Detect
-def EdgeDetect(im, Opt, SkeleArray):
+def EdgeDetect(im, Opt, SkelArray):
     """
-    Detects edges using morphological erosion. Then calculates LER.
+    Detects edges using morphological erosion. Then calculates LWR.
     This often requires super sampling! I may implement super sampling in this process
     v0.1
     """
@@ -522,14 +522,13 @@ def EdgeDetect(im, Opt, SkeleArray):
 #        LDistBin=LDistBin[1:]           
     
     #2nd way. Find distance from each point to center. mask w edge
-    EDDistA2=scipy.ndimage.morphology.distance_transform_edt( (1-SkeleArray)) #
+    EDDistA2=scipy.ndimage.morphology.distance_transform_edt( (1-SkelArray)) #
     EDDistA2=EDDistA2*EDArray #Mask out with edges. Look at distance from edge
     EDDist, EDDistCnt = np.unique(EDDistA2,return_counts=True) # Save the distances, and their counts
     EDDist=EDDist[1:];EDDistCnt=EDDistCnt[1:] # Ignore the number of zero distance points
     EDDist=EDDist*Opt.NmPP # Make the distances nanometers
     EDGmod=lmfit.models.GaussianModel()
     EDGPars=EDGmod.guess(EDDistCnt, x=EDDist)
-    
     EDGFit=EDGmod.fit(EDDistCnt,EDGPars,x=EDDist)
     LER3Sig=3*EDGFit.params.valuesdict()['sigma'] # extract the sigma
     LERMean=EDGFit.params.valuesdict()['center'] # and mean of gauss fit
@@ -541,7 +540,6 @@ def EdgeDetect(im, Opt, SkeleArray):
 #    EDFigPlt.set_ylabel('Counts (arbitrary)')        
 #    EDFigPlt.plot(EDDist, EDDistCnt,         'bo')
 #    EDFigPlt.plot(EDDist, EDGFit.best_fit, 'r-')
-    
     EDDistFlat=EDDistA2.ravel()[np.flatnonzero(EDDistA2)] # just collect all the distances into a 1d array, dropping any zero distances
     EDDistFlat*=Opt.NmPP # convert to nanometers
     EDDistKDE=scipy.stats.gaussian_kde(EDDistFlat) # this smooths the data by dropping gaussians
@@ -551,6 +549,14 @@ def EdgeDetect(im, Opt, SkeleArray):
     LER3SigS=3*EDGFitS.params.valuesdict()['sigma'] # extract the sigma
     LERMeanS=EDGFitS.params.valuesdict()['center'] # and mean of gauss fit         
     
+    
+    # Find feature X and avg them
+    Xval, Xcnt = np.unique(im.nonzero()[1],return_counts=True)
+    for i in Xval:
+        #todo : now that I have the x values determine cut off with 2nd derivative avg x than use that to find distance and mask with edges then repeat code of above 
+                                 
+                                      
+                                      
     EDFigPlt2=EDFig.add_subplot(212)
     EDFigPlt2.set_title('1/2th Line Width Roughness fitting (Smoothed), \n Mean Line Dist is %.2f, 3$\sigma$ is %.2f' %(LERMeanS, LER3SigS))
     EDFigPlt2.set_xlabel('Distance (nm)')
