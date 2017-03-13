@@ -499,7 +499,11 @@ for ImNum in range(0, len(FNFull) ):
     if Opt.ThreshToggle==1:
         (ThreshArray,Output.Thresh)=IAFun.Thresholding(ArrayIn, Opt, Output.l0)
         BinArray=ThreshArray
-
+    elif Opt.ThreshToggle==0:
+        BinArray=np.ones(ArrayIn.shape)
+        BinArray[ArrayIn>np.mean(ArrayIn)]=0
+        BinArray=BinArray.astype(bool)
+        print('No Thresholding, Assuming input image is binary')
     #%% Remove Small Objects
     
     if Opt.RSOToggle==1:
@@ -537,7 +541,7 @@ for ImNum in range(0, len(FNFull) ):
     # Currently requires skeletonization
     
     if Opt.EDToggle==1:
-        (Output.LERMean,Output.LER3Sig,Output.LERMeanS,Output.LER3SigS)=IAFun.EdgeDetect(BinArray,Opt,SkelArray)
+        (Output.lwr, Output.ler, Output.lpr)=IAFun.EdgeDetect(BinArray,Opt,SkelArray)
             
 
     #%% Autocorrel. LETS GO, Currently Not Working
@@ -612,6 +616,14 @@ for ImNum in range(0, len(FNFull) ):
             'LWR 3Sig nm',
             'LWR Dist KDE nm',
             'LWR 3Sig KDE nm',
+            'LER Dist nm',
+            'LER 3Sig nm',
+            'LER Dist KDE nm',
+            'LER 3Sig KDE nm',
+            'LPR Dist nm',
+            'LPR 3Sig nm',
+            'LPR Dist KDE nm',
+            'LPR 3Sig KDE nm',
             'Denoise',
             'Threshold',
             'Denoise Used',
@@ -660,10 +672,26 @@ for ImNum in range(0, len(FNFull) ):
                 LogW.writerow(['','','','',''])
                 pass
             try:
-                LogW.writerow([Output.LERMean,
-                Output.LER3Sig,
-                Output.LERMeanS,
-                Output.LER3SigS,''])
+                LogW.writerow([Output.lwr[0],
+                Output.lwr[1],
+                Output.lwr[2],
+                Output.lwr[3],''])
+            except:
+                LogW.writerow(['','','','',''])
+                pass
+            try:
+                LogW.writerow([Output.ler[0],
+                Output.ler[1],
+                Output.ler[2],
+                Output.ler[3],''])
+            except:
+                LogW.writerow(['','','','',''])
+                pass
+            try:
+                LogW.writerow([Output.lpr[0],
+                Output.lpr[1],
+                Output.lpr[2],
+                Output.lpr[3],''])
             except:
                 LogW.writerow(['','','','',''])
                 pass

@@ -514,62 +514,156 @@ def EdgeDetect(im, Opt, SkelArray):
     EDImage = Image.fromarray(100*np.uint8(EDArray))
     EDImage=EDImage.convert(mode="RGB")
     
-#        # 1st way find distance from each point to edge
-#        LDistA=scipy.ndimage.morphology.distance_transform_edt( (1-LEDA)) #
-#        LDistA=LDistA*LASkel #Mask out with skeleton so we only look at distances from center
-#        LDistHist, LDistBin=np.histogram(LDistA,bins=100)
-#        LDistHist=LDistHist[1:] # remove the 0 distance fake data
-#        LDistBin=LDistBin[1:]           
-    
     #2nd way. Find distance from each point to center. mask w edge
-    EDDistA2=scipy.ndimage.morphology.distance_transform_edt( (1-SkelArray)) #
-    EDDistA2=EDDistA2*EDArray #Mask out with edges. Look at distance from edge
-    EDDist, EDDistCnt = np.unique(EDDistA2,return_counts=True) # Save the distances, and their counts
-    EDDist=EDDist[1:];EDDistCnt=EDDistCnt[1:] # Ignore the number of zero distance points
-    EDDist=EDDist*Opt.NmPP # Make the distances nanometers
-    EDGmod=lmfit.models.GaussianModel()
-    EDGPars=EDGmod.guess(EDDistCnt, x=EDDist)
-    EDGFit=EDGmod.fit(EDDistCnt,EDGPars,x=EDDist)
-    LER3Sig=3*EDGFit.params.valuesdict()['sigma'] # extract the sigma
-    LERMean=EDGFit.params.valuesdict()['center'] # and mean of gauss fit
-    EDFig=plt.figure()
-    # First Figure : Unsmoothed Currently disabled as not relevant
-#    EDFigPlt=EDFig.add_subplot(211)
-#    EDFigPlt.set_title('Line Width Roughness fitting, \n Mean Line Dist is %.2f, 3$\sigma$ is %.2f' %(LERMean, LER3Sig))
-#    EDFigPlt.set_xlabel('Distance (nm)')
-#    EDFigPlt.set_ylabel('Counts (arbitrary)')        
-#    EDFigPlt.plot(EDDist, EDDistCnt,         'bo')
-#    EDFigPlt.plot(EDDist, EDGFit.best_fit, 'r-')
-    EDDistFlat=EDDistA2.ravel()[np.flatnonzero(EDDistA2)] # just collect all the distances into a 1d array, dropping any zero distances
-    EDDistFlat*=Opt.NmPP # convert to nanometers
-    EDDistKDE=scipy.stats.gaussian_kde(EDDistFlat) # this smooths the data by dropping gaussians
-    EDDistX=np.linspace(0,EDDistFlat.max(),100)
-    EDDistY=EDDistKDE(EDDistX) #smoothed obviously
-    EDGFitS=EDGmod.fit(EDDistY,EDGPars,x=EDDistX) #S FOR SMOOTHEDDDD
-    LER3SigS=3*EDGFitS.params.valuesdict()['sigma'] # extract the sigma
-    LERMeanS=EDGFitS.params.valuesdict()['center'] # and mean of gauss fit         
+    lwrA=scipy.ndimage.morphology.distance_transform_edt( (1-SkelArray)) #
+    lwrA=lwrA*EDArray #Mask out with edges. Look at distance from edge
+    lwrDist, lwrDistCnt = np.unique(lwrA,return_counts=True) # Save the distances, and their counts
+    lwrDist=lwrDist[1:];lwrDistCnt=lwrDistCnt[1:] # Ignore the number of zero distance points
+    lwrDist=lwrDist*Opt.NmPP # Make the distances nanometers
     
+    
+    lwrGmod=lmfit.models.GaussianModel()
+    lwrGPars=lwrGmod.guess(lwrDistCnt, x=lwrDist)
+    lwrGFit=lwrGmod.fit(lwrDistCnt,lwrGPars,x=lwrDist)
+    lwr3Sig=3*lwrGFit.params.valuesdict()['sigma'] # extract the sigma
+    lwrMean=lwrGFit.params.valuesdict()['center'] # and mean of gauss fit
+    EDFig=plt.figure(figsize=(6,6))
+    # smoothing
+    lwrDistFlat=lwrA.ravel()[np.flatnonzero(lwrA)] # just collect all the distances into a 1d array, dropping any zero distances
+    lwrDistFlat*=Opt.NmPP # convert to nanometers
+    lwrDistKDE=scipy.stats.gaussian_kde(lwrDistFlat) # this smooths the data by dropping gaussians
+    lwrDistX=np.linspace(0,lwrDistFlat.max(),100)
+    lwrDistY=lwrDistKDE(lwrDistX) #smoothed obviously
+    lwrGFitS=lwrGmod.fit(lwrDistY,lwrGPars,x=lwrDistX) #S FOR SMOOTHEDDDD
+    lwr3SigS=3*lwrGFitS.params.valuesdict()['sigma'] # extract the sigma
+    lwrMeanS=lwrGFitS.params.valuesdict()['center'] # and mean of gauss fit         
+    # plotting
+    lwrFig = EDFig.add_subplot(311)
+    lwrFig.set_title('1/2th Line Width Roughness fitting (Smoothed), \n Mean Line Dist is %.2f, 3$\sigma$ is %.2f' %(lwrMeanS, lwr3SigS))
+    lwrFig.set_xlabel('Distance (nm)')
+    lwrFig.set_ylabel('Counts (arbitrary)')        
+    lwrFig.plot(lwrDistX, lwrGFitS.best_fit, 'r-')
+    lwrFig.plot(lwrDistX,lwrDistKDE(lwrDistX), 'bo')
+
     
     # Find feature X and avg them
     Xval, Xcnt = np.unique(im.nonzero()[1],return_counts=True)
-    for i in Xval:
+    Fend = np.zeros((1,2)) # holds the side of each feature
+    Ftot = np.zeros((1,1)) # will hold weighted counts eg Xval*Xnt
+    Fcnt = np.zeros((1,1)) # will hold total number of pixels eg sum Xcnt
+    Fmid = np.zeros((1,1)) # will hold featuremidpoints 
+    Fend[0] = -1
+    Fnum = 0
+    for i in range(Xval.size):
+        Ftot[Fnum]+=Xval[i]*Xcnt[i]
+        Fcnt[Fnum]+=Xcnt[i]
+        if (i == 0): # are we starting?
+            Fend[0,0]=Xval[i] 
+        elif (i == Xval.size - 1): # are we done
+            Fend[Fnum,1] = Xval[i]
+            Fmid[Fnum]=Ftot[Fnum]/Fcnt[Fnum] # calculate midpoint
+        elif (i != 0) and (Fend[Fnum,0] == -1): # if Our start of feature is -1. Keep looking
+             if (Xval[i] != Xval[i-1]+1): # if we found a start
+                 Fend[Fnum,0] = Xval[i] # assign it
+        elif (i != 0) and (Fend[Fnum,1] == -1): # if we are on the end of each feature
+             if (Xval[i+1] != Xval[i]+1) or (Xcnt[i+1] > Xcnt[i] and Xcnt[i-1] > Xcnt[i]):
+                 Fend[Fnum,1] = Xval[i]
+                 Fmid[Fnum]=Ftot[Fnum]/Fcnt[Fnum] # calculate midpoint
+                 Fend = np.append(Fend, [[-1,-1]],axis=0)
+                 Ftot = np.append(Ftot, [0])
+                 Fcnt = np.append(Fcnt, [0])
+                 Fmid = np.append(Fmid, [0])
+                 
+                 #print( str(Fend[Fnum])+' mid is at '+str(Fmid[Fnum]))
+                 Fnum += 1
+                 if (Xcnt[i+1] > Xcnt[i] and Xcnt[i-1] > Xcnt[i]): # if our intersection is blurred add to both
+                     Fend[Fnum,0]= Xval[i]
+                     Ftot[Fnum]+=Xval[i]*Xcnt[i]
+                     Fcnt[Fnum]+=Xcnt[i]
+            
+    # ok now that we found our midpoints
+    EDMidA=np.zeros(im.shape) # make an array of zeros
+    EDMidA[:,np.rint(Fmid).astype(int)] = 1 # set the columns where the middle are as 1 so its analogous to skelarray
+    
+     # now repeat the lwr stuff for ler
+     
+    lerA=scipy.ndimage.morphology.distance_transform_edt( (1-EDMidA)) #
+    lerA=lerA*EDArray #Mask out with edges. Look at distance from edge
+    lerDist, lerDistCnt = np.unique(lerA,return_counts=True) # Save the distances, and their counts
+    lerDist=lerDist[1:];lerDistCnt=lerDistCnt[1:] # Ignore the number of zero distance points
+    lerDist=lerDist*Opt.NmPP # Make the distances nanometers
+    lerGmod=lmfit.models.GaussianModel()
+    lerGPars=lerGmod.guess(lerDistCnt, x=lerDist)
+    lerGFit=lerGmod.fit(lerDistCnt,lerGPars,x=lerDist)
+    ler3Sig=3*lerGFit.params.valuesdict()['sigma'] # extract the sigma
+    lerMean=lerGFit.params.valuesdict()['center'] # and mean of gauss fit
+    # smoothing
+    lerDistFlat=lerA.ravel()[np.flatnonzero(lerA)] # just collect all the distances into a 1d array, dropping any zero distances
+    lerDistFlat*=Opt.NmPP # convert to nanometers
+    lerDistKDE=scipy.stats.gaussian_kde(lerDistFlat) # this smooths the data by dropping gaussians
+    lerDistX=np.linspace(0,lerDistFlat.max(),100)
+    lerDistY=lerDistKDE(lerDistX) #smoothed obviously
+    lerGFitS=lerGmod.fit(lerDistY,lerGPars,x=lerDistX) #S FOR SMOOTHEDDDD
+    ler3SigS=3*lerGFitS.params.valuesdict()['sigma'] # extract the sigma
+    lerMeanS=lerGFitS.params.valuesdict()['center'] # and mean of gauss fit         
+    # plotting
+    lerFig=EDFig.add_subplot(312)
+    lerFig.set_title('Line Edge Roughness fitting (Smoothed), \n Mean Line Dist is %.2f, 3$\sigma$ is %.2f' %(lerMeanS, ler3SigS))
+    lerFig.set_xlabel('Distance (nm)')
+    lerFig.set_ylabel('Counts (arbitrary)')        
+    lerFig.plot(lerDistX, lerGFitS.best_fit, 'r-')
+    lerFig.plot(lerDistX,lerDistKDE(lerDistX), 'bo')
+
+    
+    # now repeat the ler stuff for lpr (Line Placement Roughness)
+    
+    lprA=scipy.ndimage.morphology.distance_transform_edt( (1-EDMidA)) #
+    lprA=lprA*SkelArray #Mask out with edges. Look at distance from edge
+    lprDist, lprDistCnt = np.unique(lprA,return_counts=True) # Save the distances, and their counts
+    lprDist=lprDist[1:];lprDistCnt=lprDistCnt[1:] # Ignore the number of zero distance points
+    lprDist=lprDist*Opt.NmPP # Make the distances nanometers
+    lprGmod=lmfit.models.GaussianModel()
+    lprGPars=lprGmod.guess(lprDistCnt, x=lprDist)
+    lprGFit=lprGmod.fit(lprDistCnt,lprGPars,x=lprDist)
+    lpr3Sig=3*lprGFit.params.valuesdict()['sigma'] # extract the sigma
+    lprMean=lprGFit.params.valuesdict()['center'] # and mean of gauss fit
+    # smoothing
+    lprDistFlat=lprA.ravel()[np.flatnonzero(lprA)] # just collect all the distances into a 1d array, dropping any zero distances
+    lprDistFlat*=Opt.NmPP # convert to nanometers
+    lprDistKDE=scipy.stats.gaussian_kde(lprDistFlat) # this smooths the data by dropping gaussians
+    lprDistX=np.linspace(0,lprDistFlat.max(),100)
+    lprDistY=lprDistKDE(lprDistX) #smoothed obviously
+    lprGFitS=lprGmod.fit(lprDistY,lprGPars,x=lprDistX) #S FOR SMOOTHEDDDD
+    lpr3SigS=3*lprGFitS.params.valuesdict()['sigma'] # extract the sigma
+    lprMeanS=lprGFitS.params.valuesdict()['center'] # and mean of gauss fit         
+    # plotting
+    lprFig = EDFig.add_subplot(313)
+    lprFig.set_title('Line Placement Roughness fitting, \n Mean Line Dist is %.2f, 3$\sigma$ is %.2f' %(lprMean, lpr3Sig))
+    lprFig.set_xlabel('Distance (nm)')
+    lprFig.set_ylabel('Counts (arbitrary)')  
+    # Can't do smoothed due to proximity to 0
+    lprFig.plot(lprDist, lprGFit.best_fit, 'r-')
+    lprFig.plot(lprDist,lprDistCnt, 'bo')
+    EDFig.tight_layout( pad = 0.5, w_pad=0.5, h_pad=1.0 )
+    
+
+             
+            
+        
+        
+        
+        
         #todo : now that I have the x values determine cut off with 2nd derivative avg x than use that to find distance and mask with edges then repeat code of above 
                                  
                                       
                                       
-    EDFigPlt2=EDFig.add_subplot(212)
-    EDFigPlt2.set_title('1/2th Line Width Roughness fitting (Smoothed), \n Mean Line Dist is %.2f, 3$\sigma$ is %.2f' %(LERMeanS, LER3SigS))
-    EDFigPlt2.set_xlabel('Distance (nm)')
-    EDFigPlt2.set_ylabel('Counts (arbitrary)')        
-    EDFigPlt2.plot(EDDistX, EDGFitS.best_fit, 'r-')
-    EDFigPlt2.plot(EDDistX,EDDistKDE(EDDistX), 'bo')
-    EDFig.tight_layout()
+
     
 
 
 
     if Opt.EDSa==1: #save
-        EDFig.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "LWR.png"))
+        EDFig.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "R.png"))
         EDImage.save(os.path.join(Opt.FPath,"output",Opt.BName+"ED.tif"))
     
     if Opt.EDSh == 1: # show
@@ -577,8 +671,10 @@ def EdgeDetect(im, Opt, SkelArray):
         EDImage.show()
     else:
         plt.close(EDFig)
-    
-    return(LERMean,LER3Sig,LERMeanS,LER3SigS);
+    lwr = [lwrMean, lwr3Sig, lwrMeanS,lwr3SigS] # for out
+    ler = [lerMean, ler3Sig, lerMeanS, ler3SigS]
+    lpr = [lprMean, lpr3Sig, lprMeanS, lpr3SigS]
+    return( lwr, ler, lpr);
 
 
 #%% Angle Detection
