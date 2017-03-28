@@ -62,7 +62,8 @@ ShowImage = 0 # Show images?
 Opt.IDEToggle = 0 # Mask out the electrodes for YK
 Opt.LabelToggle = 0 # label domains
 Opt.AFMLayer = "ZSensor" #Matched Phase ZSensor
-Opt.AFMLevel = 0  # 0 = none 1 = Median 2= Median of Dif
+Opt.AFMLevel = 3  # 0 = none 1 = Median 2= Median of Dif 3 = polyfit
+Opt.AFMPDeg = 5 # degree of polynomial.
 
 # Following is GUI supported
 #Opt.EDToggle=0; #ED/LER
@@ -139,7 +140,7 @@ class GUI:
         self.l1.pack(side=tk.LEFT)
         self.e1 = tk.Entry(self.f1)
         self.e1.pack(side=tk.LEFT)
-        self.e1.insert(0, "1.116")  
+        self.e1.insert(0, "0")  
         
         self.f2 = tk.ttk.Labelframe(Page1)
         self.f2.pack()
@@ -162,7 +163,7 @@ class GUI:
         
         self.CropB = tk.Entry(self.f2)
         self.CropB.pack(side=tk.LEFT)
-        self.CropB.insert(0, "100")          
+        self.CropB.insert(0, "0")          
         
         self.ssampf=tk.ttk.Labelframe(Page1)
         self.ssampf.pack()
@@ -183,7 +184,7 @@ class GUI:
         self.fftl.pack(side=tk.LEFT) 
         self.L0 =tk.Entry(self.fftf)
         self.L0.pack(side=tk.LEFT)
-        self.L0.insert(0,"28")
+        self.L0.insert(0,"25")
         
         
         self.Denf= tk.ttk.Labelframe(Page1)

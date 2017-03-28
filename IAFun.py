@@ -45,25 +45,37 @@ def AutoDetect( FileName , Opt ):
         [AFMIndex]=[ i for i, s in enumerate(Labels) if Opt.AFMLayer in s] #they index from 1????
         AFMIndex-=1 # fix that quick
         imarray = RawData['wData'][:,:,AFMIndex]
+        #slow scan is column in original data
         TArray=imarray.transpose() # necessary so that slow scan Y and fast scan is X EG afm tip goes along row > < then down to next row etc
         # AFM data has to be leveled :(
         if Opt.AFMLevel == 1: #median leveling
-            MeanRow=TArray.mean(axis=1) # this calculates the mean of each row
-            Mean=TArray.mean() # mean of everything
-            MeanOffset=MeanRow-Mean # determine the offsets
-            imarray=imarray-MeanOffset # adjust the image
+            MeanSlow=imarray.mean(axis=0) # this calculates the mean of each slow scan row
+            Mean=imarray.mean() # mean of everything
+            MeanOffset=MeanSlow-Mean # determine the offsets
+            imfit=imarray-MeanOffset # adjust the image
             
         elif Opt.AFMLevel==2: # median of dif leveling
             DMean=np.diff(TArray,axis=0).mean(axis=1) 
             # calc the 1st order diff from one row to next. Then average these differences 
             DMean=np.insert(DMean,0,0) # the first row we don't want to adjust so pop in a 0
+            imfit = imarray-DMean
+        elif Opt.AFMLevel==3: # Polynomial leveling
+            imfit = np.zeros(imarray.shape)
+            FastInd = np.arange(imarray.shape[0]) # this is 0 - N rows
             
-        
-        
+            for SlowInd in np.arange(imarray.shape[1]): # for each column eg slowscan axis
+                Slow = imarray[:, SlowInd]
+                PCoef = np.polyfit(FastInd, Slow, Opt.AFMPDeg)
+                POffset = np.polyval(PCoef , FastInd)
+                imfit[:, SlowInd] = imarray[:, SlowInd] - POffset
+                            
+
         #Brightness/Contrast RESET needed for denoising. Need to figure out how to keep track of this? add an opt?
-        imarray = imarray/imarray.max()
+        imfit = imfit - imfit.min()
+        imfit = imfit*255/imfit.max()
         Opt.NmPP=RawData['wave_header']['sfA'][0]*1e9
-        #RawData.clear()
+        RawData.clear()
+        imarray=imfit
         
     else:
         im= Image.open(Opt.Name)
@@ -370,7 +382,7 @@ def Thresholding(im, Opt, l0):
     AdaptBin=skimage.filters.threshold_adaptive(im,Thresh ,'gaussian')
     
     
-    AdaptThresh = Image.fromarray(100*np.uint8(AdaptBin))
+    AdaptThresh = Image.fromarray(100*np.uint8(AdaptBin))(
     AdaptThresh=AdaptThresh.convert(mode="RGB")
     if Opt.ThreshSh == 1:
         AdaptThresh.show()
