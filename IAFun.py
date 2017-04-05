@@ -382,9 +382,9 @@ def Thresholding(im, Opt, l0):
     AdaptBin=skimage.filters.threshold_adaptive(im,Thresh ,'gaussian')
     
     
-    AdaptThresh = Image.fromarray(100*np.uint8(AdaptBin))(
+    AdaptThresh = Image.fromarray(100*np.uint8(AdaptBin))
     AdaptThresh=AdaptThresh.convert(mode="RGB")
-    if Opt.ThreshSh == 1:
+    if Opt.ThreshSh==1:
         AdaptThresh.show()
     if Opt.ThreshSa==1:
         AdaptThresh.save(os.path.join(Opt.FPath,"output",Opt.BName+"AThresh.tif"))
