@@ -22,7 +22,7 @@ try:
 except: print('You will be unable to open Asylum data without igor')
 import re #dat regex
 import matplotlib.pyplot as plt
-import exifread #needed to read tif tags
+
 
 import scipy
 
@@ -42,8 +42,8 @@ def AutoDetect( FileName , Opt ):
         Labels = RawData['labels'][2]
         Labels = [i.decode("utf-8") for i in Labels] # make it strings
         # Need to add a selector here for future height/phase
-        [AFMIndex]=[ i for i, s in enumerate(Labels) if Opt.AFMLayer in s] #they index from 1????
-        AFMIndex-=1 # fix that quick
+        AFMIndex=[ i for i, s in enumerate(Labels) if Opt.AFMLayer in s] #they index from 1????
+        AFMIndex= AFMIndex[0]-1 # fix that quick
         imarray = RawData['wData'][:,:,AFMIndex]
         #slow scan is column in original data
         TArray=imarray.transpose() # necessary so that slow scan Y and fast scan is X EG afm tip goes along row > < then down to next row etc
@@ -402,7 +402,30 @@ def RSO(im, Opt):
     if Opt.RSOSa==1:
         RSOI.save(os.path.join(Opt.FPath,"output",Opt.BName+"LADRSO.tif"))
     return(RSO);
-        
+
+
+
+def BPFilter(im, NmPP, LW='NA', HW='NA'):
+    """
+    Bandpass filter with NmPP and Low Wavelength and Highest Wavelength given in nanometers (wavelength as opposed to wavenumber)
+    """
+    Wind=np.max(im.shape)
+    FT = np.fft.fft2(im,s=(Wind,Wind)) # take the real fft in 2d
+    FT = np.fft.fftshift(FT) # shift so 0 freq is at 0 
+    WL=np.fft.fftfreq(Wind,NmPP)
+    
+    y, x = np.indices(FT.shape)
+    if not center:
+        center = np.array([(x.max()-x.min())/2.0, (x.max()-x.min())/2.0])
+    r=np.hypot(x-center[0],y-center[1])
+    
+    
+    if HW != 'NA':LF = 1/HW # lowest frequency allowed (wavenumber)
+    
+    if LW != 'NA':HF = 1/LW # Highest frequency allowed (wavenumber)
+
+
+    
 #%% Following is Analysis as Opposed to image prep, may split in future
 def Label(im, Opt):
     """
