@@ -452,5 +452,17 @@ for ImNum in range(0, len(FNFull) ):
     except:
         pass
     #TODO : Make not hardcoded
-    
+
     imarray[:,:,ImNum]=IAFun.AutoDetect( FNFull[ImNum], Opt) # autodetect the machine, nmpp and return the raw data array
+#%% 
+Opt.DenWeight=20
+Opt.ThreshWeight=2.5
+ArrayIn=imarray
+ArrayIn = IAFun.Denoising(ArrayIn, Opt, 50)[0]
+ArrayIn = IAFun.BPFilter(ArrayIn,Opt.NmPP,LW=100,Axes='x') #FFT Filtering
+ArrayIn = IAFun.BPFilter(ArrayIn,Opt.NmPP,HW=500,Axes='y') #FFT Filtering
+Thresh = ArrayIn > 11
+#Thresh = IAFun.Thresholding(ArrayIn, Opt, 50)[0]
+Skeleton = skimage.morphology.skeletonize(Thresh)
+plt.imshow(Skeleton)
+#%%

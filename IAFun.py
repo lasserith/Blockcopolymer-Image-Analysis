@@ -46,8 +46,9 @@ def AutoDetect( FileName , Opt ):
         AFMIndex= AFMIndex[0]-1 # fix that quick
         imarray = RawData['wData'][:,:,AFMIndex]
         #slow scan is column in original data
-        TArray=imarray.transpose() # necessary so that slow scan Y and fast scan is X EG afm tip goes along row > < then down to next row etc
         # AFM data has to be leveled :(
+        TArray=imarray.transpose() # necessary so that slow scan Y and fast scan is X EG afm tip goes along row > < then down to next row etc
+
         if Opt.AFMLevel == 1: #median leveling
             MeanSlow=imarray.mean(axis=0) # this calculates the mean of each slow scan row
             Mean=imarray.mean() # mean of everything
@@ -68,11 +69,11 @@ def AutoDetect( FileName , Opt ):
                 PCoef = np.polyfit(FastInd, Slow, Opt.AFMPDeg)
                 POffset = np.polyval(PCoef , FastInd)
                 imfit[:, SlowInd] = imarray[:, SlowInd] - POffset
-                            
+        else: imfit=imarray
 
         #Brightness/Contrast RESET needed for denoising. Need to figure out how to keep track of this? add an opt?
-        imfit = imfit - imfit.min()
-        imfit = imfit*255/imfit.max()
+#        imfit = imfit - imfit.min()
+#        imfit = imfit*255/imfit.max()
         Opt.NmPP=RawData['wave_header']['sfA'][0]*1e9
         RawData.clear()
         imarray=imfit
@@ -257,7 +258,7 @@ def azimuthalAverage(image, center=None):
     y, x = np.indices(image.shape)
 
     if not center:
-        center = np.array([(x.max()-x.min())/2.0, (x.max()-x.min())/2.0])
+        center = np.array([(x.max()-x.min())/2.0, (y.max()-y.min())/2.0])
 
     r = np.hypot(x - center[0], y - center[1])
 
@@ -405,27 +406,43 @@ def RSO(im, Opt):
 
 
 
-def BPFilter(im, NmPP, LW='NA', HW='NA'):
+def BPFilter(im, NmPP, LW='NA', HW='NA' , Axes='Circ'):
     """
-    Bandpass filter with NmPP and Low Wavelength and Highest Wavelength given in nanometers (wavelength as opposed to wavenumber)
+    Bandpass filter with NmPP and Low Wavelength and Highest Wavelength given in nanometers wavelength as opposed to wavenumber
+    (Bandpass filter : image, Spacing, LW='NA', HW='NA', Axes = 'Circ' (or x y))
     """
     Wind=np.max(im.shape)
-    FT = np.fft.fft2(im,s=(Wind,Wind)) # take the real fft in 2d
+    FT = np.fft.rfft2(im,s=(Wind,Wind)) # take the real fft in 2d
     FT = np.fft.fftshift(FT) # shift so 0 freq is at 0 
-    WL=np.fft.fftfreq(Wind,NmPP)
-    
+    WL=np.fft.rfftfreq(Wind,d=NmPP)
     y, x = np.indices(FT.shape)
-    if not center:
-        center = np.array([(x.max()-x.min())/2.0, (x.max()-x.min())/2.0])
-    r=np.hypot(x-center[0],y-center[1])
-    
-    
+
+    center = np.array([(x.max()-x.min())/2.0, (y.max()-y.min())/2.0])   
+    x=np.abs(x-center[0]) # x is now dist from center
+    y=np.abs(y-center[1]) # y is now dist from center
+    r=np.hypot(x,y) # this gives radius in index
+    r=r*WL[1] # now in freq space. Could do this before but I think hypot is quicker with int
+    x=x*WL[1] # now in frequency space
+    y=y*WL[1] # now in frequency space (wavenumber)
+ 
+    LF=r.min()
+    HF=r.max()
     if HW != 'NA':LF = 1/HW # lowest frequency allowed (wavenumber)
-    
     if LW != 'NA':HF = 1/LW # Highest frequency allowed (wavenumber)
+    if Axes == 'Circ': # symmetric circle filter
+        FT[r<LF] = 0
+        FT[r>HF] = 0
+    elif Axes == 'x': # filter X (ROWS)
+        FT[x<LF] = 0
+        FT[x>HF] = 0
+    elif Axes == 'y': # filter y (Columns)
+        FT[y<LF] = 0
+        FT[y>HF] = 0
 
-
-    
+    FT = np.fft.ifftshift(FT)
+    Fim = np.fft.irfft2(FT,s=(Wind,Wind))
+    Fim = Fim[0:im.shape[0],0:im.shape[1]]
+    return(Fim)
 #%% Following is Analysis as Opposed to image prep, may split in future
 def Label(im, Opt):
     """
