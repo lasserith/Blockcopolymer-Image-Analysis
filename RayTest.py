@@ -23,6 +23,8 @@ import scipy
 import skimage
 from skimage import restoration, morphology, filters, feature
 import matplotlib.pyplot as plt
+plt.rcParams['animation.ffmpeg_path'] = r'C:\ffmpeg\bin\ffmpeg.exe'
+import matplotlib.animation as manimation
 
 
 import IAFun
@@ -192,7 +194,7 @@ class GUI:
         self.l3.pack(side=tk.LEFT)
         self.e6 = tk.Entry(self.Denf)
         self.e6.pack(side=tk.LEFT)
-        self.e6.insert(0,"150")
+        self.e6.insert(0,"20")
 
         
         self.Threshf= tk.ttk.Labelframe(Page1)
@@ -429,8 +431,12 @@ FNFull = tk.filedialog.askopenfilename(parent=FOpen, title='Please select a file
 FOpen.withdraw()
 #if len(FNFull) > 0:
 #    print("You chose %s" % FNFull)
+#%% Animation Setup
+MovieFig = plt.figure()
+MovieSubplot = MovieFig.add_subplot(111)
+ims = []
 #%%
-imarray=np.zeros((256,512,len(FNFull)))
+
 for ImNum in range(0, len(FNFull) ):
     Opt.Name=FNFull[ImNum] # this hold the full file name
     Opt.FPath, Opt.BName= os.path.split(Opt.Name)  # File Path/ File Name
@@ -452,17 +458,60 @@ for ImNum in range(0, len(FNFull) ):
     except:
         pass
     #TODO : Make not hardcoded
-
-    imarray[:,:,ImNum]=IAFun.AutoDetect( FNFull[ImNum], Opt) # autodetect the machine, nmpp and return the raw data array
+    if ImNum ==0:
+        firstim = IAFun.AutoDetect( FNFull[ImNum], Opt)
+        Shap0 =firstim.shape[0]
+        Shap1 = firstim.shape[1]
+        imarray = np.zeros((Shap0,Shap1,len(FNFull)))
+        SkelOut = np.zeros((Shap0,Shap1,len(FNFull)))
+        FiltCum = np.zeros((Shap0,Shap1))
+        ThreshCum = np.zeros((Shap0,Shap1))
+        SkelCum = np.zeros((Shap0,Shap1))
+        imarray[:,:,ImNum] = firstim
+    else:
+        imarray[:,:,ImNum]=IAFun.AutoDetect( FNFull[ImNum], Opt) # autodetect the machine, nmpp and return the raw data array
 #%% 
-Opt.DenWeight=20
-Opt.ThreshWeight=2.5
-ArrayIn=imarray
-ArrayIn = IAFun.Denoising(ArrayIn, Opt, 50)[0]
-ArrayIn = IAFun.BPFilter(ArrayIn,Opt.NmPP,LW=100,Axes='x') #FFT Filtering
-ArrayIn = IAFun.BPFilter(ArrayIn,Opt.NmPP,HW=500,Axes='y') #FFT Filtering
-Thresh = ArrayIn > 11
-#Thresh = IAFun.Thresholding(ArrayIn, Opt, 50)[0]
-Skeleton = skimage.morphology.skeletonize(Thresh)
-plt.imshow(Skeleton)
+    ArrayIn=imarray[:,:,ImNum]
+    ArrayIn = IAFun.Denoising(ArrayIn, Opt, 50)[0]
+    ArrayIn = IAFun.BPFilter(ArrayIn,Opt.NmPP,LW=100,Axes='x') #FFT Filtering
+    ArrayIn = IAFun.BPFilter(ArrayIn,Opt.NmPP,HW=500,Axes='y') #FFT Filtering
+    FiltCum+=ArrayIn
+    Thresh = ArrayIn > 11
+    ThreshCum+=ArrayIn
+    #Thresh = IAFun.Thresholding(ArrayIn, Opt, 50)[0]
+    Skeleton = skimage.morphology.skeletonize(Thresh)
+    SkelCum+=Skeleton
+    SkelOut[:,:,ImNum] = Skeleton
+    
+           
+    
+    R, C = np.indices(Skeleton.shape)
+    # 51 - 79 Top cuts
+    #61 act - 89 Act Top Actual skel
+    #150 act - 120 act bot act
+    #160 - 130 bot cuts
+    
+    MaskSkel = np.ones_like(Skeleton)
+    SlTop = (89-61)/C.max() # Slope of top of wedge (Lside y - Rside y * dx)
+    SlBot = (120-150)/C.max() # slope of bottom of wedge
+    MaskSkel[ R < C*SlTop+51] = 0
+    MaskSkel[ R > C*SlBot+160 ] = 0
+    CropSkel = np.multiply(Skeleton, MaskSkel)
+    
+    Frame = plt.imshow(CropSkel, animated=True)
+    ims.append([Frame])
+
 #%%
+#ims=[]
+#for ImNum in range(0, 273 ):
+#    Frame=MovieSubplot.imshow(SkelOut[:,:,ImNum], animated=True)
+#    ims.append([Frame])
+#    print(ImNum)
+
+
+ani = manimation.ArtistAnimation(MovieFig, ims,blit=True)
+#%% Save animation
+MWriter = manimation.FFMpegWriter(bitrate=10000)
+ani.save('Wedge.mp4' , writer=MWriter)
+##%%
+#np.save('SkelOutArray',SkelOut)
