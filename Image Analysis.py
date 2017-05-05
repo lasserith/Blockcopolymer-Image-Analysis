@@ -199,7 +199,7 @@ class GUI:
         self.l3.pack(side=tk.LEFT)
         self.e6 = tk.Entry(self.Denf)
         self.e6.pack(side=tk.LEFT)
-        self.e6.insert(0,"150")
+        self.e6.insert(0,"43")
 
         
         self.Threshf= tk.ttk.Labelframe(Page1)

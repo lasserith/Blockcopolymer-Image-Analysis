@@ -768,8 +768,8 @@ def AngEC(im, Opt, EDArray='none', SkelArray='none'):
     YDist=(EDDistA2[0,:,:]-Yind)
     AngArray=np.arctan2(YDist,XDist)*180/np.pi
     
-    #AngArray is -180- - > +180 lets make it 0<x<=180
-    AngArray[AngArray<=0]+=180
+    #AngArray is -180- - > +180 lets make it 0<x<=360
+    AngArray+=180
 
     #masking
     EDArray=1.0*EDArray
@@ -927,40 +927,32 @@ def AngHist(AngArray,Opt, MaskArray=1, WeightArray='none'):
 
 
 #%% Autocorrelation T_T
-def AutoCorrelation(im,Opt, AngArray, SkelArray):
+def AutoCorrelation(AngArray, Opt):
     """
     Autocorrelation is a WIP still
+    (AutoCorrelation function that is passed the angle array)
     VALPHA
     """
     class AutoCor:
         pass
-    # Struct Tens
-#    LStructTen=skimage.feature.structure_tensor(CropArray, sigma=1) # Take original image and calc derivatives
-#    
-#    LAng=np.arctan2(LStructTen[2],LStructTen[0]) # use arctan dy/dx to find direction of line Rads
-#    LAngS=LAng*LSkelAC #Mask out with Skeleton
-
-    
-
-    AngSkel=AngArray*SkelArray
-
     
     
-    """
-    Note that angles are 0<->pi/2 will use trick later to correct for  
-    """
+    AutoCor.SkI, AutoCor.SkJ=np.nonzero(1-np.isnan(AngArray)); #Get indexes of non nan
     
-    AutoCor.SkI, AutoCor.SkJ=np.nonzero(SkelArray); #Get indexes of nonzero try LASkel/LSKelAC
+    
+    AutoCor.RandoList=np.random.randint(0,len(AutoCor.SkI),Opt.ACSize)
+    
     AutoCor.n=np.zeros(Opt.ACCutoff)
-    
-    AutoCor.RandoList=np.random.choice(len(AutoCor.SkI), len(AutoCor.SkI), replace=False)
     AutoCor.h=np.zeros(Opt.ACCutoff)
-    AutoCor.Indexes=np.array([[-1,-1],[0,-1],[1,-1],[-1,0],[1,0],[-1,1],[0,1],[1,1]]) # for picking nearby
-    AutoCor.IndAngles=np.array([135,90,45,180,0,-135,-90,-45]) #angle of the above in degrees
-    AutoCor.IndAngles=AutoCor.IndAngles*np.pi/180 # radians
-    AutoCor.Ind=0;
+    AutoCor.Indexes=np.array([[-1,-1],[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0]]) # for picking nearby
+    AutoCor.IndAngles=np.array([315,270,225,180,135,90,45,0]) #angle of the above in degrees UP is 0 go cw
     
-    while AutoCor.Ind < Opt.ACSize : # How many points to start at to calc auto correlate
+    
+    AutoCor.IndAngles=AutoCor.IndAngles*np.pi/180 # radians
+    AngArray = AngArray * np.pi/180 #radians
+
+    
+    for AutoCor.Ind in np.arange(Opt.ACSize) : # How many points to start at to calc auto correlate
         # The following is the AutoCor Loop
         AutoCor.ntemp=np.zeros(Opt.ACCutoff) # How many times have calculated the n=Index+1 correlation?
         AutoCor.htemp=np.zeros( Opt.ACCutoff ) # what is the current sum value of the correlation(divide by ntemp at end)
@@ -968,60 +960,50 @@ def AutoCorrelation(im,Opt, AngArray, SkelArray):
         AutoCor.BBI = 0 # not necessary but helpful to remind us start = BBI 0
         AutoCor.SAD=0;
         #First pick a point, find it's angle
+        #TODO
         AutoCor.CCOORD=[AutoCor.SkI[AutoCor.RandoList[AutoCor.Ind]] ,
                         AutoCor.SkJ[AutoCor.RandoList[AutoCor.Ind]] ]
         
-        AutoCor.angtemp[0]=LAnGDS[ tuple(AutoCor.CCOORD) ]
+        AutoCor.angtemp[0]=AngArray[ tuple(AutoCor.CCOORD) ]
         
         AutoCor.BBI=1 #now we at first point... 
         AutoCor.PastN=9 # No previous point to worry about moving back to
                       
         while AutoCor.BBI <= 2*(Opt.ACCutoff): # How far to walk BackBoneIndex total points is 2*Cuttoff+1 (1st point)
             np.roll(AutoCor.angtemp,1) # now 1st angle is index 1 instead of 0 etc
-            #what is our next points Cooard?
-            print('%F' % AutoCor.BBI)
+            #what is our next points Coord?
+            
             AutoCor.WalkDirect=np.random.choice(8,8,replace=False) # pick a spot to move
-            for TestNeighbor in np.arange(8):
+            for TestNeighbor in np.arange(8): # try moves
                 AutoCor.COORD=AutoCor.Indexes[AutoCor.WalkDirect[TestNeighbor]]+AutoCor.CCOORD
-                if np.array( (AutoCor.COORD < SkelArray.shape) ).all(): # If we are still in bounds
-                    if (SkelArray[ tuple(AutoCor.COORD)] == 1 & AutoCor.WalkDirect[TestNeighbor] != 7-AutoCor.PastN): # if we have a valid move
+                if (AngArray[ tuple(AutoCor.COORD)] != float('nan')):
+                    if (AutoCor.WalkDirect[TestNeighbor] != (4+AutoCor.PastN)%8): # if we have a valid move
                         if AutoCor.BBI==1: # And its the first move we need to fix 1st angle
-                            if AutoCor.angtemp[1] <=0: # if angle is neg
-                                if( np.abs( (AutoCor.angtemp[1]+np.pi)-AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]]) <=
-                            np.abs(AutoCor.angtemp[1]-AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]])):
-                                    #is angle + pi closer?
-                                    AutoCor.angtemp[1]+=np.pi;
-                            else: # if angle is postive
-                                if( np.abs( (AutoCor.angtemp[1]-np.pi)-AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]]) <=
-                            np.abs(AutoCor.angtemp[1]-AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]])):
-                                    #is angle + pi closer?
-                                    AutoCor.angtemp[1]+=np.pi;
+                            if AutoCor.angtemp[1] < AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]] - 90: # if angle is 90 lower
+                                AutoCor.angtemp[1]+=np.pi
+                            elif AutoCor.angtemp[1] > AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]] + 90:
+                                AutoCor.angtemp[1]-=np.pi
+                            
                         AutoCor.PastN=AutoCor.WalkDirect[TestNeighbor];
-                        del TestNeighbor;
                         AutoCor.CCOORD=AutoCor.COORD; # move there
-                        AutoCor.angtemp[0]=LAnGDS[tuple(AutoCor.CCOORD)] # set angle to new angle
+                        AutoCor.angtemp[0]=AngArray[tuple(AutoCor.CCOORD)] # set angle to new angle
                         break # break the for loop
-            else:
-                # Need to break out of the backbone loop as well...
-                AutoCor.SAD=1; # because
-                del TestNeighbor
+                        print(AngArray[tuple(AutoCor.CCoord)])
+                    elif TestNeighbor==7: # else if we at the end
+                        # Need to break out of the backbone loop as well...
+                        AutoCor.SAD=1; # because
                     
-            if AutoCor.SAD==1:
+            if AutoCor.SAD==1: # break out of BB while loop
                 # Decide if I count this or not...
                 AutoCor.SAD=0;
                 break
             
-            # BUT WAIT WE NEED TO FIX THE NEW ANGLE TOO! Keep it within pi of previous
-            if AutoCor.angtemp[0] <=0 and ( np.abs( (AutoCor.angtemp[0]+np.pi)-AutoCor.angtemp[1]) <=
-            np.abs(AutoCor.angtemp[0]-AutoCor.angtemp[1])):
-                    #is angle + pi closer?
-                    AutoCor.angtemp[0]+=np.pi;
-            elif AutoCor.angtemp[0] > 0 and (np.abs( (AutoCor.angtemp[0]-np.pi)-AutoCor.angtemp[1]) <=
-            np.abs(AutoCor.angtemp[0]-AutoCor.angtemp[1])):
-                    #is angle + pi closer?
-                    AutoCor.angtemp[1]+=np.pi;           
-                        
-#            print(np.array_str(AutoCor.CCOORD))        
+            # BUT WAIT WE NEED TO FIX THE NEW ANGLE TOO!
+            if AutoCor.angtemp[0] < AutoCor.IndAngles[AutoCor.PastN] - 90: # if angle is 90 lower
+                AutoCor.angtemp[0]+=np.pi
+            elif AutoCor.angtemp[0] > AutoCor.IndAngles[AutoCor.PastN] + 90:
+                AutoCor.angtemp[0]-=np.pi         
+                              
             for AutoCor.PI in range (0,Opt.ACCutoff): # Persistance Index, 0 = 1 dist etc
                 #Calculating autocorrelation loop
                 if (AutoCor.BBI > 0 & AutoCor.BBI%(AutoCor.PI+1)==0):
