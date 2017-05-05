@@ -46,8 +46,8 @@ Opt.AutoThresh = 1
 
 
 Opt.Inversion = 0
-Opt.ACToggle = 0 #autocorrelation (currently broken)
-Opt.ACCutoff = 0
+Opt.ACToggle = 1 #autocorrelation (currently broken)
+Opt.ACCutoff = 10
 Opt.ACSize = 50
 
 Opt.SchCO = 5 # Step in from 'Ide' in nm
@@ -546,8 +546,8 @@ for ImNum in range(0, len(FNFull) ):
             
 
     #%% Autocorrel. LETS GO, Currently Not Working
-    if Opt.ACToggle==5:
-        AutoCor=IAFun.AutoCorrelation(BinArray, Opt, SkelArray)
+    if Opt.ACToggle==1:
+        AutoCor=IAFun.AutoCorrelation(AngDetA, Opt)
     
     #%% Find the inverse or 'Dark' Image repeat as above
     if Opt.Inversion==1:

@@ -936,8 +936,8 @@ def AutoCorrelation(AngArray, Opt):
     class AutoCor:
         pass
     
-    
-    AutoCor.SkI, AutoCor.SkJ=np.nonzero(1-np.isnan(AngArray)); #Get indexes of non nan
+    MaskA = 1-np.isnan(AngArray)
+    AutoCor.SkI, AutoCor.SkJ=np.nonzero( MaskA ); #Get indexes of non nan
     
     
     AutoCor.RandoList=np.random.randint(0,len(AutoCor.SkI),Opt.ACSize)
@@ -961,37 +961,37 @@ def AutoCorrelation(AngArray, Opt):
         AutoCor.SAD=0;
         #First pick a point, find it's angle
         #TODO
-        AutoCor.CCOORD=[AutoCor.SkI[AutoCor.RandoList[AutoCor.Ind]] ,
-                        AutoCor.SkJ[AutoCor.RandoList[AutoCor.Ind]] ]
+        AutoCor.CCOORD=np.append(AutoCor.SkI[AutoCor.RandoList[AutoCor.Ind]],
+                         AutoCor.SkJ[AutoCor.RandoList[AutoCor.Ind]])
         
-        AutoCor.angtemp[0]=AngArray[ tuple(AutoCor.CCOORD) ]
+        AutoCor.angtemp[0]=AngArray[ (AutoCor.CCOORD) ]
         
         AutoCor.BBI=1 #now we at first point... 
         AutoCor.PastN=9 # No previous point to worry about moving back to
                       
         while AutoCor.BBI <= 2*(Opt.ACCutoff): # How far to walk BackBoneIndex total points is 2*Cuttoff+1 (1st point)
-            np.roll(AutoCor.angtemp,1) # now 1st angle is index 1 instead of 0 etc
+            AutoCor.angtemp = np.roll(AutoCor.angtemp,1) # now 1st angle is index 1 instead of 0 etc
             #what is our next points Coord?
             
-            AutoCor.WalkDirect=np.random.choice(8,8,replace=False) # pick a spot to move
-            for TestNeighbor in np.arange(8): # try moves
-                AutoCor.COORD=AutoCor.Indexes[AutoCor.WalkDirect[TestNeighbor]]+AutoCor.CCOORD
-                if (AngArray[ tuple(AutoCor.COORD)] != float('nan')):
-                    if (AutoCor.WalkDirect[TestNeighbor] != (4+AutoCor.PastN)%8): # if we have a valid move
+            AutoCor.WalkDirect=np.random.choice(4,4,replace=False) # pick a spot to move
+            for TestNeighbor in np.arange(4): # try moves
+                AutoCor.COORD = AutoCor.Indexes[AutoCor.WalkDirect[TestNeighbor]]+AutoCor.CCOORD
+                if MaskA[ (AutoCor.COORD)] == 1:
+                    if (AutoCor.WalkDirect[TestNeighbor] != (2+AutoCor.PastN)%4): # if we have a valid move
                         if AutoCor.BBI==1: # And its the first move we need to fix 1st angle
                             if AutoCor.angtemp[1] < AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]] - 90: # if angle is 90 lower
                                 AutoCor.angtemp[1]+=np.pi
                             elif AutoCor.angtemp[1] > AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]] + 90:
                                 AutoCor.angtemp[1]-=np.pi
                             
-                        AutoCor.PastN=AutoCor.WalkDirect[TestNeighbor];
-                        AutoCor.CCOORD=AutoCor.COORD; # move there
-                        AutoCor.angtemp[0]=AngArray[tuple(AutoCor.CCOORD)] # set angle to new angle
-                        break # break the for loop
-                        print(AngArray[tuple(AutoCor.CCoord)])
-                    elif TestNeighbor==7: # else if we at the end
-                        # Need to break out of the backbone loop as well...
-                        AutoCor.SAD=1; # because
+                    AutoCor.PastN=AutoCor.WalkDirect[TestNeighbor];
+                    AutoCor.CCOORD=AutoCor.COORD; # move there
+                    AutoCor.angtemp[0]=AngArray[(AutoCor.CCOORD)] # set angle to new angle
+                    break # break the for loop
+                    
+                elif TestNeighbor==3: # else if we at the end
+                    # Need to break out of the backbone loop as well...
+                    AutoCor.SAD=1; # because
                     
             if AutoCor.SAD==1: # break out of BB while loop
                 # Decide if I count this or not...
