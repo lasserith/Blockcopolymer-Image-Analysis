@@ -47,8 +47,8 @@ Opt.AutoThresh = 1
 
 Opt.Inversion = 0
 Opt.ACToggle = 1 #autocorrelation (currently broken)
-Opt.ACCutoff = 10
-Opt.ACSize = 1000
+Opt.ACCutoff = 15
+Opt.ACSize = 5000
 
 Opt.SchCO = 5 # Step in from 'Ide' in nm
 
