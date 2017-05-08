@@ -936,12 +936,12 @@ def AutoCorrelation(AngArray, Opt):
     class AutoCor:
         pass
     
-    MaskA = 1-np.isnan(AngArray)
+    
     AutoCor.SkI, AutoCor.SkJ=np.nonzero( MaskA ); #Get indexes of non nan
     PosNeg = np.array([-1, 1])
     
     AutoCor.RandoList=np.random.randint(0,len(AutoCor.SkI),Opt.ACSize)
-    
+    AutoCor.uncor=np.zeros((1,2)) # where do we go uncorrelated? how many times.
     AutoCor.n=np.zeros(Opt.ACCutoff)
     AutoCor.h=np.zeros(Opt.ACCutoff)
     AutoCor.Indexes=np.array([[-1,-1],[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0]]) # for picking nearby
@@ -956,7 +956,7 @@ def AutoCorrelation(AngArray, Opt):
         # The following is the AutoCor Loop
         AutoCor.ntemp=np.zeros(Opt.ACCutoff) # How many times have calculated the n=Index+1 correlation?
         AutoCor.htemp=np.zeros( Opt.ACCutoff ) # what is the current sum value of the correlation(divide by ntemp at end)
-        AutoCor.angtemp=np.zeros(Opt.ACCutoff+1) # What is the current angle, 1 prev angle, etc etc
+        AutoCor.angtemp=np.ones(Opt.ACCutoff+1)*float('nan') # What is the current angle, 1 prev angle, etc etc
         AutoCor.BBI = 0 # not necessary but helpful to remind us start = BBI 0
         AutoCor.SAD=0;
         #First pick a point, find it's angle
@@ -988,7 +988,7 @@ def AutoCorrelation(AngArray, Opt):
             
             for TestNeighbor in np.arange(7): # try moves
                 AutoCor.COORD = AutoCor.Indexes[AutoCor.WalkDirect[TestNeighbor]]+AutoCor.CCOORD
-                if MaskA[AutoCor.CCOORD[0],AutoCor.CCOORD[1]] == 1:
+                if AngArray[AutoCor.CCOORD[0],AutoCor.CCOORD[1]] != float('nan'): # if we have a good move
 #                    if AutoCor.BBI==1: # And its the first move we need to fix 1st angle
 #                        if AutoCor.angtemp[1] < AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]] - 90: # if angle is 90 lower
 #                            AutoCor.angtemp[1]+=np.pi
@@ -998,7 +998,20 @@ def AutoCorrelation(AngArray, Opt):
                     AutoCor.PastN=AutoCor.WalkDirect[TestNeighbor];
                     AutoCor.CCOORD=AutoCor.COORD; # move there
                     AutoCor.angtemp[0]=AngArray[AutoCor.CCOORD[0],AutoCor.CCOORD[1]] # set angle to new angle
-                    break # break the for loop
+                    print(AutoCor.angtemp[0])
+                    DoOnce = 0 # there has to be a more beautiful way to do this
+                    for AutoCor.PI in range (0,Opt.ACCutoff): # Persistance Index, 0 = 1 dist etc
+                #Calculating autocorrelation loop
+                        if AutoCor.angtemp[AutoCor.PI+1] != float('nan'):
+                            hcalc = np.cos(AutoCor.angtemp[0]-AutoCor.angtemp[AutoCor.PI+1])
+                            AutoCor.htemp[AutoCor.PI] += hcalc
+                            AutoCor.ntemp[AutoCor.PI] += 1
+                        if hcalc <= 0 & DoOnce == 0:
+                            AutoCor.uncor[0,0] += AutoCor.PI
+                            AutoCor.uncor[0,1] += 1
+                            DoOnce = 1
+                            
+                    break # break the for loop (done finding next point)
                     
                 elif TestNeighbor==6: # else if we at the end
                     # Need to break out of the backbone loop as well...
@@ -1015,12 +1028,7 @@ def AutoCorrelation(AngArray, Opt):
 #            elif AutoCor.angtemp[0] > AutoCor.IndAngles[AutoCor.PastN] + 90:
 #                AutoCor.angtemp[0]-=np.pi         
                               
-            for AutoCor.PI in range (0,Opt.ACCutoff): # Persistance Index, 0 = 1 dist etc
-                #Calculating autocorrelation loop
-                if (AutoCor.BBI > 0 & AutoCor.BBI%(AutoCor.PI+1)==0):
-                    
-                    AutoCor.htemp[AutoCor.PI]+=np.cos(AutoCor.angtemp[0]-AutoCor.angtemp[AutoCor.PI+1]) # dotproduct is cos
-                    AutoCor.ntemp[AutoCor.PI]+=1
+            
             
                     
             #FinD next point

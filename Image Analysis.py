@@ -163,7 +163,7 @@ class GUI:
         
         self.CropB = tk.Entry(self.f2)
         self.CropB.pack(side=tk.LEFT)
-        self.CropB.insert(0, "0")          
+        self.CropB.insert(0, "100")          
         
         self.ssampf=tk.ttk.Labelframe(Page1)
         self.ssampf.pack()
