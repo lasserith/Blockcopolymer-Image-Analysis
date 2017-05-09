@@ -294,9 +294,9 @@ def FFT( im, Opt):
     
     FSize=np.min( im.shape )
     #FSize=500;
-    FourierArray=np.fft.fft2( im, s=(FSize,FSize) );
-    FreqA=np.fft.fftfreq(FSize, d=Opt.NmPP);
-#
+    FourierArray=np.fft.rfft2( im, s=(FSize,FSize) );
+    FreqA=np.fft.rfftfreq(FSize, d=Opt.NmPP);
+    #
     F2Array=np.fft.fftshift(FourierArray);    SpaceA=1/FreqA;
     PowerSpec2d= np.abs( F2Array )**2;
     
@@ -937,7 +937,7 @@ def AutoCorrelation(AngArray, Opt):
         pass
     
     MaskA = 1-np.isnan(AngArray) # 0 = nan, 1 = valid
-    Opt.ACSize = np.max( (Opt.ACSize , MaskA.sum()) )
+    Opt.ACSize = np.min( (Opt.ACSize , MaskA.sum()) )
     
     AutoCor.SkI, AutoCor.SkJ=np.nonzero( MaskA ); #Get indexes of non nan
     PosNeg = np.array([-1, 1])
@@ -969,8 +969,8 @@ def AutoCorrelation(AngArray, Opt):
         AutoCor.angtemp[0] = AngArray[AutoCor.CCOORD[0],AutoCor.CCOORD[1]]         
         AutoCor.BBI = 1 #now we at first point... 
         AutoCor.PastN = np.random.randint(8,16) # No previous point to worry about moving back to
-                      
-        while AutoCor.BBI <= 2*(Opt.ACCutoff): # How far to walk BackBoneIndex total points is 2*Cuttoff+1 (1st point)
+         
+        for AutoCor.BBI in np.arange(2*Opt.ACCutoff+1): # How far to walk BackBoneIndex total points is 
             AutoCor.angtemp = np.roll(AutoCor.angtemp,1) # now 1st angle is index 1 instead of 0 etc
             #what is our next points Coord?
             
@@ -992,26 +992,24 @@ def AutoCorrelation(AngArray, Opt):
                 AutoCor.COORD = AutoCor.Indexes[AutoCor.WalkDirect[TestNeighbor]]+AutoCor.CCOORD
                 if AutoCor.COORD[0] < AngArray.shape[0] and AutoCor.COORD[1] < AngArray.shape[1]: # if we are in bounds
                     if np.isnan(AngArray[AutoCor.COORD[0],AutoCor.COORD[1]]) == 0: # if we have a good move
-    #                    if AutoCor.BBI==1: # And its the first move we need to fix 1st angle
-    #                        if AutoCor.angtemp[1] < AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]] - 90: # if angle is 90 lower
-    #                            AutoCor.angtemp[1]+=np.pi
-    #                        elif AutoCor.angtemp[1] > AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]] + 90:
-    #                            AutoCor.angtemp[1]-=np.pi
+#                        if AutoCor.BBI==1: # And its the first move we need to fix 1st angle
+#                            if AutoCor.angtemp[1] < AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]] - 90: # if angle is 90 lower
+#                                AutoCor.angtemp[1]+=np.pi
+#                            elif AutoCor.angtemp[1] > AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]] + 90:
+#                                AutoCor.angtemp[1]-=np.pi
                         AutoCor.PastN=AutoCor.WalkDirect[TestNeighbor];
                         
                         AutoCor.CCOORD = AutoCor.COORD; # move there
                         AutoCor.angtemp[0]=AngArray[AutoCor.CCOORD[0],AutoCor.CCOORD[1]] # set angle to new angle
-                        DoOnce = 0 # there has to be a more beautiful way to do this
+                        
                         for AutoCor.PI in range (0,Opt.ACCutoff): # Persistance Index, 0 = 1 dist etc
                     #Calculating autocorrelation loop
                             if np.isnan(AutoCor.angtemp[AutoCor.PI+1]) == 0:
                                 hcalc = np.cos(AutoCor.angtemp[0]-AutoCor.angtemp[AutoCor.PI+1])
+#                                hcalc = abs(AutoCor.angtemp[0]-AutoCor.angtemp[AutoCor.PI+1])
                                 AutoCor.htemp[AutoCor.PI] += hcalc
                                 AutoCor.ntemp[AutoCor.PI] += 1
-                            if hcalc <= 0 & DoOnce == 0:
-                                AutoCor.uncor[0,0] += AutoCor.PI
-                                AutoCor.uncor[0,1] += 1
-                                DoOnce = 1
+
                                 
                         break # break the for loop (done finding next point)
                     
@@ -1029,22 +1027,126 @@ def AutoCorrelation(AngArray, Opt):
 #                AutoCor.angtemp[0]+=np.pi
 #            elif AutoCor.angtemp[0] > AutoCor.IndAngles[AutoCor.PastN] + 90:
 #                AutoCor.angtemp[0]-=np.pi         
-                              
+         # we found all our points done with BBI
+        AutoCor.h +=AutoCor.htemp
+        AutoCor.n +=AutoCor.ntemp
+        AutoCor.Ind += 1
+                
+    AutoCor.Out = np.divide(AutoCor.h, AutoCor.n)
+#    PFit=polyfit(np.arange(1,len(AutoCor.Out)+1)*Opt.NmPP,)
+    print( AutoCor.Out)
+    print(AutoCor.Out.sum())
+
+    
+    return(AutoCor)
+#%% Autocorrelation T_T
+def PersistenceLength(SkelArray, Opt):
+    """
+    Autocorrelation is a WIP still
+    (AutoCorrelation function that is passed the angle array)
+    VALPHA
+    """
+    class PL:
+        pass
+    
+    Opt.ACSize = np.min(SkelArray.sum(), Opt.ACSize)
+    PL.n=np.zeros(Opt.ACCutoff)
+    PL.h=np.zeros(Opt.ACCutoff)
+    PL.Indexes=np.array([[0,-1],[1,0],[0,1],[-1,0]]) # for picking nearby
+   
+    AdCount=scipy.signal.convolve(SkelArray, np.ones((3,3)),mode='same')
+    # Remove Opt.DefEdge pixels at edge to prevent edge effects. be sure to account for area difference
+    (CIMH,CIMW)=im.shape
+    AdCount[0:int(Opt.DefEdge-1),:]=0; AdCount[int(CIMH+1-Opt.DefEdge):int(CIMH),:]=0; 
+    AdCount[:,0:int(Opt.DefEdge-1)]=0; AdCount[:,int(CIMW+1-Opt.DefEdge):int(CIMW)]=0;
             
+    TermArray = np.multiply(SkelArray* (AdCount==2))
+    
+    
+    
+    for AutoCor.Ind in np.arange(Opt.ACSize) : # How many points to start at to calc auto correlate
+        # The following is the AutoCor Loop
+        AutoCor.ntemp=np.zeros(Opt.ACCutoff) # How many times have calculated the n=Index+1 correlation?
+        AutoCor.htemp=np.zeros( Opt.ACCutoff ) # what is the current sum value of the correlation(divide by ntemp at end)
+        AutoCor.angtemp=np.ones(Opt.ACCutoff+1)*float('nan') # What is the current angle, 1 prev angle, etc etc
+        AutoCor.BBI = 0 # not necessary but helpful to remind us start = BBI 0
+        AutoCor.SAD=0;
+        #First pick a point, find it's angle
+        #TODO
+        AutoCor.CCOORD=np.append(AutoCor.SkI[AutoCor.RandoList[AutoCor.Ind]],
+                         AutoCor.SkJ[AutoCor.RandoList[AutoCor.Ind]])
+        
+        AutoCor.angtemp[0] = AngArray[AutoCor.CCOORD[0],AutoCor.CCOORD[1]]         
+        AutoCor.BBI = 1 #now we at first point... 
+        AutoCor.PastN = np.random.randint(8,16) # No previous point to worry about moving back to
+         
+        for AutoCor.BBI in np.arange(2*Opt.ACCutoff+1): # How far to walk BackBoneIndex total points is 
+            AutoCor.angtemp = np.roll(AutoCor.angtemp,1) # now 1st angle is index 1 instead of 0 etc
+            #what is our next points Coord?
             
+            PM1 = AutoCor.PastN + PosNeg[np.random.randint(0,2)] * PosNeg
+            PM2 = AutoCor.PastN + PosNeg[np.random.randint(0,2)] * 2 * PosNeg
+            PM3 = AutoCor.PastN + PosNeg[np.random.randint(0,2)] * 3 * PosNeg
+            
+            if AutoCor.PastN%2 == 0: # if even check the cardinals then diagonals
+                AutoCor.WalkDirect=np.append(PM1%8, AutoCor.PastN%8)
+                AutoCor.WalkDirect=np.concatenate((AutoCor.WalkDirect, PM3%8, PM2%8))
+            else: # if odd
+                AutoCor.WalkDirect=np.append(AutoCor.PastN%8, PM1%8)
+                AutoCor.WalkDirect=np.concatenate((AutoCor.WalkDirect, PM2%8, PM3%8))
+                
+                
+                
+            
+            for TestNeighbor in np.arange(7): # try moves
+                AutoCor.COORD = AutoCor.Indexes[AutoCor.WalkDirect[TestNeighbor]]+AutoCor.CCOORD
+                if AutoCor.COORD[0] < AngArray.shape[0] and AutoCor.COORD[1] < AngArray.shape[1]: # if we are in bounds
+                    if np.isnan(AngArray[AutoCor.COORD[0],AutoCor.COORD[1]]) == 0: # if we have a good move
+#                        if AutoCor.BBI==1: # And its the first move we need to fix 1st angle
+#                            if AutoCor.angtemp[1] < AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]] - 90: # if angle is 90 lower
+#                                AutoCor.angtemp[1]+=np.pi
+#                            elif AutoCor.angtemp[1] > AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]] + 90:
+#                                AutoCor.angtemp[1]-=np.pi
+                        AutoCor.PastN=AutoCor.WalkDirect[TestNeighbor];
+                        
+                        AutoCor.CCOORD = AutoCor.COORD; # move there
+                        AutoCor.angtemp[0]=AngArray[AutoCor.CCOORD[0],AutoCor.CCOORD[1]] # set angle to new angle
+                        
+                        for AutoCor.PI in range (0,Opt.ACCutoff): # Persistance Index, 0 = 1 dist etc
+                    #Calculating autocorrelation loop
+                            if np.isnan(AutoCor.angtemp[AutoCor.PI+1]) == 0:
+                                hcalc = np.cos(AutoCor.angtemp[0]-AutoCor.angtemp[AutoCor.PI+1])
+#                                hcalc = abs(AutoCor.angtemp[0]-AutoCor.angtemp[AutoCor.PI+1])
+                                AutoCor.htemp[AutoCor.PI] += hcalc
+                                AutoCor.ntemp[AutoCor.PI] += 1
+
+                                
+                        break # break the for loop (done finding next point)
                     
-            #FinD next point
-            AutoCor.BBI+=1
+                elif TestNeighbor==6: # else if we at the end
+                    # Need to break out of the backbone loop as well...
+                    AutoCor.SAD=1; # because
+                    
+            if AutoCor.SAD==1: # break out of BB while loop
+                # Decide if I count this or not...
+                AutoCor.SAD=0;
+                break
             
-            if AutoCor.BBI==2*(Opt.ACCutoff): # we found all our points!
-                AutoCor.h +=AutoCor.htemp
-                AutoCor.n +=AutoCor.ntemp
-                AutoCor.Ind += 1
+            # BUT WAIT WE NEED TO FIX THE NEW ANGLE TOO!
+#            if AutoCor.angtemp[0] < AutoCor.IndAngles[AutoCor.PastN] - 90: # if angle is 90 lower
+#                AutoCor.angtemp[0]+=np.pi
+#            elif AutoCor.angtemp[0] > AutoCor.IndAngles[AutoCor.PastN] + 90:
+#                AutoCor.angtemp[0]-=np.pi         
+         # we found all our points done with BBI
+        AutoCor.h +=AutoCor.htemp
+        AutoCor.n +=AutoCor.ntemp
+        AutoCor.Ind += 1
                 
     AutoCor.Out = np.divide(AutoCor.h, AutoCor.n)
     print( AutoCor.Out)
-    AutoCor.uncor = np.append(AutoCor.uncor, AutoCor.uncor[0,0]/AutoCor.uncor[0,1])
-    print( AutoCor.uncor )
+    print(AutoCor.Out.sum())
+
+    
     return(AutoCor)
 #%% Param Optimizer
 def ParamOptimizer(ArrayIn, Opt, l0, Params):
