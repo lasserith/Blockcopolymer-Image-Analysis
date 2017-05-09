@@ -970,7 +970,7 @@ def AutoCorrelation(AngArray, Opt):
         AutoCor.BBI = 1 #now we at first point... 
         AutoCor.PastN = np.random.randint(8,16) # No previous point to worry about moving back to
          
-        for AutoCor.BBI in np.arange(2*Opt.ACCutoff+1): # How far to walk BackBoneIndex total points is 
+        while AutoCor.BBI < np.arange(2*Opt.ACCutoff+1): # How far to walk BackBoneIndex total points is 
             AutoCor.angtemp = np.roll(AutoCor.angtemp,1) # now 1st angle is index 1 instead of 0 etc
             #what is our next points Coord?
             
@@ -1005,7 +1005,7 @@ def AutoCorrelation(AngArray, Opt):
                         for AutoCor.PI in range (0,Opt.ACCutoff): # Persistance Index, 0 = 1 dist etc
                     #Calculating autocorrelation loop
                             if np.isnan(AutoCor.angtemp[AutoCor.PI+1]) == 0:
-                                hcalc = np.cos(AutoCor.angtemp[0]-AutoCor.angtemp[AutoCor.PI+1])
+                                hcalc = np.cos(abs(AutoCor.angtemp[0]-AutoCor.angtemp[AutoCor.PI+1]))
 #                                hcalc = abs(AutoCor.angtemp[0]-AutoCor.angtemp[AutoCor.PI+1])
                                 AutoCor.htemp[AutoCor.PI] += hcalc
                                 AutoCor.ntemp[AutoCor.PI] += 1
@@ -1016,7 +1016,7 @@ def AutoCorrelation(AngArray, Opt):
                 elif TestNeighbor==6: # else if we at the end
                     # Need to break out of the backbone loop as well...
                     AutoCor.SAD=1; # because
-                    
+            AutoCor.BBI+=1
             if AutoCor.SAD==1: # break out of BB while loop
                 # Decide if I count this or not...
                 AutoCor.SAD=0;
@@ -1049,7 +1049,8 @@ def PersistenceLength(SkelArray, Opt):
     class PL:
         pass
     
-    Opt.ACSize = np.min(SkelArray.sum(), Opt.ACSize)
+    PL.size = np.min(SkelArray.sum(), Opt.ACSize)
+    PL.Cutoff = Opt.ACCutoff
     PL.n=np.zeros(Opt.ACCutoff)
     PL.h=np.zeros(Opt.ACCutoff)
     PL.Indexes=np.array([[0,-1],[1,0],[0,1],[-1,0]]) # for picking nearby
@@ -1061,26 +1062,26 @@ def PersistenceLength(SkelArray, Opt):
     AdCount[:,0:int(Opt.DefEdge-1)]=0; AdCount[:,int(CIMW+1-Opt.DefEdge):int(CIMW)]=0;
             
     TermArray = np.multiply(SkelArray* (AdCount==2))
+    PointI, PointJ = np.nonzero(TermArray)
+    RandoList=np.random.randint(0,len(PointI),Opt.ACSize)
     
-    
-    
-    for AutoCor.Ind in np.arange(Opt.ACSize) : # How many points to start at to calc auto correlate
+    for Ind in np.arange(PL.size) : # How many points to start at to calc auto correlate
         # The following is the AutoCor Loop
-        AutoCor.ntemp=np.zeros(Opt.ACCutoff) # How many times have calculated the n=Index+1 correlation?
-        AutoCor.htemp=np.zeros( Opt.ACCutoff ) # what is the current sum value of the correlation(divide by ntemp at end)
-        AutoCor.angtemp=np.ones(Opt.ACCutoff+1)*float('nan') # What is the current angle, 1 prev angle, etc etc
-        AutoCor.BBI = 0 # not necessary but helpful to remind us start = BBI 0
-        AutoCor.SAD=0;
+        ntemp=np.zeros(PL.Cutoff) # How many times have calculated the n=Index+1 correlation?
+        htemp=np.zeros( PL.Cutoff ) # what is the current sum value of the correlation(divide by ntemp at end)
+        XYtemp=np.ones(PL.Cutoff+1,2)*float('nan') # What is the current coord prev etc
+        BBI = 0 # not necessary but helpful to remind us start = BBI 0
+        SAD=0 # used to double loop break
         #First pick a point, find it's angle
         #TODO
-        AutoCor.CCOORD=np.append(AutoCor.SkI[AutoCor.RandoList[AutoCor.Ind]],
-                         AutoCor.SkJ[AutoCor.RandoList[AutoCor.Ind]])
+        CCOORD=np.append(PointI[RandoList[Ind]],
+                         PointJ[RandoList[Ind]])
         
-        AutoCor.angtemp[0] = AngArray[AutoCor.CCOORD[0],AutoCor.CCOORD[1]]         
-        AutoCor.BBI = 1 #now we at first point... 
-        AutoCor.PastN = np.random.randint(8,16) # No previous point to worry about moving back to
+        XYtemp = CCOORD   
+        BBI = 1 #now we at first point... 
+        PastN = np.random.randint(8,16) # No previous point to worry about moving back to
          
-        for AutoCor.BBI in np.arange(2*Opt.ACCutoff+1): # How far to walk BackBoneIndex total points is 
+        while BBI < np.arange(2*Opt.ACCutoff+1): # How far to walk BackBoneIndex total points is 
             AutoCor.angtemp = np.roll(AutoCor.angtemp,1) # now 1st angle is index 1 instead of 0 etc
             #what is our next points Coord?
             
