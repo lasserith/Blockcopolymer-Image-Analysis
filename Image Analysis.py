@@ -46,9 +46,9 @@ Opt.AutoThresh = 1
 
 
 Opt.Inversion = 0
-Opt.ACToggle = 1 #autocorrelation (currently broken)
-Opt.ACCutoff = 10
-Opt.ACSize = 1000
+Opt.ACToggle = 2 #autocorrelation 1 = orient 2 = contour v dist
+Opt.ACCutoff = 50
+Opt.ACSize = 20
 
 Opt.SchCO = 5 # Step in from 'Ide' in nm
 
@@ -548,6 +548,8 @@ for ImNum in range(0, len(FNFull) ):
     #%% Autocorrel. LETS GO, Currently Not Working
     if Opt.ACToggle==1:
         AutoCor=IAFun.AutoCorrelation(AngDetA, Opt)
+    elif Opt.ACToggle == 2: # do it from contour v end end dist
+        AutoCor = IAFun.PersistenceLength(SkelArray, Opt)
     
     #%% Find the inverse or 'Dark' Image repeat as above
     if Opt.Inversion==1:

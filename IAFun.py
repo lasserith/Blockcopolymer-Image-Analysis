@@ -946,6 +946,7 @@ def AutoCorrelation(AngArray, Opt):
     AutoCor.uncor=np.zeros((1,2)) # where do we go uncorrelated? how many times.
     AutoCor.n=np.zeros(Opt.ACCutoff)
     AutoCor.h=np.zeros(Opt.ACCutoff)
+    AutoCor.Ind = 0
     AutoCor.Indexes=np.array([[-1,-1],[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0]]) # for picking nearby
     AutoCor.IndAngles=np.array([315,270,225,180,135,90,45,0]) #angle of the above in degrees UP is 0 go cw
     
@@ -954,7 +955,7 @@ def AutoCorrelation(AngArray, Opt):
     AngArray = AngArray * np.pi/180 #radians
     
     
-    for AutoCor.Ind in np.arange(Opt.ACSize) : # How many points to start at to calc auto correlate
+    while AutoCor.Ind < Opt.ACSize : # How many points to start at to calc auto correlate
         # The following is the AutoCor Loop
         AutoCor.ntemp=np.zeros(Opt.ACCutoff) # How many times have calculated the n=Index+1 correlation?
         AutoCor.htemp=np.zeros( Opt.ACCutoff ) # what is the current sum value of the correlation(divide by ntemp at end)
@@ -970,7 +971,7 @@ def AutoCorrelation(AngArray, Opt):
         AutoCor.BBI = 1 #now we at first point... 
         AutoCor.PastN = np.random.randint(8,16) # No previous point to worry about moving back to
          
-        while AutoCor.BBI < np.arange(2*Opt.ACCutoff+1): # How far to walk BackBoneIndex total points is 
+        while AutoCor.BBI < (2*Opt.ACCutoff+1): # How far to walk BackBoneIndex total points is 
             AutoCor.angtemp = np.roll(AutoCor.angtemp,1) # now 1st angle is index 1 instead of 0 etc
             #what is our next points Coord?
             
@@ -1016,12 +1017,12 @@ def AutoCorrelation(AngArray, Opt):
                 elif TestNeighbor==6: # else if we at the end
                     # Need to break out of the backbone loop as well...
                     AutoCor.SAD=1; # because
-            AutoCor.BBI+=1
+            
             if AutoCor.SAD==1: # break out of BB while loop
                 # Decide if I count this or not...
                 AutoCor.SAD=0;
                 break
-            
+            AutoCor.BBI+=1
             # BUT WAIT WE NEED TO FIX THE NEW ANGLE TOO!
 #            if AutoCor.angtemp[0] < AutoCor.IndAngles[AutoCor.PastN] - 90: # if angle is 90 lower
 #                AutoCor.angtemp[0]+=np.pi
@@ -1049,106 +1050,89 @@ def PersistenceLength(SkelArray, Opt):
     class PL:
         pass
     
-    PL.size = np.min(SkelArray.sum(), Opt.ACSize)
+    PL.size = np.min((SkelArray.sum()/2, Opt.ACSize))
     PL.Cutoff = Opt.ACCutoff
     PL.n=np.zeros(Opt.ACCutoff)
     PL.h=np.zeros(Opt.ACCutoff)
-    PL.Indexes=np.array([[0,-1],[1,0],[0,1],[-1,0]]) # for picking nearby
+    PL.Ind = 0
+    Indexes=np.array([[-1,-1],[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0]]) # for picking nearby
    
     AdCount=scipy.signal.convolve(SkelArray, np.ones((3,3)),mode='same')
     # Remove Opt.DefEdge pixels at edge to prevent edge effects. be sure to account for area difference
-    (CIMH,CIMW)=im.shape
-    AdCount[0:int(Opt.DefEdge-1),:]=0; AdCount[int(CIMH+1-Opt.DefEdge):int(CIMH),:]=0; 
-    AdCount[:,0:int(Opt.DefEdge-1)]=0; AdCount[:,int(CIMW+1-Opt.DefEdge):int(CIMW)]=0;
+#    (CIMH,CIMW)=SkelArray.shape
+#    AdCount[0:int(Opt.DefEdge-1),:]=0; AdCount[int(CIMH+1-Opt.DefEdge):int(CIMH),:]=0; 
+#    AdCount[:,0:int(Opt.DefEdge-1)]=0; AdCount[:,int(CIMW+1-Opt.DefEdge):int(CIMW)]=0;
             
-    TermArray = np.multiply(SkelArray* (AdCount==2))
+    TermArray = np.multiply(SkelArray, (AdCount==2))
     PointI, PointJ = np.nonzero(TermArray)
     RandoList=np.random.randint(0,len(PointI),Opt.ACSize)
     
-    for Ind in np.arange(PL.size) : # How many points to start at to calc auto correlate
+    while PL.Ind < PL.size : # How many points to start at to calc auto correlate
         # The following is the AutoCor Loop
         ntemp=np.zeros(PL.Cutoff) # How many times have calculated the n=Index+1 correlation?
         htemp=np.zeros( PL.Cutoff ) # what is the current sum value of the correlation(divide by ntemp at end)
-        XYtemp=np.ones(PL.Cutoff+1,2)*float('nan') # What is the current coord prev etc
+        XYtemp=np.ones((PL.Cutoff,2))*float('nan') # What is the current coord prev etc was +1 prev
         BBI = 0 # not necessary but helpful to remind us start = BBI 0
         SAD=0 # used to double loop break
         #First pick a point, find it's angle
         #TODO
-        CCOORD=np.append(PointI[RandoList[Ind]],
-                         PointJ[RandoList[Ind]])
+        CCOORD=np.append(PointI[RandoList[PL.Ind]],
+                         PointJ[RandoList[PL.Ind]])
+        while SkelArray[CCOORD[0],CCOORD[1]] == 0:
+            PL.Ind +=1
+            CCOORD=np.append(PointI[RandoList[PL.Ind]],
+                         PointJ[RandoList[PL.Ind]])
         
-        XYtemp = CCOORD   
+        XYtemp[0] = CCOORD   
         BBI = 1 #now we at first point... 
-        PastN = np.random.randint(8,16) # No previous point to worry about moving back to
-         
-        while BBI < np.arange(2*Opt.ACCutoff+1): # How far to walk BackBoneIndex total points is 
-            AutoCor.angtemp = np.roll(AutoCor.angtemp,1) # now 1st angle is index 1 instead of 0 etc
-            #what is our next points Coord?
-            
-            PM1 = AutoCor.PastN + PosNeg[np.random.randint(0,2)] * PosNeg
-            PM2 = AutoCor.PastN + PosNeg[np.random.randint(0,2)] * 2 * PosNeg
-            PM3 = AutoCor.PastN + PosNeg[np.random.randint(0,2)] * 3 * PosNeg
-            
-            if AutoCor.PastN%2 == 0: # if even check the cardinals then diagonals
-                AutoCor.WalkDirect=np.append(PM1%8, AutoCor.PastN%8)
-                AutoCor.WalkDirect=np.concatenate((AutoCor.WalkDirect, PM3%8, PM2%8))
-            else: # if odd
-                AutoCor.WalkDirect=np.append(AutoCor.PastN%8, PM1%8)
-                AutoCor.WalkDirect=np.concatenate((AutoCor.WalkDirect, PM2%8, PM3%8))
-                
-                
-                
-            
-            for TestNeighbor in np.arange(7): # try moves
-                AutoCor.COORD = AutoCor.Indexes[AutoCor.WalkDirect[TestNeighbor]]+AutoCor.CCOORD
-                if AutoCor.COORD[0] < AngArray.shape[0] and AutoCor.COORD[1] < AngArray.shape[1]: # if we are in bounds
-                    if np.isnan(AngArray[AutoCor.COORD[0],AutoCor.COORD[1]]) == 0: # if we have a good move
-#                        if AutoCor.BBI==1: # And its the first move we need to fix 1st angle
-#                            if AutoCor.angtemp[1] < AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]] - 90: # if angle is 90 lower
-#                                AutoCor.angtemp[1]+=np.pi
-#                            elif AutoCor.angtemp[1] > AutoCor.IndAngles[AutoCor.WalkDirect[TestNeighbor]] + 90:
-#                                AutoCor.angtemp[1]-=np.pi
-                        AutoCor.PastN=AutoCor.WalkDirect[TestNeighbor];
-                        
-                        AutoCor.CCOORD = AutoCor.COORD; # move there
-                        AutoCor.angtemp[0]=AngArray[AutoCor.CCOORD[0],AutoCor.CCOORD[1]] # set angle to new angle
-                        
-                        for AutoCor.PI in range (0,Opt.ACCutoff): # Persistance Index, 0 = 1 dist etc
-                    #Calculating autocorrelation loop
-                            if np.isnan(AutoCor.angtemp[AutoCor.PI+1]) == 0:
-                                hcalc = np.cos(AutoCor.angtemp[0]-AutoCor.angtemp[AutoCor.PI+1])
-#                                hcalc = abs(AutoCor.angtemp[0]-AutoCor.angtemp[AutoCor.PI+1])
-                                AutoCor.htemp[AutoCor.PI] += hcalc
-                                AutoCor.ntemp[AutoCor.PI] += 1
 
+         
+        while BBI < (2*Opt.ACCutoff+1): # How far to walk BackBoneIndex total points is 
+            
+            #what is our next points Coord?
+                           
+            
+            for TestNeighbor in np.arange(4): # try moves
+                COORD = Indexes[TestNeighbor]+CCOORD
+                if COORD[0] < SkelArray.shape[0] and COORD[1] < SkelArray.shape[1]: # if we are in bounds
+                    if (SkelArray[COORD[0],COORD[1]] == 1): # if we have a good move
+
+                        
+                        CCOORD = COORD; # move there
+                        RCDist = XYtemp - CCOORD # calculate distance from new points to prev points (END END DIST)
+                        Dist = np.hypot(RCDist[:,0], RCDist[:,1]) # find hypot for dist
+                        Dist[np.isnan(Dist)] = 0 # get rid of nans
+                        print( Dist )
+                        htemp += Dist # add results to cumulative calc
+                        ntemp += (1-np.isnan(XYtemp[:,0])) # which numbers did we actually accumulate
+                        XYtemp = np.roll(XYtemp,2) # now starting point is index 1 instead of 0 etc
+                        XYtemp[0] = CCOORD # set XY to new COORD
+                        SkelArray[CCOORD[0],COORD[1]] = 0 # delete point so we don't hit it again
                                 
                         break # break the for loop (done finding next point)
                     
-                elif TestNeighbor==6: # else if we at the end
+                elif TestNeighbor==3: # else if we at the end
                     # Need to break out of the backbone loop as well...
-                    AutoCor.SAD=1; # because
+                    SAD=1; # because
                     
-            if AutoCor.SAD==1: # break out of BB while loop
+            if SAD==1: # break out of BB while loop
                 # Decide if I count this or not...
-                AutoCor.SAD=0;
+                SAD=0;
                 break
+            BBI += 1
+        
             
-            # BUT WAIT WE NEED TO FIX THE NEW ANGLE TOO!
-#            if AutoCor.angtemp[0] < AutoCor.IndAngles[AutoCor.PastN] - 90: # if angle is 90 lower
-#                AutoCor.angtemp[0]+=np.pi
-#            elif AutoCor.angtemp[0] > AutoCor.IndAngles[AutoCor.PastN] + 90:
-#                AutoCor.angtemp[0]-=np.pi         
-         # we found all our points done with BBI
-        AutoCor.h +=AutoCor.htemp
-        AutoCor.n +=AutoCor.ntemp
-        AutoCor.Ind += 1
+        PL.h += htemp
+        PL.n += ntemp
+        PL.Ind += 1
+        
                 
-    AutoCor.Out = np.divide(AutoCor.h, AutoCor.n)
-    print( AutoCor.Out)
-    print(AutoCor.Out.sum())
+    PL.Out = np.divide(PL.h, PL.n)
+    print( PL.Out)
+    print( PL.Out.sum())
 
     
-    return(AutoCor)
+    return(PL)
 #%% Param Optimizer
 def ParamOptimizer(ArrayIn, Opt, l0, Params):
     Opt.DenWeight=Params[0]
