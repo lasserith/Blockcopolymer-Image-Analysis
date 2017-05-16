@@ -1050,10 +1050,13 @@ def PersistenceLength(SkelArray, Opt):
     class PL:
         pass
     
-    PL.size = np.min((SkelArray.sum()/2, Opt.ACSize))
+    
     PL.Cutoff = Opt.ACCutoff
     PL.n=np.zeros(Opt.ACCutoff)
     PL.h=np.zeros(Opt.ACCutoff)
+    PL.ContList = np.ones( 1 ) # maybe just keep track of all the points? Will get absurdly big
+    PL.EEList = np.ones( 1 ) # dittooooo
+    
     PL.Ind = 0
     Indexes=np.array([[-1,-1],[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0]]) # for picking nearby
    
@@ -1065,12 +1068,19 @@ def PersistenceLength(SkelArray, Opt):
             
     TermArray = np.multiply(SkelArray, (AdCount==2))
     PointI, PointJ = np.nonzero(TermArray)
-    RandoList=np.random.randint(0,len(PointI),Opt.ACSize)
+    PL.size = np.min((len(PointI), Opt.ACSize))
+    
+    RandoList=np.random.randint(0,len(PointI),PL.size)
     
     while PL.Ind < PL.size : # How many points to start at to calc auto correlate
         # The following is the AutoCor Loop
-        ntemp=np.zeros(PL.Cutoff) # How many times have calculated the n=Index+1 correlation?
-        htemp=np.zeros( PL.Cutoff ) # what is the current sum value of the correlation(divide by ntemp at end)
+        
+        ntemp = np.zeros(PL.Cutoff) # How many times have calculated the n=Index+1 correlation?
+        htemp = np.zeros( PL.Cutoff ) # what is the current sum value of the correlation(divide by ntemp at end)
+
+
+        
+        ContTemp = np.zeros( PL.Cutoff )
         XYtemp=np.ones((PL.Cutoff,2))*float('nan') # What is the current coord prev etc was +1 prev
         BBI = 0 # not necessary but helpful to remind us start = BBI 0
         SAD=0 # used to double loop break
@@ -1092,7 +1102,7 @@ def PersistenceLength(SkelArray, Opt):
             #what is our next points Coord?
                            
             
-            for TestNeighbor in np.arange(4): # try moves
+            for TestNeighbor in np.arange(8): # try moves
                 COORD = Indexes[TestNeighbor]+CCOORD
                 if COORD[0] < SkelArray.shape[0] and COORD[1] < SkelArray.shape[1]: # if we are in bounds
                     if (SkelArray[COORD[0],COORD[1]] == 1): # if we have a good move
@@ -1102,16 +1112,27 @@ def PersistenceLength(SkelArray, Opt):
                         RCDist = XYtemp - CCOORD # calculate distance from new points to prev points (END END DIST)
                         Dist = np.hypot(RCDist[:,0], RCDist[:,1]) # find hypot for dist
                         Dist[np.isnan(Dist)] = 0 # get rid of nans
-                        print( Dist )
-                        htemp += Dist # add results to cumulative calc
+#                        print( Dist )
+                        ContTemp = np.roll(ContTemp,1) # roll it so we can accept the 1 unit distance
+                        ContTemp[ContTemp!=0] += Dist[0] # Add contour distance of last step to each cell
+                        ContTemp[0] = Dist[0] #make sure to set 
+                        DistRatio = np.divide(Dist,ContTemp)
+                        DistRatio[ np.isnan(DistRatio) ] = 0
+                        
+                        PL.ContList = np.append( PL.ContList, ContTemp[np.nonzero(Dist)] )
+                        PL.EEList = np.append( PL.EEList, Dist[np.nonzero(Dist)] )
+                        
+                        htemp += DistRatio # add results to cumulative calc
                         ntemp += (1-np.isnan(XYtemp[:,0])) # which numbers did we actually accumulate
                         XYtemp = np.roll(XYtemp,2) # now starting point is index 1 instead of 0 etc
+                        
+                        
                         XYtemp[0] = CCOORD # set XY to new COORD
                         SkelArray[CCOORD[0],COORD[1]] = 0 # delete point so we don't hit it again
                                 
                         break # break the for loop (done finding next point)
                     
-                elif TestNeighbor==3: # else if we at the end
+                elif TestNeighbor==7: # else if we at the end
                     # Need to break out of the backbone loop as well...
                     SAD=1; # because
                     
@@ -1127,11 +1148,21 @@ def PersistenceLength(SkelArray, Opt):
         PL.Ind += 1
         
                 
-    PL.Out = np.divide(PL.h, PL.n)
-    print( PL.Out)
-    print( PL.Out.sum())
-
-    
+    PL.DistR = np.divide(PL.h , PL.n)
+    Bins = np.arange(int(PL.ContList.max()))
+    BinInd = np.digitize( PL.ContList, Bins )
+    plt.plot(PL.ContList, PL.EEList, 'b.')
+#    PLPlot=plt.figure()
+#    PLPlot1=PLPlot.add_subplot(111)
+#    PLPlot1.plot(PL.DistR)
+#    if Opt.AECSh == 1: #REPLACE show
+#
+#        AngPlot.show() #
+#    if Opt.AECSa==1: #Replace save
+#        AngPlot.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "AngEC.png"), dpi=300)
+#    plt.close(AngPlot)
+#    plt.plot(PL.DistR)
+#    plt.plot(ContLength, PL.EELength,'r',ContLength,ContLength,'b')
     return(PL)
 #%% Param Optimizer
 def ParamOptimizer(ArrayIn, Opt, l0, Params):

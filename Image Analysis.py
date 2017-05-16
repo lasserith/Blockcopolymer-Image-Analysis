@@ -47,8 +47,8 @@ Opt.AutoThresh = 1
 
 Opt.Inversion = 0
 Opt.ACToggle = 2 #autocorrelation 1 = orient 2 = contour v dist
-Opt.ACCutoff = 50
-Opt.ACSize = 20
+Opt.ACCutoff = 200
+Opt.ACSize = 100
 
 Opt.SchCO = 5 # Step in from 'Ide' in nm
 
@@ -179,12 +179,12 @@ class GUI:
         self.fftf.pack()
         self.fftTog=tk.Checkbutton(self.fftf,text="Enable FFT",variable=Opt.FFTToggle)
         self.fftTog.pack(side=tk.LEFT)
-        self.fftTog.select()
+#        self.fftTog.select()
         self.fftl=tk.Label(self.fftf, text="Enter L0 (nm) if not using FFT")
         self.fftl.pack(side=tk.LEFT) 
         self.L0 =tk.Entry(self.fftf)
         self.L0.pack(side=tk.LEFT)
-        self.L0.insert(0,"25")
+        self.L0.insert(0,"28")
         
         
         self.Denf= tk.ttk.Labelframe(Page1)
