@@ -949,7 +949,8 @@ def AutoCorrelation(AngArray, Opt):
     AutoCor.Ind = 0
     AutoCor.Indexes=np.array([[-1,-1],[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0]]) # for picking nearby
     AutoCor.IndAngles=np.array([315,270,225,180,135,90,45,0]) #angle of the above in degrees UP is 0 go cw
-    
+    AutoCor.HList = np.ones(1)
+    AutoCor.DistList = np.ones(1)
     
     AutoCor.IndAngles=AutoCor.IndAngles*np.pi/180 # radians
     AngArray = AngArray * np.pi/180 #radians
@@ -962,6 +963,7 @@ def AutoCorrelation(AngArray, Opt):
         AutoCor.angtemp=np.ones(Opt.ACCutoff+1)*float('nan') # What is the current angle, 1 prev angle, etc etc
         AutoCor.BBI = 0 # not necessary but helpful to remind us start = BBI 0
         AutoCor.SAD=0;
+        ContTemp = np.zeros( Opt.ACCutoff ) # hold the backbone distance
         #First pick a point, find it's angle
         #TODO
         AutoCor.CCOORD=np.append(AutoCor.SkI[AutoCor.RandoList[AutoCor.Ind]],
@@ -1000,13 +1002,21 @@ def AutoCorrelation(AngArray, Opt):
 #                                AutoCor.angtemp[1]-=np.pi
                         AutoCor.PastN=AutoCor.WalkDirect[TestNeighbor];
                         
+                        Dist = np.hypot(AutoCor.CCOORD[0]-AutoCor.COORD[0],AutoCor.CCOORD[1]-AutoCor.COORD[1])
+                        ContTemp = np.roll(ContTemp,1) # roll it so we can accept the 1 unit distance
+                        ContTemp[ContTemp!=0] += Dist # Add contour distance of last step to each cell
+                        ContTemp[0] = Dist #make sure to set                         
+                        
                         AutoCor.CCOORD = AutoCor.COORD; # move there
                         AutoCor.angtemp[0]=AngArray[AutoCor.CCOORD[0],AutoCor.CCOORD[1]] # set angle to new angle
                         
                         for AutoCor.PI in range (0,Opt.ACCutoff): # Persistance Index, 0 = 1 dist etc
                     #Calculating autocorrelation loop
                             if np.isnan(AutoCor.angtemp[AutoCor.PI+1]) == 0:
+                                distcalc = ContTemp[AutoCor.PI]
                                 hcalc = np.cos(abs(AutoCor.angtemp[0]-AutoCor.angtemp[AutoCor.PI+1]))
+                                AutoCor.HList = np.append( AutoCor.HList, hcalc)
+                                AutoCor.DistList = np.append( AutoCor.DistList, distcalc)
 #                                hcalc = abs(AutoCor.angtemp[0]-AutoCor.angtemp[AutoCor.PI+1])
                                 AutoCor.htemp[AutoCor.PI] += hcalc
                                 AutoCor.ntemp[AutoCor.PI] += 1
@@ -1035,8 +1045,12 @@ def AutoCorrelation(AngArray, Opt):
                 
     AutoCor.Out = np.divide(AutoCor.h, AutoCor.n)
 #    PFit=polyfit(np.arange(1,len(AutoCor.Out)+1)*Opt.NmPP,)
-    print( AutoCor.Out)
-    print(AutoCor.Out.sum())
+
+    AutoCor.Bins = np.arange(1,int(AutoCor.DistList.max())+0.5,1)
+    ContBin  = np.digitize( AutoCor.HList, AutoCor.Bins ) # which contour length bin is each one in
+    AutoCor.MeanCont = np.zeros_like(AutoCor.Bins) # hold mean eelength for each cont length
+    for i in np.arange(1,len(AutoCor.Bins)):
+        AutoCor.MeanCont[i] = AutoCor.HList[ ContBin == i ].mean()
 
     
     return(AutoCor)
@@ -1149,9 +1163,14 @@ def PersistenceLength(SkelArray, Opt):
         
                 
     PL.DistR = np.divide(PL.h , PL.n)
-    Bins = np.arange(int(PL.ContList.max()))
-    BinInd = np.digitize( PL.ContList, Bins )
-    plt.plot(PL.ContList, PL.EEList, 'b.')
+    PL.Bins = np.arange(1,int(PL.ContList.max())+0.5,1)
+    PL.ContBin  = np.digitize( PL.ContList, PL.Bins ) # which contour length bin is each one in
+    PL.MeanCont = np.zeros_like(PL.Bins) # hold mean eelength for each cont length
+    for i in np.arange(1,len(PL.Bins)):
+        PL.MeanCont[i] = PL.EEList[ PL.ContBin == i ].mean()
+    
+    plt.plot( PL.Bins, np.divide(PL.MeanCont, PL.Bins) )
+#    plt.plot(PL.ContList, PL.EEList, 'b.')
 #    PLPlot=plt.figure()
 #    PLPlot1=PLPlot.add_subplot(111)
 #    PLPlot1.plot(PL.DistR)
