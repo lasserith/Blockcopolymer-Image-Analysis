@@ -385,27 +385,27 @@ FOpen.withdraw()
 
 for ImNum in range(0, len(FNFull) ):
     
-    im= Image.open(FNFull[ImNum])
-    FName = os.path.splitext(FNFull[ImNum])[0]
-    Opt.FPath, Opt.BName= os.path.split(FName) 
+    Opt.Name=FNFull[ImNum] # this hold the full file name
+    Opt.FPath, Opt.BName= os.path.split(Opt.Name)  # File Path/ File Name
+    (Opt.FName, Opt.FExt) = os.path.splitext(Opt.BName) # File name/File Extension split
     
     # Make output folder if needed
     try:
         os.stat(os.path.join(Opt.FPath,"output"))
     except:
         os.mkdir(os.path.join(Opt.FPath,"output"))
-        
-    if im.mode!="P":
-        im=im.convert(mode='P')
-        print("Image was not in the original format, and has been converted back to grayscale. Consider using the original image.")    
-    imarray = np.array(im)
+    
+    try:
+        Opt.NmPP=Opt.NmPPSet
+    except:
+        pass
+    imarray=IAFun.AutoDetect( FNFull[ImNum], Opt) # autodetect the machine, nmpp and return the raw data array
     
     
     
-    #%% Autodetect per pixel scaling for merlin, don't have a nanosem image to figure that out
     
-    IAFun.AutoDetect( FNFull[ImNum], Opt)
     
+0
     #%% Crop
     (CropArray, Output.CIMH, Output.CIMW)=IAFun.Crop( imarray , Opt )
     ArrayIn=CropArray

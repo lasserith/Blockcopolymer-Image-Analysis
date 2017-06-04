@@ -46,7 +46,7 @@ Opt.AutoThresh = 1
 
 
 Opt.Inversion = 0
-Opt.ACToggle = 1 #autocorrelation 1 = orient 2 = contour v dist
+Opt.ACToggle = 0 #autocorrelation 1 = orient 2 = contour v dist
 Opt.ACCutoff = 20
 Opt.ACSize = 100
 
