@@ -1075,7 +1075,7 @@ def PersistenceLength(SkelArray, Opt):
     PL.Ind = 0
     Indexes=np.array([[-1,-1],[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0]]) # for picking nearby
    
-    AdCount=scipy.signal.convolve(SkelArray, np.ones((3,3)),mode='same')
+    AdCount=scipy.signal.convolve(SkelArray, np.ones((3,3)),mode='same', method='direct')
     # Remove Opt.DefEdge pixels at edge to prevent edge effects. be sure to account for area difference
 #    (CIMH,CIMW)=SkelArray.shape
 #    AdCount[0:int(Opt.DefEdge-1),:]=0; AdCount[int(CIMH+1-Opt.DefEdge):int(CIMH),:]=0; 
