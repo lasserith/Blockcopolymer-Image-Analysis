@@ -405,7 +405,7 @@ for ImNum in range(0, len(FNFull) ):
     
     
     
-0
+
     #%% Crop
     (CropArray, Output.CIMH, Output.CIMW)=IAFun.Crop( imarray , Opt )
     ArrayIn=CropArray
