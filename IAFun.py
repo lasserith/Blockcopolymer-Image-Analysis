@@ -380,8 +380,9 @@ def Thresholding(im, Opt, l0):
     else:
         Thresh=Opt.ThreshWeight
         
-    AdaptBin=skimage.filters.threshold_adaptive(im,Thresh ,'gaussian')
+    ThreshCut =skimage.filters.threshold_local(im,Thresh ,'gaussian') # thi
     
+    AdaptBin = im > ThreshCut
     
     AdaptThresh = Image.fromarray(100*np.uint8(AdaptBin))
     AdaptThresh=AdaptThresh.convert(mode="RGB")
@@ -796,7 +797,7 @@ def AngEC(im, Opt, EDArray='none', SkelArray='none'):
 
     
 #%% Angle Hist: Creates histograms of angles
-def AngHist(AngArray,Opt, MaskArray=1, WeightArray='none'):
+def AngHist(AngArray,Opt, MaskArray=1, WeightArray='N'):
     """
     Simply takes an array and computes the histograms with 1 degree bins from 0-180
     Also weights pixels with weight array if given, and masks with mask array if given
@@ -813,7 +814,7 @@ def AngHist(AngArray,Opt, MaskArray=1, WeightArray='none'):
     BCount=Rhigh-Rlow+1     
     HPW=10 # half peak width, how many angles to combine
     
-    if WeightArray=='none':
+    if WeightArray=='N':
         WeightArray=np.ones_like(AngArray)
         
     #angarray=np.absolute(np.pi/4-angarray) #Renormalize to between 0 and pi/4
@@ -1083,7 +1084,7 @@ def PersistenceLength(SkelArray, Opt):
     TermArray = np.multiply(SkelArray, (AdCount==2))
     PointI, PointJ = np.nonzero(TermArray)
     PL.size = np.min((len(PointI), Opt.ACSize))
-    
+    print(PL.size,Opt.ACSize,len(PointI))
     RandoList=np.random.randint(0,len(PointI),PL.size)
     
     while PL.Ind < PL.size : # How many points to start at to calc auto correlate
