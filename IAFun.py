@@ -1065,8 +1065,7 @@ def PersistenceLength(SkelArray, Opt):
     class PL:
         pass
     
-    
-    PL.Cutoff = Opt.ACCutoff
+    SkelLocal = SkelArray.copy()
     PL.n=np.zeros(Opt.ACCutoff)
     PL.h=np.zeros(Opt.ACCutoff)
     PL.ContList = np.ones( 1 ) # maybe just keep track of all the points? Will get absurdly big
@@ -1075,13 +1074,13 @@ def PersistenceLength(SkelArray, Opt):
     PL.Ind = 0
     Indexes=np.array([[-1,-1],[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0]]) # for picking nearby
    
-    AdCount=scipy.signal.convolve(SkelArray, np.ones((3,3)),mode='same', method='direct')
+    AdCount=scipy.signal.convolve(SkelLocal, np.ones((3,3)),mode='same', method='direct')
     # Remove Opt.DefEdge pixels at edge to prevent edge effects. be sure to account for area difference
 #    (CIMH,CIMW)=SkelArray.shape
 #    AdCount[0:int(Opt.DefEdge-1),:]=0; AdCount[int(CIMH+1-Opt.DefEdge):int(CIMH),:]=0; 
 #    AdCount[:,0:int(Opt.DefEdge-1)]=0; AdCount[:,int(CIMW+1-Opt.DefEdge):int(CIMW)]=0;
             
-    TermArray = np.multiply(SkelArray, (AdCount==2))
+    TermArray = np.multiply(SkelLocal, (AdCount==2))
     PointI, PointJ = np.nonzero(TermArray)
     PL.size = np.min((len(PointI), Opt.ACSize))
     print(PL.size,Opt.ACSize,len(PointI))
@@ -1090,37 +1089,39 @@ def PersistenceLength(SkelArray, Opt):
     while PL.Ind < PL.size : # How many points to start at to calc auto correlate
         # The following is the AutoCor Loop
         
-        ntemp = np.zeros(PL.Cutoff) # How many times have calculated the n=Index+1 correlation?
-        htemp = np.zeros( PL.Cutoff ) # what is the current sum value of the correlation(divide by ntemp at end)
+        ntemp = np.zeros(Opt.ACCutoff) # How many times have calculated the n=Index+1 correlation?
+        htemp = np.zeros( Opt.ACCutoff ) # what is the current sum value of the correlation(divide by ntemp at end)
 
 
         
-        ContTemp = np.zeros( PL.Cutoff )
-        XYtemp=np.ones((PL.Cutoff,2))*float('nan') # What is the current coord prev etc was +1 prev
+        ContTemp = np.zeros( Opt.ACCutoff )
+        XYtemp=np.ones((Opt.ACCutoff,2))*float('nan') # What is the current coord prev etc was +1 prev
         BBI = 0 # not necessary but helpful to remind us start = BBI 0
         SAD=0 # used to double loop break
         #First pick a point, find it's angle
         #TODO
         CCOORD=np.append(PointI[RandoList[PL.Ind]],
                          PointJ[RandoList[PL.Ind]])
-        while SkelArray[CCOORD[0],CCOORD[1]] == 0:
-            PL.Ind +=1
-            CCOORD=np.append(PointI[RandoList[PL.Ind]],
-                         PointJ[RandoList[PL.Ind]])
+        while SkelLocal[CCOORD[0],CCOORD[1]] == 0: # if our point isn't good
+            PL.Ind +=1 #try the next
+            try:CCOORD=np.append(PointI[RandoList[PL.Ind]],PointJ[RandoList[PL.Ind]])
+            except: 
+                BBI = Opt.ACCutoff # skip the big loop
+                break # break outta here
         
         XYtemp[0] = CCOORD   
         BBI = 1 #now we at first point... 
 
          
-        while BBI < (2*Opt.ACCutoff+1): # How far to walk BackBoneIndex total points is 
+        while BBI < (Opt.ACCutoff): # How far to walk BackBoneIndex total points is 
             
             #what is our next points Coord?
                            
             
             for TestNeighbor in np.arange(8): # try moves
                 COORD = Indexes[TestNeighbor]+CCOORD
-                if COORD[0] < SkelArray.shape[0] and COORD[1] < SkelArray.shape[1]: # if we are in bounds
-                    if (SkelArray[COORD[0],COORD[1]] == 1): # if we have a good move
+                if COORD[0] < SkelLocal.shape[0] and COORD[1] < SkelLocal.shape[1]: # if we are in bounds
+                    if (SkelLocal[COORD[0],COORD[1]] == 1): # if we have a good move
 
                         
                         CCOORD = COORD; # move there
@@ -1143,7 +1144,7 @@ def PersistenceLength(SkelArray, Opt):
                         
                         
                         XYtemp[0] = CCOORD # set XY to new COORD
-                        SkelArray[CCOORD[0],COORD[1]] = 0 # delete point so we don't hit it again
+                        SkelLocal[CCOORD[0],COORD[1]] = 0 # delete point so we don't hit it again
                                 
                         break # break the for loop (done finding next point)
                     
@@ -1154,6 +1155,7 @@ def PersistenceLength(SkelArray, Opt):
             if SAD==1: # break out of BB while loop
                 # Decide if I count this or not...
                 SAD=0;
+                PL.Ind += 1
                 break
             BBI += 1
         
