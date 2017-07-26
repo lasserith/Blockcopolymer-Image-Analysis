@@ -1089,8 +1089,8 @@ def PersistenceLength(SkelArray, Opt):
     while PL.Ind < PL.size : # How many points to start at to calc auto correlate
         # The following is the AutoCor Loop
         
-        ntemp = np.zeros(Opt.ACCutoff) # How many times have calculated the n=Index+1 correlation?
-        htemp = np.zeros( Opt.ACCutoff ) # what is the current sum value of the correlation(divide by ntemp at end)
+#        ntemp = np.zeros(Opt.ACCutoff) # How many times have calculated the n=Index+1 correlation?
+#        htemp = np.zeros( Opt.ACCutoff ) # what is the current sum value of the correlation(divide by ntemp at end)
 
 
         
@@ -1127,19 +1127,19 @@ def PersistenceLength(SkelArray, Opt):
                         CCOORD = COORD; # move there
                         RCDist = XYtemp - CCOORD # calculate distance from new points to prev points (END END DIST)
                         Dist = np.hypot(RCDist[:,0], RCDist[:,1]) # find hypot for dist
-                        Dist[np.isnan(Dist)] = 0 # get rid of nans
-#                        print( Dist )
+                        Dist[np.isnan(Dist)] = 0 
+                        
                         ContTemp = np.roll(ContTemp,1) # roll it so we can accept the 1 unit distance
                         ContTemp[ContTemp!=0] += Dist[0] # Add contour distance of last step to each cell
                         ContTemp[0] = Dist[0] #make sure to set 
-                        DistRatio = np.divide(Dist,ContTemp)
-                        DistRatio[ np.isnan(DistRatio) ] = 0
+#                        DistRatio = np.divide(Dist,ContTemp)
+#                        DistRatio[ np.isnan(DistRatio) ] = 0
                         
                         PL.ContList = np.append( PL.ContList, ContTemp[np.nonzero(Dist)] )
                         PL.EEList = np.append( PL.EEList, Dist[np.nonzero(Dist)] )
                         
-                        htemp += DistRatio # add results to cumulative calc
-                        ntemp += (1-np.isnan(XYtemp[:,0])) # which numbers did we actually accumulate
+#                        htemp += DistRatio # add results to cumulative calc
+#                        ntemp += (1-np.isnan(XYtemp[:,0])) # which numbers did we actually accumulate
                         XYtemp = np.roll(XYtemp,2) # now starting point is index 1 instead of 0 etc
                         
                         
@@ -1160,23 +1160,30 @@ def PersistenceLength(SkelArray, Opt):
             BBI += 1
         
             
-        PL.h += htemp
-        PL.n += ntemp
+#        PL.h += htemp
+#        PL.n += ntemp
         PL.Ind += 1
         
                 
-    PL.DistR = np.divide(PL.h , PL.n)
-    PL.Bins = np.arange(1,int(PL.ContList.max())+0.5,1)
-    PL.ContBin  = np.digitize( PL.ContList, PL.Bins ) # which contour length bin is each one in
-    PL.MeanCont = np.zeros_like(PL.Bins) # hold mean eelength for each cont length
-    for i in np.arange(1,len(PL.Bins)):
-        PL.MeanCont[i] = PL.EEList[ PL.ContBin == i ].mean()
+#    PL.DistR = np.divide(PL.h , PL.n)
+#    PL.Bins = np.arange(1,int(PL.ContList.max())+0.5,1)
+#    PL.ContBin  = np.digitize( PL.ContList, PL.Bins ) # which contour length bin is each one in
+#    PL.MeanCont = np.zeros_like(PL.Bins) # hold mean eelength for each cont length
+#    for i in np.arange(1,len(PL.Bins)):
+#        PL.MeanCont[i] = PL.EEList[ PL.ContBin == i ].mean()
+
+    PL.UNBins, PL.UNBinID =np.unique(np.around(PL.ContList, decimals=1), return_inverse=True)
+    PL.UNMeanEE = np.zeros_like(PL.UNBins)
+    for i in np.arange(0, len(PL.UNBins)):
+        PL.UNMeanEE[i] = PL.EEList[ PL.UNBinID == i].mean()
+        
     
-    plt.plot( PL.Bins, np.divide(PL.MeanCont, PL.Bins) )
+
 #    plt.plot(PL.ContList, PL.EEList, 'b.')
-#    PLPlot=plt.figure()
-#    PLPlot1=PLPlot.add_subplot(111)
-#    PLPlot1.plot(PL.DistR)
+    PLPlot=plt.figure()
+    PLPlot1=PLPlot.add_subplot(111)
+    PLPlot1.plot(PL.UNBins, np.divide(PL.UNMeanEE, PL.UNBins),'k.')
+    PLPlot.show()
 #    if Opt.AECSh == 1: #REPLACE show
 #
 #        AngPlot.show() #

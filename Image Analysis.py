@@ -46,8 +46,8 @@ Opt.AutoThresh = 1
 
 
 Opt.Inversion = 0
-Opt.ACToggle = 2 #autocorrelation 1 = orient 2 = contour v dist
-Opt.ACCutoff = 500
+Opt.ACToggle = 0 #autocorrelation 1 = orient 2 = contour v dist
+Opt.ACCutoff = 750
 Opt.ACSize = 1000
 
 Opt.SchCO = 5 # Step in from 'Ide' in nm
@@ -524,7 +524,8 @@ for ImNum in range(0, len(FNFull) ):
     
     if Opt.SkeleToggle==1:
         (SkelArray, SkelAC, Output.TCount, Output.TCA, Output.JCount, Output.JCA)=IAFun.Skeleton(BinArray,Opt)
-    
+        Output.DomSize=SkelArray.sum()/scipy.ndimage.measurements.label(SkelArray,structure=np.ones((3,3)))[1]
+        #calculate domain size. This is here for now
     #%% Angle Detection
     
     if Opt.AngDetToggle==2:
@@ -545,11 +546,13 @@ for ImNum in range(0, len(FNFull) ):
         (Output.lwr, Output.ler, Output.lpr)=IAFun.EdgeDetect(BinArray,Opt,SkelArray)
             
 
-    #%% Autocorrel. LETS GO, Currently Not Working
+    #%% Autocorrel. LETS GO, Currently Working
     if Opt.ACToggle==1:
         AutoCor=IAFun.AutoCorrelation(AngDetA, Opt)
     elif Opt.ACToggle == 2: # do it from contour v end end dist
         AutoCor = IAFun.PersistenceLength(SkelArray, Opt)
+    
+    
     
     #%% Find the inverse or 'Dark' Image repeat as above
     if Opt.Inversion==1:
@@ -615,6 +618,7 @@ for ImNum in range(0, len(FNFull) ):
             'LTerminals/nm^2',
             'LJunctions',
             'Ljunctions/nm^2',
+            'Mean Domain Size',
             'LWR Dist nm',
             'LWR 3Sig nm',
             'LWR Dist KDE nm',
@@ -670,9 +674,10 @@ for ImNum in range(0, len(FNFull) ):
                 LogW.writerow([Output.TCount,
                 Output.TCA,
                 Output.JCount,
-                Output.JCA,''])
+                Output.JCA,
+                Output.DomSize,''])
             except:
-                LogW.writerow(['','','','',''])
+                LogW.writerow(['','','','','',''])
                 pass
             try:
                 LogW.writerow([Output.lwr[0],
