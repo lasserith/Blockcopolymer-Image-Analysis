@@ -1100,12 +1100,12 @@ def PersistenceLength(SkelArray, Opt):
         SAD=0 # used to double loop break
         #First pick a point, find it's angle
         #TODO
-        CCOORD=np.append(PointI[RandoList[PL.Ind]],
-                         PointJ[RandoList[PL.Ind]])
-        while SkelLocal[CCOORD[0],CCOORD[1]] == 0: # if our point isn't good
+        CCOORD=np.array((PointI[RandoList[PL.Ind]],
+                         PointJ[RandoList[PL.Ind]]), ndmin=2)
+        while SkelLocal[CCOORD[0,0],CCOORD[0,1]] == 0: # if our point isn't good
             PL.Ind +=1 #try the next
-            try:CCOORD=np.append(PointI[RandoList[PL.Ind]],PointJ[RandoList[PL.Ind]])
-            except: 
+            try:CCOORD=np.array((PointI[RandoList[PL.Ind]],PointJ[RandoList[PL.Ind]]),ndmin=2)
+            except: # if we are out of points
                 BBI = Opt.ACCutoff # skip the big loop
                 break # break outta here
         
@@ -1120,11 +1120,11 @@ def PersistenceLength(SkelArray, Opt):
             
             for TestNeighbor in np.arange(8): # try moves
                 COORD = Indexes[TestNeighbor]+CCOORD
-                if COORD[0] < SkelLocal.shape[0] and COORD[1] < SkelLocal.shape[1]: # if we are in bounds
-                    if (SkelLocal[COORD[0],COORD[1]] == 1): # if we have a good move
+                if COORD[0,0] < SkelLocal.shape[0] and COORD[0,1] < SkelLocal.shape[1]: # if we are in bounds
+                    if (SkelLocal[COORD[0,0],COORD[0,1]] == 1): # if we have a good move
 
                         
-                        CCOORD = COORD; # move there
+                        CCOORD = COORD.copy(); # move there
                         RCDist = XYtemp - CCOORD # calculate distance from new points to prev points (END END DIST)
                         Dist = np.hypot(RCDist[:,0], RCDist[:,1]) # find hypot for dist
                         Dist[np.isnan(Dist)] = 0 
@@ -1143,8 +1143,8 @@ def PersistenceLength(SkelArray, Opt):
                         XYtemp = np.roll(XYtemp,2) # now starting point is index 1 instead of 0 etc
                         
                         
-                        XYtemp[0] = CCOORD # set XY to new COORD
-                        SkelLocal[CCOORD[0],COORD[1]] = 0 # delete point so we don't hit it again
+                        XYtemp[0] = CCOORD.copy() # set XY to new COORD
+                        SkelLocal[CCOORD[0,0],CCOORD[0,1]] = 0 # delete point so we don't hit it again
                                 
                         break # break the for loop (done finding next point)
                     
@@ -1163,6 +1163,7 @@ def PersistenceLength(SkelArray, Opt):
 #        PL.h += htemp
 #        PL.n += ntemp
         PL.Ind += 1
+        print(PL.Ind)
         
                 
 #    PL.DistR = np.divide(PL.h , PL.n)

@@ -46,9 +46,9 @@ Opt.AutoThresh = 1
 
 
 Opt.Inversion = 0
-Opt.ACToggle = 0 #autocorrelation 1 = orient 2 = contour v dist
+Opt.ACToggle = 2 #autocorrelation 1 = orient 2 = contour v dist
 Opt.ACCutoff = 750
-Opt.ACSize = 1000
+Opt.ACSize = 20
 
 Opt.SchCO = 5 # Step in from 'Ide' in nm
 
