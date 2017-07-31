@@ -237,9 +237,9 @@ def YKDetect(image, Opt):
     #% Add toggle here for show/save
     #DYIm.show();DXIm.show();LapIm.show();
     
-#    DXIm.save(os.path.join(Opt.FPath,"output",Opt.BName+"DX.tif"))
-#    DYIm.save(os.path.join(Opt.FPath,"output",Opt.BName+"DY.tif"))
-#    SchIm.save(os.path.join(Opt.FPath,"output",Opt.BName+"Sch.tif"))
+#    DXIm.save(os.path.join(Opt.FPath,"output",Opt.FName+"DX.tif"))
+#    DYIm.save(os.path.join(Opt.FPath,"output",Opt.FName+"DY.tif"))
+#    SchIm.save(os.path.join(Opt.FPath,"output",Opt.FName+"Sch.tif"))
     return(Ide)
 
 #%% Azimuthal Averaging
@@ -334,13 +334,13 @@ def FFT( im, Opt):
         if Opt.FFTSh == 1:
             PS2DImage.show()
         if Opt.FFTSa==1:
-            np.savez(os.path.join(Opt.FPath,"output",Opt.BName + "FFT"),(FreqA[0:int(np.floor(FSize/2))], PowerSpec1d[0:int(np.floor(FSize/2))]))
-            Fig.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "PowerSpecFreq.png"))
+            np.savez(os.path.join(Opt.FPath,"output",Opt.FName + "FFT"),(FreqA[0:int(np.floor(FSize/2))], PowerSpec1d[0:int(np.floor(FSize/2))]))
+            Fig.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "PowerSpecFreq.png"))
             PSD1D.annotate('Primary Peak at %f' %PFMax, xy=(PFMax, PHMax), xytext=(1.5*PFMax, 1.5*PHMax),
                     arrowprops=dict(facecolor='black', width=2,headwidth=5),
                     )
-            Fig.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "PowerSpecFreqLabel.png"))
-            PS2DImage.save(os.path.join(Opt.FPath,"output",Opt.BName + "PowerSpec2d.tif"))
+            Fig.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "PowerSpecFreqLabel.png"))
+            PS2DImage.save(os.path.join(Opt.FPath,"output",Opt.FName + "PowerSpec2d.tif"))
     return(PSMax);
 #%%
 def Denoising(im, Opt, l0):
@@ -363,7 +363,7 @@ def Denoising(im, Opt, l0):
     if Opt.DenSh == 1:
         DenImage.show()
     if Opt.DenSa == 1:   
-        DenImage.save(os.path.join(Opt.FPath,"output",Opt.BName + "Den.tif"))
+        DenImage.save(os.path.join(Opt.FPath,"output",Opt.FName + "Den.tif"))
     
     return( DenArray , DenoiseWeight )
 #%%
@@ -389,7 +389,7 @@ def Thresholding(im, Opt, l0):
     if Opt.ThreshSh==1:
         AdaptThresh.show()
     if Opt.ThreshSa==1:
-        AdaptThresh.save(os.path.join(Opt.FPath,"output",Opt.BName+"AThresh.tif"))
+        AdaptThresh.save(os.path.join(Opt.FPath,"output",Opt.FName+"AThresh.tif"))
     return(AdaptBin,Thresh)
 #%%
 def RSO(im, Opt):
@@ -402,7 +402,7 @@ def RSO(im, Opt):
     if Opt.RSOSh == 1:
         RSOI.show()
     if Opt.RSOSa==1:
-        RSOI.save(os.path.join(Opt.FPath,"output",Opt.BName+"LADRSO.tif"))
+        RSOI.save(os.path.join(Opt.FPath,"output",Opt.FName+"LADRSO.tif"))
     return(RSO);
 
 
@@ -494,10 +494,10 @@ def Label(im, Opt):
         WLabDomCI.show()
         WThroughCI.show()
     if Opt.LabelSa == 1:
-        WLabI.save(os.path.join(Opt.FPath,"output",Opt.BName+"Lab.tif"))
-        WDomCI.save(os.path.join(Opt.FPath,"output",Opt.BName+"DomC.tif"))
-        WDomCI.save(os.path.join(Opt.FPath,"output",Opt.BName+"LabDomC.tif"))
-        WThroughCI.save(os.path.join(Opt.FPath,"output",Opt.BName+"ThroughDomC.tif"))
+        WLabI.save(os.path.join(Opt.FPath,"output",Opt.FName+"Lab.tif"))
+        WDomCI.save(os.path.join(Opt.FPath,"output",Opt.FName+"DomC.tif"))
+        WDomCI.save(os.path.join(Opt.FPath,"output",Opt.FName+"LabDomC.tif"))
+        WThroughCI.save(os.path.join(Opt.FPath,"output",Opt.FName+"ThroughDomC.tif"))
     return(WFrac, BFrac, WDomI, WDomFrac);
     
 #%%
@@ -514,7 +514,7 @@ def Skeleton(im,Opt):
     if Opt.SkeleSh == 1:
         LASkelI.show()
     if Opt.SkeleSa==1:
-        LASkelI.save(os.path.join(Opt.FPath,"output",Opt.BName+"Skel.tif"))
+        LASkelI.save(os.path.join(Opt.FPath,"output",Opt.FName+"Skel.tif"))
 
     
     AdCount=scipy.signal.convolve(SkelArray, np.ones((3,3)),mode='same')
@@ -535,7 +535,7 @@ def Skeleton(im,Opt):
     if Opt.SkeleSh == 1:
         SkelT.show()
     if Opt.SkeleSa==1:
-        SkelT.save(os.path.join(Opt.FPath,"output",Opt.BName+"SkelTerm.tif"))
+        SkelT.save(os.path.join(Opt.FPath,"output",Opt.FName+"SkelTerm.tif"))
     
     # Junctions
     
@@ -552,7 +552,7 @@ def Skeleton(im,Opt):
     if Opt.SkeleSh == 1:
         SkelJ.show()
     if Opt.SkeleSa==1:
-        SkelJ.save(os.path.join(Opt.FPath,"output",Opt.BName+"SkelJunc.tif"))
+        SkelJ.save(os.path.join(Opt.FPath,"output",Opt.FName+"SkelJunc.tif"))
     
     return(SkelArray, SkelAC, TCount, TCA, JCount, JCA)
 #%% Edge Detect
@@ -716,8 +716,8 @@ def EdgeDetect(im, Opt, SkelArray):
 
 
     if Opt.EDSa==1: #save
-        EDFig.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "R.png"))
-        EDImage.save(os.path.join(Opt.FPath,"output",Opt.BName+"ED.tif"))
+        EDFig.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "R.png"))
+        EDImage.save(os.path.join(Opt.FPath,"output",Opt.FName+"ED.tif"))
     
     if Opt.EDSh == 1: # show
         EDFig.show()
@@ -790,7 +790,7 @@ def AngEC(im, Opt, EDArray='none', SkelArray='none'):
 
         AngPlot.show() #
     if Opt.AECSa==1: #Replace save
-        AngPlot.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "AngEC.png"), dpi=300)
+        AngPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "AngEC.png"), dpi=300)
     plt.close(AngPlot)
     return(AngArray)
     
@@ -854,7 +854,7 @@ def AngHist(AngArray,Opt, MaskArray=1, WeightArray='N'):
     AngHist.Plt1.set_title('OD')
     
     #going to dump this one here TODO dump all as BINS COUNTSA COUNTSB with headers
-    np.savetxt(os.path.join(Opt.FPath,"output",Opt.BName + "Hist.csv"),hist,delimiter=',')
+    np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "Hist.csv"),hist,delimiter=',')
     # Also find the max and second highest orientation and dump those to output
     
     CntT=np.sum(hist) # cumulative count
@@ -921,7 +921,7 @@ def AngHist(AngArray,Opt, MaskArray=1, WeightArray='N'):
     if 1 == 1: #REPLACE show
         AngHist.Plot.show()
     if 1==1: #Replace save
-        AngHist.Plot.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "AngHist.png"))
+        AngHist.Plot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "AngHist.png"))
     plt.close()
     
     return(Peak1,Cnt1,Peak2,Cnt2,CntT)
@@ -1166,33 +1166,64 @@ def PersistenceLength(SkelArray, Opt):
         print(PL.Ind)
         
                 
-#    PL.DistR = np.divide(PL.h , PL.n)
-#    PL.Bins = np.arange(1,int(PL.ContList.max())+0.5,1)
-#    PL.ContBin  = np.digitize( PL.ContList, PL.Bins ) # which contour length bin is each one in
-#    PL.MeanCont = np.zeros_like(PL.Bins) # hold mean eelength for each cont length
-#    for i in np.arange(1,len(PL.Bins)):
-#        PL.MeanCont[i] = PL.EEList[ PL.ContBin == i ].mean()
+    PL.ContList*=Opt.NmPP
+    PL.EEList*=Opt.NmPP
 
-    PL.UNBins, PL.UNBinID =np.unique(np.around(PL.ContList, decimals=1), return_inverse=True)
+    PL.UNBins, PL.UNBinID =np.unique(np.around(PL.ContList, decimals=0), return_inverse=True)
     PL.UNMeanEE = np.zeros_like(PL.UNBins)
+    PL.UNSDEE = np.zeros_like(PL.UNBins)
+    PL.UNMeanCL = np.zeros_like(PL.UNBins)
+    PL.UNSDCL = np.zeros_like(PL.UNBins)
+    
+    
     for i in np.arange(0, len(PL.UNBins)):
         PL.UNMeanEE[i] = PL.EEList[ PL.UNBinID == i].mean()
+        PL.UNSDEE[i] = PL.EEList[ PL.UNBinID == i].std() # std dev
+        PL.UNMeanCL[i] = PL.ContList[ PL.UNBinID == i].mean()
+        PL.UNSDCL[i] = PL.ContList[ PL.UNBinID == i].std()
         
     
-
+    def PerFunc(cl, P):
+        return(np.sqrt( 2*P*cl* (1-P/cl*(1-np.exp(-cl/P) ) )  ))
+    PMod = lmfit.Model(PerFunc)
+    PL.PRes = PMod.fit(PL.UNMeanEE, cl=PL.UNMeanCL, P=1)
+    
+    
+    PL.Ratio=np.divide(PL.UNMeanEE, PL.UNMeanCL)
+    
 #    plt.plot(PL.ContList, PL.EEList, 'b.')
     PLPlot=plt.figure()
-    PLPlot1=PLPlot.add_subplot(111)
-    PLPlot1.plot(PL.UNBins, np.divide(PL.UNMeanEE, PL.UNBins),'k.')
+    PLPlot1=PLPlot.add_subplot(311)
+    PLPlot1.plot(PL.UNBins, PL.Ratio,'k.')
+    PLPlot1.set_xlabel('Contour Length')
+    PLPlot1.set_ylabel('End to End Distance \n divided by Contour Length')
+    PLPlot2=PLPlot.add_subplot(312)
+    PLPlot2.errorbar(PL.UNMeanCL, PL.UNMeanEE,  yerr=PL.UNSDEE, xerr=PL.UNSDCL)
+    PLPlot2.set_xlabel('Contour Length')
+    PLPlot2.set_ylabel('End to End Distance')
+    PLPlot3=PLPlot.add_subplot(313)
+    PLPlot3.plot(PL.UNMeanCL, PL.PRes.best_fit,'b-')
+    PLPlot3.plot(PL.UNMeanCL, PL.UNMeanEE,'k.')
+    PLPlot3.set_xlabel('Contour Length')
+    PLPlot3.set_ylabel('End to End Distance')
+    PLPlot3.set_title('PL Fit : '+str(PL.PRes.params['P'].value))
+    
+    
+    PLPlot.tight_layout( pad = 1, w_pad=1, h_pad=3.0 )
+ #    if Opt.AECSh == 1: #REPLACE show   
     PLPlot.show()
-#    if Opt.AECSh == 1: #REPLACE show
-#
-#        AngPlot.show() #
+    if PL.Ratio.min() > 0.9:
+        PL.Pers = 'Infinite'
+        PLPlot.suptitle('Infinite Persistence Length')
+    else:
+        PL.Pers = PL.UNMeanCL[np.argmax(PL.Ratio < 0.9)]
+        PLPlot.suptitle('Persistence Length (nm) : '+str(PL.Pers.round()))
+
 #    if Opt.AECSa==1: #Replace save
-#        AngPlot.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "AngEC.png"), dpi=300)
+
+    PLPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "PerLen.png"), dpi=300)
 #    plt.close(AngPlot)
-#    plt.plot(PL.DistR)
-#    plt.plot(ContLength, PL.EELength,'r',ContLength,ContLength,'b')
+
     return(PL)
 #%% Param Optimizer
 def ParamOptimizer(ArrayIn, Opt, l0, Params):
