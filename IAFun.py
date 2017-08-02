@@ -1174,13 +1174,16 @@ def PersistenceLength(SkelArray, Opt):
     PL.UNSDEE = np.zeros_like(PL.UNBins)
     PL.UNMeanCL = np.zeros_like(PL.UNBins)
     PL.UNSDCL = np.zeros_like(PL.UNBins)
-    
+    PL.UNMeanRat = np.zeros_like(PL.UNBins)
+    PL.UNSDRat = np.zeros_like(PL.UNBins)
     
     for i in np.arange(0, len(PL.UNBins)):
         PL.UNMeanEE[i] = PL.EEList[ PL.UNBinID == i].mean()
         PL.UNSDEE[i] = PL.EEList[ PL.UNBinID == i].std() # std dev
         PL.UNMeanCL[i] = PL.ContList[ PL.UNBinID == i].mean()
         PL.UNSDCL[i] = PL.ContList[ PL.UNBinID == i].std()
+        PL.UNMeanRat[i] = np.divide(PL.EEList[ PL.UNBinID == i],PL.ContList[ PL.UNBinID == i]).mean()
+        PL.UNSDRat[i] = np.divide(PL.EEList[ PL.UNBinID == i],PL.ContList[ PL.UNBinID == i]).std()
         
     
     def PerFunc(cl, P):
@@ -1188,35 +1191,37 @@ def PersistenceLength(SkelArray, Opt):
     PMod = lmfit.Model(PerFunc)
     PL.PRes = PMod.fit(PL.UNMeanEE, cl=PL.UNMeanCL, P=1)
     
+    PL.RatFilt = scipy.ndimage.filters.gaussian_filter1d(PL.UNMeanRat,3)
     
-    PL.Ratio=np.divide(PL.UNMeanEE, PL.UNMeanCL)
     
 #    plt.plot(PL.ContList, PL.EEList, 'b.')
     PLPlot=plt.figure()
-    PLPlot1=PLPlot.add_subplot(311)
-    PLPlot1.plot(PL.UNBins, PL.Ratio,'k.')
+    PLPlot1=PLPlot.add_subplot(211)
+    PLPlot1.plot(PL.UNMeanCL, PL.UNMeanRat,'b.')
+    PLPlot1.plot(PL.UNMeanCL, PL.RatFilt,'k-')
+    PLPlot1.set_ylim([0,1])
     PLPlot1.set_xlabel('Contour Length')
     PLPlot1.set_ylabel('End to End Distance \n divided by Contour Length')
-    PLPlot2=PLPlot.add_subplot(312)
+    PLPlot2=PLPlot.add_subplot(212)
     PLPlot2.errorbar(PL.UNMeanCL, PL.UNMeanEE,  yerr=PL.UNSDEE, xerr=PL.UNSDCL)
     PLPlot2.set_xlabel('Contour Length')
     PLPlot2.set_ylabel('End to End Distance')
-    PLPlot3=PLPlot.add_subplot(313)
-    PLPlot3.plot(PL.UNMeanCL, PL.PRes.best_fit,'b-')
-    PLPlot3.plot(PL.UNMeanCL, PL.UNMeanEE,'k.')
-    PLPlot3.set_xlabel('Contour Length')
-    PLPlot3.set_ylabel('End to End Distance')
-    PLPlot3.set_title('PL Fit : '+str(PL.PRes.params['P'].value))
+#    PLPlot3=PLPlot.add_subplot(313)
+#    PLPlot3.plot(PL.UNMeanCL, PL.PRes.best_fit,'b-')
+#    PLPlot3.plot(PL.UNMeanCL, PL.UNMeanEE,'k.')
+#    PLPlot3.set_xlabel('Contour Length')
+#    PLPlot3.set_ylabel('End to End Distance')
+#    PLPlot3.set_title('PL Fit : '+str(PL.PRes.params['P'].value))
     
     
-    PLPlot.tight_layout( pad = 1, w_pad=1, h_pad=3.0 )
+    PLPlot.tight_layout( pad = 2, w_pad=2, h_pad=5.0 )
  #    if Opt.AECSh == 1: #REPLACE show   
     PLPlot.show()
-    if PL.Ratio.min() > 0.9:
+    if PL.RatFilt.min() > 0.8:
         PL.Pers = 'Infinite'
         PLPlot.suptitle('Infinite Persistence Length')
     else:
-        PL.Pers = PL.UNMeanCL[np.argmax(PL.Ratio < 0.9)]
+        PL.Pers = PL.UNMeanCL[np.argmax(PL.RatFilt < 0.8)]
         PLPlot.suptitle('Persistence Length (nm) : '+str(PL.Pers.round()))
 
 #    if Opt.AECSa==1: #Replace save

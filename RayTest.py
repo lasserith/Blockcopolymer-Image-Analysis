@@ -509,9 +509,9 @@ for ImNum in range(0, len(FNFull) ):
 #    print(ImNum)
 
 
-ani = manimation.ArtistAnimation(MovieFig, ims,blit=True)
-#%% Save animation
-MWriter = manimation.FFMpegWriter(bitrate=10000)
-ani.save('Wedge.mp4' , writer=MWriter)
-##%%
+#ani = manimation.ArtistAnimation(MovieFig, ims,blit=True)
+##%% Save animation
+#MWriter = manimation.FFMpegWriter(bitrate=10000)
+#ani.save('Wedge.mp4' , writer=MWriter)
+###%%
 #np.save('SkelOutArray',SkelOut)
