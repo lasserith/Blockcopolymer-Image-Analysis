@@ -464,9 +464,9 @@ for ImNum in range(0, len(FNFull) ):
         Shap1 = firstim.shape[1]
         imarray = np.zeros((Shap0,Shap1,len(FNFull)))
         SkelOut = np.zeros((Shap0,Shap1,len(FNFull)))
+        CropSkelOut = np.zeros((Shap0,Shap1,len(FNFull)))
         FiltCum = np.zeros((Shap0,Shap1))
         ThreshCum = np.zeros((Shap0,Shap1))
-        SkelCum = np.zeros((Shap0,Shap1))
         imarray[:,:,ImNum] = firstim
     else:
         imarray[:,:,ImNum]=IAFun.AutoDetect( FNFull[ImNum], Opt) # autodetect the machine, nmpp and return the raw data array
@@ -480,26 +480,62 @@ for ImNum in range(0, len(FNFull) ):
     ThreshCum+=ArrayIn
     #Thresh = IAFun.Thresholding(ArrayIn, Opt, 50)[0]
     Skeleton = skimage.morphology.skeletonize(Thresh)
-    SkelCum+=Skeleton
     SkelOut[:,:,ImNum] = Skeleton
     
            
     
-    R, C = np.indices(Skeleton.shape)
+    
+
+#%% Seperate out cropping so I can alter the crop cuts
     # 51 - 79 Top cuts
     #61 act - 89 Act Top Actual skel
+    
+    #70 - 58 ; 110-140 
+    
     #150 act - 120 act bot act
     #160 - 130 bot cuts
-    
-    MaskSkel = np.ones_like(Skeleton)
-    SlTop = (89-61)/C.max() # Slope of top of wedge (Lside y - Rside y * dx)
-    SlBot = (120-150)/C.max() # slope of bottom of wedge
-    MaskSkel[ R < C*SlTop+51] = 0
-    MaskSkel[ R > C*SlBot+160 ] = 0
-    CropSkel = np.multiply(Skeleton, MaskSkel)
+for ii in range(0, len(FNFull) ):
+    R, C = np.indices(Skeleton.shape)
+    MaskSkel = np.zeros_like(Skeleton)
+    SlTop = (70-58)/C.max() # Slope of top of wedge (Rside y - Lside y * dx)
+    SlBot = (110-140)/C.max() # slope of bottom of wedge
+    MaskSkel[ R < C*SlTop+58] = 1 # Lside Y top
+    MaskSkel[ R > C*SlBot+140 ] = 1 # Lside Y bot
+    CropSkel = np.ma.array(SkelOut[:,:,ii], mask=MaskSkel)
+    CropSkelOut[:,:,ImNum] = CropSkel.ascopy()
     
     Frame = plt.imshow(CropSkel, animated=True)
     ims.append([Frame])
+#%%
+SkelCum = np.ma.array(SkelOut.sum(axis=2), mask= MaskSkel)
+SkelX = SkelCum.mean(axis=0) # average across the channel
+# 42, 121, 206, 283, 334, 422, 478
+MPlot = plt.figure()
+MPlot.suptitle('Movement of Domain Skeletons')
+MPlot1 = MPlot.add_subplot(211)
+MPlot1.axvline(x=42,color='k')
+MPlot1.axvline(x=121,color='k')
+MPlot1.axvline(x=206,color='k')
+MPlot1.axvline(x=283,color='k')
+MPlot1.axvline(x=334,color='k')
+MPlot1.axvline(x=422,color='k')
+MPlot1.axvline(x=478,color='k')
+CPlot = MPlot1.imshow(SkelCum, cmap='brg')
+MPlot.colorbar(CPlot)
+MPlot1.set_ylim(50,150)
+
+MPlot2 = MPlot.add_subplot(212)
+MPlot2.plot(SkelX)
+MPlot2.axvline(x=42,color='k')
+MPlot2.axvline(x=121,color='k')
+MPlot2.axvline(x=206,color='k')
+MPlot2.axvline(x=283,color='k')
+MPlot2.axvline(x=334,color='k')
+MPlot2.axvline(x=422,color='k')
+MPlot2.axvline(x=478,color='k')
+MPlot2.set_xlim(0, 512)
+MPlot2.set_xlabel('Distance along channel (px)')
+MPlot2.set_ylabel('Mean Deviation over time')
 
 #%%
 #ims=[]
