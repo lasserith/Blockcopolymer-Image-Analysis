@@ -431,10 +431,7 @@ FNFull = tk.filedialog.askopenfilename(parent=FOpen, title='Please select a file
 FOpen.withdraw()
 #if len(FNFull) > 0:
 #    print("You chose %s" % FNFull)
-#%% Animation Setup
-MovieFig = plt.figure()
-MovieSubplot = MovieFig.add_subplot(111)
-ims = []
+
 #%%
 
 for ImNum in range(0, len(FNFull) ):
@@ -463,53 +460,58 @@ for ImNum in range(0, len(FNFull) ):
         Shap0 =firstim.shape[0]
         Shap1 = firstim.shape[1]
         imarray = np.zeros((Shap0,Shap1,len(FNFull)))
-        SkelOut = np.zeros((Shap0,Shap1,len(FNFull)))
-        CropSkelOut = np.zeros((Shap0,Shap1,len(FNFull)))
+        SkelOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
+        AdOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
+        ThreshOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
+        CropSkelOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
         FiltCum = np.zeros((Shap0,Shap1))
-        ThreshCum = np.zeros((Shap0,Shap1))
+        ThreshCum = np.zeros((Shap0,Shap1)).astype('i2')
         imarray[:,:,ImNum] = firstim
+        # Masking
+        R, C = np.indices(firstim.shape)
+        Mask = np.ones_like(firstim)
+        SlTop = (85-70)/C.max() # Slope of top of wedge (Rside y - Lside y * dx)
+        SlBot = (127-157)/C.max() # slope of bottom of wedge
+        Mask[ R < C*SlTop+70] = 0 # Lside Y top
+        Mask[ R > C*SlBot+157 ] = 0 # Lside Y bot
+        
     else:
         imarray[:,:,ImNum]=IAFun.AutoDetect( FNFull[ImNum], Opt) # autodetect the machine, nmpp and return the raw data array
 #%% 
-    ArrayIn=imarray[:,:,ImNum]
+    ArrayIn = imarray[:,:,ImNum]
     ArrayIn = IAFun.Denoising(ArrayIn, Opt, 50)[0]
     ArrayIn = IAFun.BPFilter(ArrayIn,Opt.NmPP,LW=100,Axes='x') #FFT Filtering
     ArrayIn = IAFun.BPFilter(ArrayIn,Opt.NmPP,HW=500,Axes='y') #FFT Filtering
+    
+    ArrayIn = np.multiply(ArrayIn,Mask)
+    
     FiltCum+=ArrayIn
     Thresh = ArrayIn > 11
-    ThreshCum+=ArrayIn
+    ThreshOut[:,:,ImNum] = Thresh
+    ThreshCum+=Thresh
     #Thresh = IAFun.Thresholding(ArrayIn, Opt, 50)[0]
     Skeleton = skimage.morphology.skeletonize(Thresh)
+    Adcount = scipy.signal.convolve(Skeleton, np.ones((3,3)),mode='same',method='direct').astype('i1')
+    AdOut[:,:,ImNum] = np.multiply(Adcount, Skeleton)
+    
     SkelOut[:,:,ImNum] = Skeleton
     
            
     
     
 
-#%% Seperate out cropping so I can alter the crop cuts
-    # 51 - 79 Top cuts
-    #61 act - 89 Act Top Actual skel
-    
-    #70 - 58 ; 110-140 
-    
-    #150 act - 120 act bot act
-    #160 - 130 bot cuts
-for ii in range(0, len(FNFull) ):
-    R, C = np.indices(Skeleton.shape)
-    MaskSkel = np.zeros_like(Skeleton)
-    SlTop = (70-58)/C.max() # Slope of top of wedge (Rside y - Lside y * dx)
-    SlBot = (110-140)/C.max() # slope of bottom of wedge
-    MaskSkel[ R < C*SlTop+58] = 1 # Lside Y top
-    MaskSkel[ R > C*SlBot+140 ] = 1 # Lside Y bot
-    CropSkel = np.ma.array(SkelOut[:,:,ii], mask=MaskSkel)
-    CropSkelOut[:,:,ImNum] = CropSkel.ascopy()
-    
-    Frame = plt.imshow(CropSkel, animated=True)
-    ims.append([Frame])
+
 #%%
-SkelCum = np.ma.array(SkelOut.sum(axis=2), mask= MaskSkel)
+SkelCum = (SkelOut.sum(axis=2))
 SkelX = SkelCum.mean(axis=0) # average across the channel
-# 42, 121, 206, 283, 334, 422, 478
+Term = AdOut == 2
+TermSum = Term.sum(axis=2)
+Junc = AdOut > 3
+JuncSum = Junc.sum(axis=2)
+DefMask = skimage.morphology.binary_erosion(Mask)
+DefMask = skimage.morphology.binary_erosion(DefMask)
+
+#%% Plotting
 MPlot = plt.figure()
 MPlot.suptitle('Movement of Domain Skeletons')
 MPlot1 = MPlot.add_subplot(211)
@@ -521,7 +523,7 @@ MPlot1.axvline(x=334,color='k')
 MPlot1.axvline(x=422,color='k')
 MPlot1.axvline(x=478,color='k')
 CPlot = MPlot1.imshow(SkelCum, cmap='brg')
-MPlot.colorbar(CPlot)
+#MPlot.colorbar(CPlot)
 MPlot1.set_ylim(50,150)
 
 MPlot2 = MPlot.add_subplot(212)
@@ -536,8 +538,102 @@ MPlot2.axvline(x=478,color='k')
 MPlot2.set_xlim(0, 512)
 MPlot2.set_xlabel('Distance along channel (px)')
 MPlot2.set_ylabel('Mean Deviation over time')
+#%%
+TPlot = plt.figure()
+TPlot.suptitle('Movement of Terminal Defects')
+TPlot1 = TPlot.add_subplot(211)
+TPlot1.axvline(x=42,color='k')
+TPlot1.axvline(x=121,color='k')
+TPlot1.axvline(x=206,color='k')
+TPlot1.axvline(x=283,color='k')
+TPlot1.axvline(x=334,color='k')
+TPlot1.axvline(x=422,color='k')
+TPlot1.axvline(x=478,color='k')
+CPlot = TPlot1.imshow(TermSum*DefMask, cmap='brg')
+#TPlot.colorbar(CPlot)
+TPlot1.set_ylim(50,150)
+
+TPlot2 = TPlot.add_subplot(212)
+TPlot2.plot((TermSum*DefMask).sum(axis=0))
+TPlot2.axvline(x=42,color='k')
+TPlot2.axvline(x=121,color='k')
+TPlot2.axvline(x=206,color='k')
+TPlot2.axvline(x=283,color='k')
+TPlot2.axvline(x=334,color='k')
+TPlot2.axvline(x=422,color='k')
+TPlot2.axvline(x=478,color='k')
+TPlot2.set_xlim(0, 512)
+TPlot2.set_ylim(0,30)
+TPlot2.set_xlabel('Distance along channel (px)')
+TPlot2.set_ylabel('Mean Deviation over time')
+#%%
+JPlot = plt.figure()
+JPlot.suptitle('Movement of Junctions')
+JPlot1 = JPlot.add_subplot(211)
+JPlot1.axvline(x=42,color='k')
+JPlot1.axvline(x=121,color='k')
+JPlot1.axvline(x=206,color='k')
+JPlot1.axvline(x=283,color='k')
+JPlot1.axvline(x=334,color='k')
+JPlot1.axvline(x=422,color='k')
+JPlot1.axvline(x=478,color='k')
+CPlot = JPlot1.imshow(JuncSum*DefMask, cmap='brg')
+#JPlot.colorbar(CPlot)
+JPlot1.set_ylim(50,150)
+
+JPlot2 = JPlot.add_subplot(212)
+JPlot2.plot((JuncSum*DefMask).sum(axis=0))
+JPlot2.axvline(x=42,color='k')
+JPlot2.axvline(x=121,color='k')
+JPlot2.axvline(x=206,color='k')
+JPlot2.axvline(x=283,color='k')
+JPlot2.axvline(x=334,color='k')
+JPlot2.axvline(x=422,color='k')
+JPlot2.axvline(x=478,color='k')
+JPlot2.set_xlim(0, 512)
+JPlot2.set_ylim(0,100)
+JPlot2.set_xlabel('Distance along channel (px)')
+JPlot2.set_ylabel('Mean Deviation over time')
 
 #%%
+DefPlot = plt.figure()
+DefPlot.suptitle('Movement of Defects')
+DefPlot1 = DefPlot.add_subplot(211)
+DefPlot1.axvline(x=42,color='k')
+DefPlot1.axvline(x=121,color='k')
+DefPlot1.axvline(x=206,color='k')
+DefPlot1.axvline(x=283,color='k')
+DefPlot1.axvline(x=334,color='k')
+DefPlot1.axvline(x=422,color='k')
+DefPlot1.axvline(x=478,color='k')
+CPlot = DefPlot1.imshow((TermSum+JuncSum)*DefMask, cmap='brg')
+#DefPlot.colorbar(CPlot)
+DefPlot1.set_ylim(50,150)
+
+DefPlot2 = DefPlot.add_subplot(212)
+DefPlot2.plot(((TermSum+JuncSum)*DefMask).sum(axis=0))
+DefPlot2.axvline(x=42,color='k')
+DefPlot2.axvline(x=121,color='k')
+DefPlot2.axvline(x=206,color='k')
+DefPlot2.axvline(x=283,color='k')
+DefPlot2.axvline(x=334,color='k')
+DefPlot2.axvline(x=422,color='k')
+DefPlot2.axvline(x=478,color='k')
+DefPlot2.set_xlim(0, 512)
+DefPlot2.set_ylim(0,100)
+DefPlot2.set_xlabel('Distance along channel (px)')
+DefPlot2.set_ylabel('Mean Deviation over time')
+#%%
+#%% Animation Setup
+MovieFig = plt.figure()
+MovieSubplot = MovieFig.add_subplot(111)
+ims = []
+
+for ii in range(0, len(FNFull) ):
+
+    Frame = plt.imshow(SkelOut[:,:,ImNum], animated=True)
+    ims.append([Frame])
+
 #ims=[]
 #for ImNum in range(0, 273 ):
 #    Frame=MovieSubplot.imshow(SkelOut[:,:,ImNum], animated=True)
