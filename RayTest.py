@@ -465,11 +465,14 @@ SlBot = (127-157)/C.max() # slope of bottom of wedge
 Mask[ R < C*SlTop+70] = 0 # Lside Y top
 Mask[ R > C*SlBot+157 ] = 0 # Lside Y bot
 #%% Parallel Loop
+IAFun.AFMPara(FNFull,Opt,FiltOut,ThreshOut,AdOut,SkelOut, 0)
+
 if __name__ == '__main__':
-    Parallel(n_jobs=8)(delayed(IAFun.AFMPara)(FNFull,Opt,FiltOut,ThreshOut,AdOut,SkelOut, ImNum)
+    __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
+    Parallel(n_jobs=8,backend="threading",verbose=50)(delayed(IAFun.AFMPara)(FNFull,Opt,FiltOut,ThreshOut,AdOut,SkelOut, ImNum)
         for ImNum in range(0, len(FNFull)))
-    
-    
+    print('Done')
+#    
 
 
 #%%
