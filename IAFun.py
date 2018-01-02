@@ -26,6 +26,31 @@ import matplotlib.pyplot as plt
 
 import scipy
 
+def AFMPara(FNFull,Opt,FiltOut,ThreshOut,AdOut,SkelOut, ImNum):
+    """Perform the Denoising thresholding and skeletonization in a parallel compatible manner"""
+    try:
+        Opt.NmPP=Opt.NmPPSet
+    except:
+        pass
+    
+    ArrayIn=IAFun.AutoDetect( FNFull[ImNum], Opt) # autodetect the machine, nmpp and return the raw data array
+    #%% 
+    
+    ArrayIn = IAFun.Denoising(ArrayIn, Opt, 50)[0]
+    ArrayIn = IAFun.BPFilter(ArrayIn,Opt.NmPP,LW=100,Axes='x') #FFT Filtering
+    ArrayIn = IAFun.BPFilter(ArrayIn,Opt.NmPP,HW=500,Axes='y') #FFT Filtering
+    #ArrayIn = np.multiply(ArrayIn,Mask) #mask in loop
+    FiltOut[:,:,ImNum] = ArrayIn
+    Thresh = ArrayIn > 11
+    ThreshOut[:,:,ImNum] = Thresh
+    
+    #Thresh = IAFun.Thresholding(ArrayIn, Opt, 50)[0]
+    Skeleton = skimage.morphology.skeletonize(Thresh)
+    Adcount = scipy.signal.convolve(Skeleton, np.ones((3,3)),mode='same',method='direct').astype('i1')
+    AdOut[:,:,ImNum] = np.multiply(Adcount, Skeleton)
+    
+    SkelOut[:,:,ImNum] = Skeleton
+
 #%%
 def AutoDetect( FileName , Opt ):
     """

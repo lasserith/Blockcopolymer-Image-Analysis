@@ -17,7 +17,7 @@ import csv
 import re
 import lmfit
 from PIL import Image
-
+from joblib import Parallel, delayed
 import numpy as np
 import scipy
 import skimage
@@ -432,76 +432,49 @@ FOpen.withdraw()
 #if len(FNFull) > 0:
 #    print("You chose %s" % FNFull)
 
-#%%
+#%% Do Once
+ImNum = 0
+Opt.Name=FNFull[ImNum] # this hold the full file name
+Opt.FPath, Opt.BName= os.path.split(Opt.Name)  # File Path/ File Name
+(Opt.FName, Opt.FExt) = os.path.splitext(Opt.BName) # File name/File Extension split
+    
+    
+# Make output folder if needed
+try:
+    os.stat(os.path.join(Opt.FPath,"output"))
+except:
+    os.mkdir(os.path.join(Opt.FPath,"output"))
 
-for ImNum in range(0, len(FNFull) ):
-    Opt.Name=FNFull[ImNum] # this hold the full file name
-    Opt.FPath, Opt.BName= os.path.split(Opt.Name)  # File Path/ File Name
-    (Opt.FName, Opt.FExt) = os.path.splitext(Opt.BName) # File name/File Extension split
-    
-    
-    # Make output folder if needed
-    try:
-        os.stat(os.path.join(Opt.FPath,"output"))
-    except:
-        os.mkdir(os.path.join(Opt.FPath,"output"))
+firstim = IAFun.AutoDetect( FNFull[ImNum], Opt)
+Shap0 =firstim.shape[0]
+Shap1 = firstim.shape[1]
+imarray = np.zeros((Shap0,Shap1,len(FNFull)))
+SkelOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
+FiltOut = np.zeros((Shap0,Shap1,len(FNFull)))
+AdOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
+ThreshOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
+CropSkelOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
+FiltCum = np.zeros((Shap0,Shap1))
+ThreshCum = np.zeros((Shap0,Shap1)).astype('i2')
 
-    
-    
-    
-    #%% Autodetect per pixel scaling for merlin/asylum AFM. Return pixel size and raw data
-    try:
-        Opt.NmPP=Opt.NmPPSet
-    except:
-        pass
-    #TODO : Make not hardcoded
-    if ImNum ==0:
-        firstim = IAFun.AutoDetect( FNFull[ImNum], Opt)
-        Shap0 =firstim.shape[0]
-        Shap1 = firstim.shape[1]
-        imarray = np.zeros((Shap0,Shap1,len(FNFull)))
-        SkelOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
-        AdOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
-        ThreshOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
-        CropSkelOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
-        FiltCum = np.zeros((Shap0,Shap1))
-        ThreshCum = np.zeros((Shap0,Shap1)).astype('i2')
-        imarray[:,:,ImNum] = firstim
-        # Masking
-        R, C = np.indices(firstim.shape)
-        Mask = np.ones_like(firstim)
-        SlTop = (85-70)/C.max() # Slope of top of wedge (Rside y - Lside y * dx)
-        SlBot = (127-157)/C.max() # slope of bottom of wedge
-        Mask[ R < C*SlTop+70] = 0 # Lside Y top
-        Mask[ R > C*SlBot+157 ] = 0 # Lside Y bot
-        
-    else:
-        imarray[:,:,ImNum]=IAFun.AutoDetect( FNFull[ImNum], Opt) # autodetect the machine, nmpp and return the raw data array
-#%% 
-    ArrayIn = imarray[:,:,ImNum]
-    ArrayIn = IAFun.Denoising(ArrayIn, Opt, 50)[0]
-    ArrayIn = IAFun.BPFilter(ArrayIn,Opt.NmPP,LW=100,Axes='x') #FFT Filtering
-    ArrayIn = IAFun.BPFilter(ArrayIn,Opt.NmPP,HW=500,Axes='y') #FFT Filtering
-    
-    ArrayIn = np.multiply(ArrayIn,Mask)
-    
-    FiltCum+=ArrayIn
-    Thresh = ArrayIn > 11
-    ThreshOut[:,:,ImNum] = Thresh
-    ThreshCum+=Thresh
-    #Thresh = IAFun.Thresholding(ArrayIn, Opt, 50)[0]
-    Skeleton = skimage.morphology.skeletonize(Thresh)
-    Adcount = scipy.signal.convolve(Skeleton, np.ones((3,3)),mode='same',method='direct').astype('i1')
-    AdOut[:,:,ImNum] = np.multiply(Adcount, Skeleton)
-    
-    SkelOut[:,:,ImNum] = Skeleton
-    
-           
+#%% Masking
+R, C = np.indices(firstim.shape)
+Mask = np.ones_like(firstim)
+SlTop = (85-70)/C.max() # Slope of top of wedge (Rside y - Lside y * dx)
+SlBot = (127-157)/C.max() # slope of bottom of wedge
+Mask[ R < C*SlTop+70] = 0 # Lside Y top
+Mask[ R > C*SlBot+157 ] = 0 # Lside Y bot
+#%% Parallel Loop
+if __name__ == '__main__':
+    Parallel(n_jobs=8)(delayed(IAFun.AFMPara)(FNFull,Opt,FiltOut,ThreshOut,AdOut,SkelOut, ImNum)
+        for ImNum in range(0, len(FNFull)))
     
     
 
 
 #%%
+ThreshCum = ThreshOut.sum(axis=2)
+FiltCum = FiltOut.sum(axis=2)    
 SkelCum = (SkelOut.sum(axis=2))
 SkelX = SkelCum.mean(axis=0) # average across the channel
 Term = AdOut == 2
