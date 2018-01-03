@@ -26,30 +26,31 @@ import matplotlib.pyplot as plt
 
 import scipy
 
-def AFMPara(FNFull,Opt,FiltOut,ThreshOut,AdOut,SkelOut, ImNum):
+
+#%%
+def AFMPara(RawIn,Opt,FiltOut,ThreshOut,AdOut,SkelOut, ii):
     """Perform the Denoising thresholding and skeletonization in a parallel compatible manner"""
     try:
-        Opt.NmPP=Opt.NmPPSet
+        if Opt.NmPPSet!=0:Opt.NmPP=Opt.NmPPSet # so if we set one then just set it
     except:
         pass
+
+#    RawIn[:,:,ii]=AutoDetect( FNFull[ii], Opt) # moved to preloop due to library incompatability
     
-    ArrayIn=AutoDetect( FNFull[ImNum], Opt) # autodetect the machine, nmpp and return the raw data array
-    #%% 
-    
-    ArrayIn = Denoising(ArrayIn, Opt, 50)[0]
-    ArrayIn = BPFilter(ArrayIn,Opt.NmPP,LW=100,Axes='x') #FFT Filtering
-    ArrayIn = BPFilter(ArrayIn,Opt.NmPP,HW=500,Axes='y') #FFT Filtering
+    FiltOut[:,:,ii] = Denoising(RawIn[:,:,ii], Opt, 50)[0]
+    FiltOut[:,:,ii] = BPFilter(FiltOut[:,:,ii],Opt.NmPP,LW=100,Axes='x') #FFT Filtering
+    FiltOut[:,:,ii] = BPFilter(FiltOut[:,:,ii],Opt.NmPP,HW=500,Axes='y') #FFT Filtering
     #ArrayIn = np.multiply(ArrayIn,Mask) #mask in loop
-    FiltOut[:,:,ImNum] = ArrayIn
-    Thresh = ArrayIn > 11
-    ThreshOut[:,:,ImNum] = Thresh
+
+    ThreshOut[:,:,ii] = FiltOut[:,:,ii] > 11
+
     
     #Thresh = IAFun.Thresholding(ArrayIn, Opt, 50)[0]
-    Skeleton = skimage.morphology.skeletonize(Thresh)
-    Adcount = scipy.signal.convolve(Skeleton, np.ones((3,3)),mode='same',method='direct').astype('i1')
-    AdOut[:,:,ImNum] = np.multiply(Adcount, Skeleton)
+    SkelOut[:,:,ii] = skimage.morphology.skeletonize(ThreshOut[:,:,ii])
+    AdOut[:,:,ii] = scipy.signal.convolve(SkelOut[:,:,ii], np.ones((3,3)),mode='same',method='direct').astype('i1')
+    AdOut[:,:,ii] = np.multiply(AdOut[:,:,ii], SkelOut[:,:,ii])
     
-    SkelOut[:,:,ImNum] = Skeleton
+
 
 #%%
 def AutoDetect( FileName , Opt ):
@@ -62,8 +63,8 @@ def AutoDetect( FileName , Opt ):
     0.2 - Asylum AFM added
     """
     if Opt.FExt == ".ibw": # file is igor
-        Opt.Machine="Asylum AFM";
-        RawData= loadibw(Opt.Name)['wave']
+        if Opt.Machine!="Asylum AFM":Opt.Machine="Asylum AFM"; # avoid race condition in parallel loop
+        RawData= loadibw(FileName)['wave']
         Labels = RawData['labels'][2]
         Labels = [i.decode("utf-8") for i in Labels] # make it strings
         # Need to add a selector here for future height/phase
@@ -99,12 +100,13 @@ def AutoDetect( FileName , Opt ):
         #Brightness/Contrast RESET needed for denoising. Need to figure out how to keep track of this? add an opt?
 #        imfit = imfit - imfit.min()
 #        imfit = imfit*255/imfit.max()
-        Opt.NmPP=RawData['wave_header']['sfA'][0]*1e9
+        if Opt.NmPP!=RawData['wave_header']['sfA'][0]*1e9:Opt.NmPP=RawData['wave_header']['sfA'][0]*1e9 # hopefully avoid issues with parallel
+        
         RawData.clear()
         imarray=imfit
         
     else:
-        im= Image.open(Opt.Name)
+        im= Image.open(FileName)
         if im.mode!="P":
             im=im.convert(mode='P')
             print("Image was not in the original format, and has been converted back to grayscale. Consider using the original image.")    
@@ -121,10 +123,10 @@ def AutoDetect( FileName , Opt ):
             pass
 
 
-    if Opt.NmPP!=0:
-        print("Instrument was autodetected as %s, NmPP is %f \n" % (Opt.Machine ,Opt.NmPP) )
-    else:
-        print("Instrument was not detected, and NmPP was not set. Please set NmPP and rerun")
+#    if Opt.NmPP!=0:
+#        print("Instrument was autodetected as %s, NmPP is %f \n" % (Opt.Machine ,Opt.NmPP) )
+#    else:
+#        print("Instrument was not detected, and NmPP was not set. Please set NmPP and rerun")
     return(imarray);
 #%% Croparayy = IAFun.bla( input)
     """

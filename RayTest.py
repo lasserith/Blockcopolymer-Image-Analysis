@@ -59,6 +59,7 @@ Opt.LabelToggle = 0 # label domains
 Opt.AFMLayer = "Phase" #Matched Phase ZSensor
 Opt.AFMLevel = 3  # 0 = none 1 = Median 2= Median of Dif 3 = polyfit
 Opt.AFMPDeg = 5 # degree of polynomial.
+Opt.NmPP = 0 # Nanometers per pixel scaling
 
 # Following is GUI supported
 #Opt.EDToggle=0; #ED/LER
@@ -434,7 +435,7 @@ FOpen.withdraw()
 
 #%% Do Once
 ImNum = 0
-Opt.Name=FNFull[ImNum] # this hold the full file name
+Opt.Name = FNFull[ImNum] # this hold the full file name
 Opt.FPath, Opt.BName= os.path.split(Opt.Name)  # File Path/ File Name
 (Opt.FName, Opt.FExt) = os.path.splitext(Opt.BName) # File name/File Extension split
     
@@ -448,7 +449,7 @@ except:
 firstim = IAFun.AutoDetect( FNFull[ImNum], Opt)
 Shap0 =firstim.shape[0]
 Shap1 = firstim.shape[1]
-imarray = np.zeros((Shap0,Shap1,len(FNFull)))
+RawIn = np.zeros((Shap0,Shap1,len(FNFull)))
 SkelOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
 FiltOut = np.zeros((Shap0,Shap1,len(FNFull)))
 AdOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
@@ -457,19 +458,20 @@ CropSkelOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
 FiltCum = np.zeros((Shap0,Shap1))
 ThreshCum = np.zeros((Shap0,Shap1)).astype('i2')
 
-#%% Masking
-R, C = np.indices(firstim.shape)
-Mask = np.ones_like(firstim)
-SlTop = (85-70)/C.max() # Slope of top of wedge (Rside y - Lside y * dx)
-SlBot = (127-157)/C.max() # slope of bottom of wedge
-Mask[ R < C*SlTop+70] = 0 # Lside Y top
-Mask[ R > C*SlBot+157 ] = 0 # Lside Y bot
-#%% Parallel Loop
-IAFun.AFMPara(FNFull,Opt,FiltOut,ThreshOut,AdOut,SkelOut, 0)
 
+#%% Import data ( can't be parallelized as it breaks the importer )
+for ii in range(0, len(FNFull)):
+    try:
+        if Opt.NmPPSet!=0:Opt.NmPP=Opt.NmPPSet # so if we set one then just set it
+    except:
+        pass
+    RawIn[:,:,ii]=IAFun.AutoDetect( FNFull[ii], Opt) # autodetect the machine, nmpp and return the raw data array
+    print('Loading raw data %i/%i' %(ii,len(FNFull)))
+
+#%% Processing
 if __name__ == '__main__':
     __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
-    Parallel(n_jobs=8,backend="threading",verbose=50)(delayed(IAFun.AFMPara)(FNFull,Opt,FiltOut,ThreshOut,AdOut,SkelOut, ImNum)
+    Parallel(n_jobs=12,backend="threading",verbose=50)(delayed(IAFun.AFMPara)(RawIn,Opt,FiltOut,ThreshOut,AdOut,SkelOut, ImNum)
         for ImNum in range(0, len(FNFull)))
     print('Done')
 #    
@@ -479,17 +481,43 @@ if __name__ == '__main__':
 ThreshCum = ThreshOut.sum(axis=2)
 FiltCum = FiltOut.sum(axis=2)    
 SkelCum = (SkelOut.sum(axis=2))
-SkelX = SkelCum.mean(axis=0) # average across the channel
+SkelMove = np.abs(SkelCum-SkelCum.max()/2) # rescale so most stable is max
+SkelMean = SkelMove.mean(axis=0) # average across the channel
+SkelSTD = SkelMove.std(axis=0)
+
 Term = AdOut == 2
 TermSum = Term.sum(axis=2)
 Junc = AdOut > 3
 JuncSum = Junc.sum(axis=2)
+
+#%% Masking
+R, C = np.indices(firstim.shape)
+Mask = np.ones_like(firstim)
+
+RYT=85;LYT=70; # right y top (85 70)
+RYB=125;LYB=157; # right y bottom (127 157)
+
+SlTop = (RYT-LYT)/C.max() # Slope of top of wedge (Rside y - Lside y * dx) 85 70
+SlBot = (RYB-LYB)/C.max() # slope of bottom of wedge 127 157
+Mask[ R < C*SlTop+LYT] = 0 # Lside Y top 70
+Mask[ R > C*SlBot+LYB ] = 0 # Lside Y bot 157
+
 DefMask = skimage.morphology.binary_erosion(Mask)
-DefMask = skimage.morphology.binary_erosion(DefMask)
+for i in range(0,5):DefMask = skimage.morphology.binary_erosion(DefMask) # how many pixels to remove for edge protect on the defects
+    
+
+
+
+ThreshCum=Mask*ThreshCum
+FiltCum=Mask*FiltCum
+SkelCum=Mask*SkelCum
+SkelMove=Mask*SkelMove
+#%% Also let's look at interface
+skimage.morphology.binary_erosion()
 
 #%% Plotting
 MPlot = plt.figure()
-MPlot.suptitle('Movement of Domain Skeletons')
+MPlot.suptitle('Stability of Domain Skeletons')
 MPlot1 = MPlot.add_subplot(211)
 MPlot1.axvline(x=42,color='k')
 MPlot1.axvline(x=121,color='k')
@@ -498,12 +526,12 @@ MPlot1.axvline(x=283,color='k')
 MPlot1.axvline(x=334,color='k')
 MPlot1.axvline(x=422,color='k')
 MPlot1.axvline(x=478,color='k')
-CPlot = MPlot1.imshow(SkelCum, cmap='brg')
-#MPlot.colorbar(CPlot)
+CPlot = MPlot1.imshow(SkelMove, cmap='magma')
+MPlot.colorbar(CPlot)
 MPlot1.set_ylim(50,150)
 
 MPlot2 = MPlot.add_subplot(212)
-MPlot2.plot(SkelX)
+MPlot2.plot( np.divide(SkelMean,Mask.sum(axis=0)) )
 MPlot2.axvline(x=42,color='k')
 MPlot2.axvline(x=121,color='k')
 MPlot2.axvline(x=206,color='k')
@@ -514,6 +542,34 @@ MPlot2.axvline(x=478,color='k')
 MPlot2.set_xlim(0, 512)
 MPlot2.set_xlabel('Distance along channel (px)')
 MPlot2.set_ylabel('Mean Deviation over time')
+
+#%% Plotting
+SkelPlot = plt.figure()
+SkelPlot.suptitle('Mean Stability and Std Deviation')
+SkelPlot1 = SkelPlot.add_subplot(211)
+SkelPlot1.axvline(x=42,color='k')
+SkelPlot1.axvline(x=121,color='k')
+SkelPlot1.axvline(x=206,color='k')
+SkelPlot1.axvline(x=283,color='k')
+SkelPlot1.axvline(x=334,color='k')
+SkelPlot1.axvline(x=422,color='k')
+SkelPlot1.axvline(x=478,color='k')
+SkelPlot1.plot( SkelMean )
+SkelPlot1.set_xlim(0, 512)
+SkelPlot1.set_ylabel('Mean of Stability')
+
+SkelPlot2 = SkelPlot.add_subplot(212)
+SkelPlot2.plot( SkelSTD )
+SkelPlot2.axvline(x=42,color='k')
+SkelPlot2.axvline(x=121,color='k')
+SkelPlot2.axvline(x=206,color='k')
+SkelPlot2.axvline(x=283,color='k')
+SkelPlot2.axvline(x=334,color='k')
+SkelPlot2.axvline(x=422,color='k')
+SkelPlot2.axvline(x=478,color='k')
+SkelPlot2.set_xlim(0, 512)
+SkelPlot2.set_xlabel('Distance along channel (px)')
+SkelPlot2.set_ylabel('Standard Deviation of Stability')
 #%%
 TPlot = plt.figure()
 TPlot.suptitle('Movement of Terminal Defects')
@@ -530,7 +586,7 @@ CPlot = TPlot1.imshow(TermSum*DefMask, cmap='brg')
 TPlot1.set_ylim(50,150)
 
 TPlot2 = TPlot.add_subplot(212)
-TPlot2.plot((TermSum*DefMask).sum(axis=0))
+TPlot2.plot( (TermSum*DefMask).sum(axis=0) )
 TPlot2.axvline(x=42,color='k')
 TPlot2.axvline(x=121,color='k')
 TPlot2.axvline(x=206,color='k')
@@ -558,7 +614,7 @@ CPlot = JPlot1.imshow(JuncSum*DefMask, cmap='brg')
 JPlot1.set_ylim(50,150)
 
 JPlot2 = JPlot.add_subplot(212)
-JPlot2.plot((JuncSum*DefMask).sum(axis=0))
+JPlot2.plot( (JuncSum*DefMask).sum(axis=0) )
 JPlot2.axvline(x=42,color='k')
 JPlot2.axvline(x=121,color='k')
 JPlot2.axvline(x=206,color='k')
@@ -587,7 +643,7 @@ CPlot = DefPlot1.imshow((TermSum+JuncSum)*DefMask, cmap='brg')
 DefPlot1.set_ylim(50,150)
 
 DefPlot2 = DefPlot.add_subplot(212)
-DefPlot2.plot(((TermSum+JuncSum)*DefMask).sum(axis=0))
+DefPlot2.plot(  np.divide(((TermSum+JuncSum)*DefMask).sum(axis=0),DefMask.sum(axis=0)) )
 DefPlot2.axvline(x=42,color='k')
 DefPlot2.axvline(x=121,color='k')
 DefPlot2.axvline(x=206,color='k')
@@ -603,21 +659,19 @@ DefPlot2.set_ylabel('Mean Deviation over time')
 #%% Animation Setup
 MovieFig = plt.figure()
 MovieSubplot = MovieFig.add_subplot(111)
-ims = []
 
-for ii in range(0, len(FNFull) ):
-
-    Frame = plt.imshow(SkelOut[:,:,ImNum], animated=True)
-    ims.append([Frame])
-
-#ims=[]
-#for ImNum in range(0, 273 ):
-#    Frame=MovieSubplot.imshow(SkelOut[:,:,ImNum], animated=True)
+#ims = []
+#for ii in range(0, len(FNFull) ):
+#
+#    Frame = plt.imshow(SkelOut[:,:,ImNum], animated=True)
 #    ims.append([Frame])
-#    print(ImNum)
 
-
-#ani = manimation.ArtistAnimation(MovieFig, ims,blit=True)
+ims=[]
+for ImNum in range(0, 273 ):
+    Frame=MovieSubplot.imshow(ThreshOut[:,:,ImNum], animated=True)
+    ims.append([Frame])
+    print(ImNum)
+ani = manimation.ArtistAnimation(MovieFig, ims,blit=True)
 ##%% Save animation
 #MWriter = manimation.FFMpegWriter(bitrate=10000)
 #ani.save('Wedge.mp4' , writer=MWriter)
