@@ -482,14 +482,17 @@ ThreshCum = ThreshOut.sum(axis=2)
 FiltCum = FiltOut.sum(axis=2)    
 SkelCum = (SkelOut.sum(axis=2))
 SkelMove = np.abs(SkelCum-SkelCum.max()/2) # rescale so most stable is max
-SkelMean = SkelMove.mean(axis=0) # average across the channel
-SkelSTD = SkelMove.std(axis=0)
+
 
 Term = AdOut == 2
 TermSum = Term.sum(axis=2)
 Junc = AdOut > 3
 JuncSum = Junc.sum(axis=2)
-
+#%% Also let's look at interface will move into loop if useful
+InterOut = np.zeros((ThreshOut.shape)).astype('i1')
+for i in range(0,273): # (len(FNFull))
+    InterOut[:,:,i] = ThreshOut[:,:,i]-skimage.morphology.binary_erosion(ThreshOut[:,:,i])
+InterCum=InterOut.sum(axis=2)
 #%% Masking
 R, C = np.indices(firstim.shape)
 Mask = np.ones_like(firstim)
@@ -499,8 +502,8 @@ RYB=125;LYB=157; # right y bottom (127 157)
 
 SlTop = (RYT-LYT)/C.max() # Slope of top of wedge (Rside y - Lside y * dx) 85 70
 SlBot = (RYB-LYB)/C.max() # slope of bottom of wedge 127 157
-Mask[ R < C*SlTop+LYT] = 0 # Lside Y top 70
-Mask[ R > C*SlBot+LYB ] = 0 # Lside Y bot 157
+Mask[ R < C*SlTop+LYT] = float('nan') # Lside Y top 70
+Mask[ R > C*SlBot+LYB ] = float('nan') # Lside Y bot 157
 
 DefMask = skimage.morphology.binary_erosion(Mask)
 for i in range(0,5):DefMask = skimage.morphology.binary_erosion(DefMask) # how many pixels to remove for edge protect on the defects
@@ -511,14 +514,22 @@ for i in range(0,5):DefMask = skimage.morphology.binary_erosion(DefMask) # how m
 ThreshCum=Mask*ThreshCum
 FiltCum=Mask*FiltCum
 SkelCum=Mask*SkelCum
+
 SkelMove=Mask*SkelMove
-#%% Also let's look at interface
-skimage.morphology.binary_erosion()
+InterCum=Mask*InterCum
+#%% Synthetics
+
+SkelMean = np.ma.masked_invalid(SkelMove).mean(axis=0) # average across the channel
+SkelSTD = np.ma.masked_invalid(SkelMove).std(axis=0)
+
+InterMean = np.ma.masked_invalid(InterCum).mean(axis=0) # average across the channel
+InterSTD = np.ma.masked_invalid(InterCum).std(axis=0)
+
 
 #%% Plotting
 MPlot = plt.figure()
 MPlot.suptitle('Stability of Domain Skeletons')
-MPlot1 = MPlot.add_subplot(211)
+MPlot1 = MPlot.add_subplot(311)
 MPlot1.axvline(x=42,color='k')
 MPlot1.axvline(x=121,color='k')
 MPlot1.axvline(x=206,color='k')
@@ -527,11 +538,11 @@ MPlot1.axvline(x=334,color='k')
 MPlot1.axvline(x=422,color='k')
 MPlot1.axvline(x=478,color='k')
 CPlot = MPlot1.imshow(SkelMove, cmap='magma')
-MPlot.colorbar(CPlot)
-MPlot1.set_ylim(50,150)
+#MPlot.colorbar(CPlot)
+MPlot1.set_ylim(60,160)
 
-MPlot2 = MPlot.add_subplot(212)
-MPlot2.plot( np.divide(SkelMean,Mask.sum(axis=0)) )
+MPlot2 = MPlot.add_subplot(312)
+MPlot2.plot( SkelMean)
 MPlot2.axvline(x=42,color='k')
 MPlot2.axvline(x=121,color='k')
 MPlot2.axvline(x=206,color='k')
@@ -540,36 +551,48 @@ MPlot2.axvline(x=334,color='k')
 MPlot2.axvline(x=422,color='k')
 MPlot2.axvline(x=478,color='k')
 MPlot2.set_xlim(0, 512)
-MPlot2.set_xlabel('Distance along channel (px)')
-MPlot2.set_ylabel('Mean Deviation over time')
+MPlot2.set_ylabel('Mean Stability')
 
+MPlot3 = MPlot.add_subplot(313)
+MPlot3.plot( SkelSTD )
+MPlot3.axvline(x=42,color='k')
+MPlot3.axvline(x=121,color='k')
+MPlot3.axvline(x=206,color='k')
+MPlot3.axvline(x=283,color='k')
+MPlot3.axvline(x=334,color='k')
+MPlot3.axvline(x=422,color='k')
+MPlot3.axvline(x=478,color='k')
+MPlot3.set_xlim(0, 512)
+MPlot3.set_xlabel('Distance along channel (px)')
+MPlot3.set_ylabel('STD Stability')
 #%% Plotting
-SkelPlot = plt.figure()
-SkelPlot.suptitle('Mean Stability and Std Deviation')
-SkelPlot1 = SkelPlot.add_subplot(211)
-SkelPlot1.axvline(x=42,color='k')
-SkelPlot1.axvline(x=121,color='k')
-SkelPlot1.axvline(x=206,color='k')
-SkelPlot1.axvline(x=283,color='k')
-SkelPlot1.axvline(x=334,color='k')
-SkelPlot1.axvline(x=422,color='k')
-SkelPlot1.axvline(x=478,color='k')
-SkelPlot1.plot( SkelMean )
-SkelPlot1.set_xlim(0, 512)
-SkelPlot1.set_ylabel('Mean of Stability')
+IPlot = plt.figure()
+IPlot.suptitle('Interfacial Movement')
+IPlot1 = IPlot.add_subplot(211)
+IPlot1.axvline(x=42,color='k')
+IPlot1.axvline(x=121,color='k')
+IPlot1.axvline(x=206,color='k')
+IPlot1.axvline(x=283,color='k')
+IPlot1.axvline(x=334,color='k')
+IPlot1.axvline(x=422,color='k')
+IPlot1.axvline(x=478,color='k')
+IPlot1.plot( InterMean )
+IPlot1.set_xlim(0, 512)
+IPlot1.set_ylim(70,90)
+IPlot1.set_ylabel('Mean Number of Interfaces')
 
-SkelPlot2 = SkelPlot.add_subplot(212)
-SkelPlot2.plot( SkelSTD )
-SkelPlot2.axvline(x=42,color='k')
-SkelPlot2.axvline(x=121,color='k')
-SkelPlot2.axvline(x=206,color='k')
-SkelPlot2.axvline(x=283,color='k')
-SkelPlot2.axvline(x=334,color='k')
-SkelPlot2.axvline(x=422,color='k')
-SkelPlot2.axvline(x=478,color='k')
-SkelPlot2.set_xlim(0, 512)
-SkelPlot2.set_xlabel('Distance along channel (px)')
-SkelPlot2.set_ylabel('Standard Deviation of Stability')
+IPlot2 = IPlot.add_subplot(212)
+IPlot2.plot( InterSTD )
+IPlot2.axvline(x=42,color='k')
+IPlot2.axvline(x=121,color='k')
+IPlot2.axvline(x=206,color='k')
+IPlot2.axvline(x=283,color='k')
+IPlot2.axvline(x=334,color='k')
+IPlot2.axvline(x=422,color='k')
+IPlot2.axvline(x=478,color='k')
+IPlot2.set_xlim(0, 512)
+IPlot2.set_xlabel('Distance along channel (px)')
+IPlot2.set_ylabel('STD Interface')
 #%%
 TPlot = plt.figure()
 TPlot.suptitle('Movement of Terminal Defects')
@@ -668,7 +691,7 @@ MovieSubplot = MovieFig.add_subplot(111)
 
 ims=[]
 for ImNum in range(0, 273 ):
-    Frame=MovieSubplot.imshow(ThreshOut[:,:,ImNum], animated=True)
+    Frame=MovieSubplot.imshow(InterOut[:,:,ImNum], animated=True)
     ims.append([Frame])
     print(ImNum)
 ani = manimation.ArtistAnimation(MovieFig, ims,blit=True)
