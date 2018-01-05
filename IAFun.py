@@ -28,7 +28,7 @@ import scipy
 
 
 #%%
-def AFMPara(RawIn,Opt,FiltOut,ThreshOut,AdOut,SkelOut, ii):
+def AFMPara(RawIn,Opt,FiltOut,ThreshOut,AdOut,SkelOut, EDOut, AngOut, ii):
     """Perform the Denoising thresholding and skeletonization in a parallel compatible manner"""
     try:
         if Opt.NmPPSet!=0:Opt.NmPP=Opt.NmPPSet # so if we set one then just set it
@@ -47,6 +47,9 @@ def AFMPara(RawIn,Opt,FiltOut,ThreshOut,AdOut,SkelOut, ii):
     
     #Thresh = IAFun.Thresholding(ArrayIn, Opt, 50)[0]
     SkelOut[:,:,ii] = skimage.morphology.skeletonize(ThreshOut[:,:,ii])
+    EDOut[:,:,ii] = (ThreshOut[:,:,ii]-skimage.morphology.binary_erosion(ThreshOut[:,:,ii], np.ones((3,3))))
+    AngOut[:,:,ii] = AngEC(ThreshOut[:,:,ii], Opt, EDArray=EDOut[:,:,ii], SkelArray=SkelOut[:,:,ii])
+    
     AdOut[:,:,ii] = scipy.signal.convolve(SkelOut[:,:,ii], np.ones((3,3)),mode='same',method='direct').astype('i1')
     AdOut[:,:,ii] = np.multiply(AdOut[:,:,ii], SkelOut[:,:,ii])
     
@@ -810,9 +813,9 @@ def AngEC(im, Opt, EDArray='none', SkelArray='none'):
     
     # note that due to the algo the angle is not defined aside from the edges
     # this masking insures the array conveys this fact
-    AngPlot=plt.figure()
-    AngPlot1=AngPlot.add_subplot(111)
-    AngPlot1.imshow(AngArray)
+        AngPlot=plt.figure()
+        AngPlot1=AngPlot.add_subplot(111)
+        AngPlot1.imshow(AngArray)
     if Opt.AECSh == 1: #REPLACE show
 
         AngPlot.show() #

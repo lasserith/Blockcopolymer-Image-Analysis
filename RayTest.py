@@ -453,6 +453,8 @@ RawIn = np.zeros((Shap0,Shap1,len(FNFull)))
 SkelOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
 FiltOut = np.zeros((Shap0,Shap1,len(FNFull)))
 AdOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
+EDOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
+AngOut = np.zeros((Shap0,Shap1,len(FNFull)))
 ThreshOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
 CropSkelOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
 FiltCum = np.zeros((Shap0,Shap1))
@@ -471,7 +473,7 @@ for ii in range(0, len(FNFull)):
 #%% Processing
 if __name__ == '__main__':
     __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
-    Parallel(n_jobs=12,backend="threading",verbose=50)(delayed(IAFun.AFMPara)(RawIn,Opt,FiltOut,ThreshOut,AdOut,SkelOut, ImNum)
+    Parallel(n_jobs=12,backend="threading",verbose=50)(delayed(IAFun.AFMPara)(RawIn,Opt,FiltOut,ThreshOut,AdOut,SkelOut, EDOut, AngOut, ImNum)
         for ImNum in range(0, len(FNFull)))
     print('Done')
 #    
@@ -484,15 +486,17 @@ SkelCum = (SkelOut.sum(axis=2))
 SkelMove = np.abs(SkelCum-SkelCum.max()/2) # rescale so most stable is max
 
 
+
 Term = AdOut == 2
 TermSum = Term.sum(axis=2)
 Junc = AdOut > 3
 JuncSum = Junc.sum(axis=2)
-#%% Also let's look at interface will move into loop if useful
+##%% Also let's look at interface will move into loop if useful DONE > EDOut
 InterOut = np.zeros((ThreshOut.shape)).astype('i1')
 for i in range(0,273): # (len(FNFull))
     InterOut[:,:,i] = ThreshOut[:,:,i]-skimage.morphology.binary_erosion(ThreshOut[:,:,i])
 InterCum=InterOut.sum(axis=2)
+
 #%% Masking
 R, C = np.indices(firstim.shape)
 Mask = np.ones_like(firstim)
@@ -505,11 +509,16 @@ SlBot = (RYB-LYB)/C.max() # slope of bottom of wedge 127 157
 Mask[ R < C*SlTop+LYT] = float('nan') # Lside Y top 70
 Mask[ R > C*SlBot+LYB ] = float('nan') # Lside Y bot 157
 
-DefMask = skimage.morphology.binary_erosion(Mask)
+
+DefMask = np.ones_like(firstim)
+DefMask[ R < C*SlTop+LYT] = 0 # Lside Y top 70
+DefMask[ R > C*SlBot+LYB-10 ] = 0 # Lside Y bot 157
 for i in range(0,5):DefMask = skimage.morphology.binary_erosion(DefMask) # how many pixels to remove for edge protect on the defects
     
 
 
+TermSum = DefMask*TermSum
+JuncSum = DefMask*JuncSum
 
 ThreshCum=Mask*ThreshCum
 FiltCum=Mask*FiltCum
@@ -522,7 +531,7 @@ InterCum=Mask*InterCum
 SkelMean = np.ma.masked_invalid(SkelMove).mean(axis=0) # average across the channel
 SkelSTD = np.ma.masked_invalid(SkelMove).std(axis=0)
 
-InterMean = np.ma.masked_invalid(InterCum).mean(axis=0) # average across the channel
+InterMean = np.ma.masked_invalid(InterCum).sum(axis=0)/len(FNFull) # average across the channel divide by number of frames
 InterSTD = np.ma.masked_invalid(InterCum).std(axis=0)
 
 
@@ -567,7 +576,7 @@ MPlot3.set_xlabel('Distance along channel (px)')
 MPlot3.set_ylabel('STD Stability')
 #%% Plotting
 IPlot = plt.figure()
-IPlot.suptitle('Interfacial Movement')
+IPlot.suptitle('Interfacial Area (IE Thermodynamic penalty)')
 IPlot1 = IPlot.add_subplot(211)
 IPlot1.axvline(x=42,color='k')
 IPlot1.axvline(x=121,color='k')
@@ -577,8 +586,8 @@ IPlot1.axvline(x=334,color='k')
 IPlot1.axvline(x=422,color='k')
 IPlot1.axvline(x=478,color='k')
 IPlot1.plot( InterMean )
-IPlot1.set_xlim(0, 512)
-IPlot1.set_ylim(70,90)
+IPlot1.set_xlim(1, 510)
+#IPlot1.set_ylim(70,90)
 IPlot1.set_ylabel('Mean Number of Interfaces')
 
 IPlot2 = IPlot.add_subplot(212)
@@ -590,9 +599,43 @@ IPlot2.axvline(x=283,color='k')
 IPlot2.axvline(x=334,color='k')
 IPlot2.axvline(x=422,color='k')
 IPlot2.axvline(x=478,color='k')
-IPlot2.set_xlim(0, 512)
+IPlot2.set_xlim(1, 510)
 IPlot2.set_xlabel('Distance along channel (px)')
 IPlot2.set_ylabel('STD Interface')
+
+IPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Interfacial.png"), dpi=300)
+
+#%% Plotting
+INPlot = plt.figure()
+INPlot.suptitle('Time Averaged Width of Interfaces (Entropic Chain Penalty)')
+INPlot1 = INPlot.add_subplot(211)
+INPlot1.axvline(x=42,color='k')
+INPlot1.axvline(x=121,color='k')
+INPlot1.axvline(x=206,color='k')
+INPlot1.axvline(x=283,color='k')
+INPlot1.axvline(x=334,color='k')
+INPlot1.axvline(x=422,color='k')
+INPlot1.axvline(x=478,color='k')
+INPlot1.plot( np.divide(np.ma.masked_invalid(Mask).sum(axis=0)*Opt.NmPP,InterMean) )
+INPlot1.set_xlim(1, 510)
+INPlot1.set_ylim(24,30)
+INPlot1.set_ylabel('Mean Interfacial Width')
+
+INPlot2 = INPlot.add_subplot(212)
+INPlot2.plot( InterSTD )
+INPlot2.axvline(x=42,color='k')
+INPlot2.axvline(x=121,color='k')
+INPlot2.axvline(x=206,color='k')
+INPlot2.axvline(x=283,color='k')
+INPlot2.axvline(x=334,color='k')
+INPlot2.axvline(x=422,color='k')
+INPlot2.axvline(x=478,color='k')
+INPlot2.set_xlim(1, 510)
+INPlot2.set_xlabel('Distance along channel (px)')
+INPlot2.set_ylabel('STD Interfacial Width')
+
+INPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "InterNorm.png"), dpi=300)
+
 #%%
 TPlot = plt.figure()
 TPlot.suptitle('Movement of Terminal Defects')
@@ -604,12 +647,12 @@ TPlot1.axvline(x=283,color='k')
 TPlot1.axvline(x=334,color='k')
 TPlot1.axvline(x=422,color='k')
 TPlot1.axvline(x=478,color='k')
-CPlot = TPlot1.imshow(TermSum*DefMask, cmap='brg')
+CPlot = TPlot1.imshow(TermSum, cmap='Blues')
 #TPlot.colorbar(CPlot)
-TPlot1.set_ylim(50,150)
+TPlot1.set_ylim(50,150) #50 150
 
 TPlot2 = TPlot.add_subplot(212)
-TPlot2.plot( (TermSum*DefMask).sum(axis=0) )
+TPlot2.plot( (TermSum).sum(axis=0) )
 TPlot2.axvline(x=42,color='k')
 TPlot2.axvline(x=121,color='k')
 TPlot2.axvline(x=206,color='k')
@@ -620,7 +663,9 @@ TPlot2.axvline(x=478,color='k')
 TPlot2.set_xlim(0, 512)
 TPlot2.set_ylim(0,30)
 TPlot2.set_xlabel('Distance along channel (px)')
-TPlot2.set_ylabel('Mean Deviation over time')
+TPlot2.set_ylabel('Sum Terminals')
+
+TPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Terminals.png"), dpi=300)
 #%%
 JPlot = plt.figure()
 JPlot.suptitle('Movement of Junctions')
@@ -632,12 +677,12 @@ JPlot1.axvline(x=283,color='k')
 JPlot1.axvline(x=334,color='k')
 JPlot1.axvline(x=422,color='k')
 JPlot1.axvline(x=478,color='k')
-CPlot = JPlot1.imshow(JuncSum*DefMask, cmap='brg')
+CPlot = JPlot1.imshow(JuncSum, cmap='Reds')
 #JPlot.colorbar(CPlot)
 JPlot1.set_ylim(50,150)
 
 JPlot2 = JPlot.add_subplot(212)
-JPlot2.plot( (JuncSum*DefMask).sum(axis=0) )
+JPlot2.plot( (JuncSum).sum(axis=0) )
 JPlot2.axvline(x=42,color='k')
 JPlot2.axvline(x=121,color='k')
 JPlot2.axvline(x=206,color='k')
@@ -646,10 +691,10 @@ JPlot2.axvline(x=334,color='k')
 JPlot2.axvline(x=422,color='k')
 JPlot2.axvline(x=478,color='k')
 JPlot2.set_xlim(0, 512)
-JPlot2.set_ylim(0,100)
+#JPlot2.set_ylim(0,100)
 JPlot2.set_xlabel('Distance along channel (px)')
-JPlot2.set_ylabel('Mean Deviation over time')
-
+JPlot2.set_ylabel('Sum Junctions')
+JPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Junctions.png"), dpi=300)
 #%%
 DefPlot = plt.figure()
 DefPlot.suptitle('Movement of Defects')
@@ -661,12 +706,12 @@ DefPlot1.axvline(x=283,color='k')
 DefPlot1.axvline(x=334,color='k')
 DefPlot1.axvline(x=422,color='k')
 DefPlot1.axvline(x=478,color='k')
-CPlot = DefPlot1.imshow((TermSum+JuncSum)*DefMask, cmap='brg')
+CPlot = DefPlot1.imshow((TermSum+JuncSum), cmap='Purples')
 #DefPlot.colorbar(CPlot)
 DefPlot1.set_ylim(50,150)
 
 DefPlot2 = DefPlot.add_subplot(212)
-DefPlot2.plot(  np.divide(((TermSum+JuncSum)*DefMask).sum(axis=0),DefMask.sum(axis=0)) )
+DefPlot2.plot(  np.divide(((TermSum+JuncSum)).sum(axis=0),DefMask.sum(axis=0)) )
 DefPlot2.axvline(x=42,color='k')
 DefPlot2.axvline(x=121,color='k')
 DefPlot2.axvline(x=206,color='k')
@@ -675,12 +720,13 @@ DefPlot2.axvline(x=334,color='k')
 DefPlot2.axvline(x=422,color='k')
 DefPlot2.axvline(x=478,color='k')
 DefPlot2.set_xlim(0, 512)
-DefPlot2.set_ylim(0,100)
+#DefPlot2.set_ylim(0,100)
 DefPlot2.set_xlabel('Distance along channel (px)')
-DefPlot2.set_ylabel('Mean Deviation over time')
+DefPlot2.set_ylabel('Sum Defects')
+DefPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Defects.png"), dpi=300)
 #%%
 #%% Animation Setup
-MovieFig = plt.figure()
+MovieFig = plt.figure(dpi=300)
 MovieSubplot = MovieFig.add_subplot(111)
 
 #ims = []
@@ -695,8 +741,10 @@ for ImNum in range(0, 273 ):
     ims.append([Frame])
     print(ImNum)
 ani = manimation.ArtistAnimation(MovieFig, ims,blit=True)
-##%% Save animation
-#MWriter = manimation.FFMpegWriter(bitrate=10000)
-#ani.save('Wedge.mp4' , writer=MWriter)
+
+#%% Save animation
+MWriter = manimation.FFMpegWriter( extra_args=['-c:v','libx264','-preset', 'slow' , '-profile:v', 'high', '-level:v' ,'4.0', '-pix_fmt' ,'yuv420p' ,'-crf' ,'22', '-codec:a', 'aac'])
+ani.save('Interface2.mp4' , writer=MWriter, dpi=300)
+#ani.save('Interfaces.mp4', fps=30, extra_args=['libx264'])
 ###%%
 #np.save('SkelOutArray',SkelOut)
