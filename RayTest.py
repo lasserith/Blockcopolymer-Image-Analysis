@@ -25,8 +25,6 @@ from skimage import restoration, morphology, filters, feature
 import matplotlib.pyplot as plt
 plt.rcParams['animation.ffmpeg_path'] = r'C:\ffmpeg\bin\ffmpeg.exe'
 import matplotlib.animation as manimation
-
-
 import IAFun
 # Will hold options
 class Opt:
@@ -488,10 +486,18 @@ SkelMove = np.abs(SkelCum-SkelCum.max()/2) # rescale so most stable is max
 
 
 Term = AdOut == 2
-TermSum = Term.sum(axis=2)
+
 Junc = AdOut > 3
-JuncSum = Junc.sum(axis=2)
-##%% Also let's look at interface will move into loop if useful DONE > EDOut
+
+#%% Teehee
+TermSum = np.zeros((Shap0,Shap1))
+JuncSum = np.zeros((Shap0,Shap1))
+for n in range(0,len(FNFull),2):
+    TermSum += Term[:,:,n]
+    JuncSum += Junc[:,:,n]
+#TermSum = Term.sum(axis=2)
+#JuncSum = Junc.sum(axis=2)
+#%% Also let's look at interface will move into loop if useful DONE > EDOut
 InterOut = np.zeros((ThreshOut.shape)).astype('i1')
 for i in range(0,273): # (len(FNFull))
     InterOut[:,:,i] = ThreshOut[:,:,i]-skimage.morphology.binary_erosion(ThreshOut[:,:,i])
@@ -695,6 +701,22 @@ JPlot2.set_xlim(0, 512)
 JPlot2.set_xlabel('Distance along channel (px)')
 JPlot2.set_ylabel('Sum Junctions')
 JPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Junctions.png"), dpi=300)
+
+#%% Ratio of Defects
+
+#RDefPlot = plt.figure()
+#RDefPlot.suptitle('Ratio of Junctions to Terminal Defects')
+#RDefPlot1 = RDefPlot.add_subplot(111)
+##RDefPlot1.axvline(x=42,color='k')
+##RDefPlot1.axvline(x=121,color='k')
+##RDefPlot1.axvline(x=206,color='k')
+##RDefPlot1.axvline(x=283,color='k')
+##RDefPlot1.axvline(x=334,color='k')
+##RDefPlot1.axvline(x=422,color='k')
+##RDefPlot1.axvline(x=478,color='k')
+#RDefPlot1.semilogy(np.divide(JuncSum.sum(axis=0),TermSum.sum(axis=0)))
+
+
 #%%
 DefPlot = plt.figure()
 DefPlot.suptitle('Movement of Defects')
@@ -737,14 +759,14 @@ MovieSubplot = MovieFig.add_subplot(111)
 
 ims=[]
 for ImNum in range(0, 273 ):
-    Frame=MovieSubplot.imshow(InterOut[:,:,ImNum], animated=True)
+    Frame=MovieSubplot.imshow(DefMask*Mask*(Junc[:,:,ImNum]*50+Term[:,:,ImNum]*100), animated=True)
     ims.append([Frame])
     print(ImNum)
 ani = manimation.ArtistAnimation(MovieFig, ims,blit=True)
 
 #%% Save animation
-MWriter = manimation.FFMpegWriter( extra_args=['-c:v','libx264','-preset', 'slow' , '-profile:v', 'high', '-level:v' ,'4.0', '-pix_fmt' ,'yuv420p' ,'-crf' ,'22', '-codec:a', 'aac'])
-ani.save('Interface2.mp4' , writer=MWriter, dpi=300)
+MWriter = manimation.FFMpegWriter( fps=10, extra_args=['-c:v','libx264' ,'-b:v','3000k', '-profile:v', 'high', '-level:v' ,'4.0', '-pix_fmt' ,'yuv420p' ,'-crf' ,'22'])
+ani.save('Defects.mp4' , writer=MWriter, dpi=300)
 #ani.save('Interfaces.mp4', fps=30, extra_args=['libx264'])
 ###%%
 #np.save('SkelOutArray',SkelOut)

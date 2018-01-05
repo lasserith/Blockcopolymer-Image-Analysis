@@ -813,9 +813,9 @@ def AngEC(im, Opt, EDArray='none', SkelArray='none'):
     
     # note that due to the algo the angle is not defined aside from the edges
     # this masking insures the array conveys this fact
-        AngPlot=plt.figure()
-        AngPlot1=AngPlot.add_subplot(111)
-        AngPlot1.imshow(AngArray)
+    AngPlot=plt.figure()
+    AngPlot1=AngPlot.add_subplot(111)
+    AngPlot1.imshow(AngArray)
     if Opt.AECSh == 1: #REPLACE show
 
         AngPlot.show() #
