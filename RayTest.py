@@ -489,14 +489,15 @@ Term = AdOut == 2
 
 Junc = AdOut > 3
 
-#%% Teehee
-TermSum = np.zeros((Shap0,Shap1))
-JuncSum = np.zeros((Shap0,Shap1))
-for n in range(0,len(FNFull),2):
-    TermSum += Term[:,:,n]
-    JuncSum += Junc[:,:,n]
-#TermSum = Term.sum(axis=2)
-#JuncSum = Junc.sum(axis=2)
+#%% Look at scan/rescan
+
+#TermSum = np.zeros((Shap0,Shap1))
+#JuncSum = np.zeros((Shap0,Shap1))
+#for n in range(1,len(FNFull),2):
+#    TermSum += Term[:,:,n]
+#    JuncSum += Junc[:,:,n]
+TermSum = Term.sum(axis=2)
+JuncSum = Junc.sum(axis=2)
 #%% Also let's look at interface will move into loop if useful DONE > EDOut
 InterOut = np.zeros((ThreshOut.shape)).astype('i1')
 for i in range(0,273): # (len(FNFull))
@@ -508,7 +509,8 @@ R, C = np.indices(firstim.shape)
 Mask = np.ones_like(firstim)
 
 RYT=85;LYT=70; # right y top (85 70)
-RYB=125;LYB=157; # right y bottom (127 157)
+RYB=123;LYB=159; # right y bottom (127 157)
+# ((LYB-LYT)-(RYB-RYT))/512 calc slope in case
 
 SlTop = (RYT-LYT)/C.max() # Slope of top of wedge (Rside y - Lside y * dx) 85 70
 SlBot = (RYB-LYB)/C.max() # slope of bottom of wedge 127 157
