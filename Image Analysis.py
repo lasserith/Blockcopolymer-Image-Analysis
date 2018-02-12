@@ -60,10 +60,11 @@ ShowImage = 0 # Show images?
 
 ## TODO : ADD THE BELOW TO GUI
 Opt.IDEToggle = 0 # Mask out the electrodes for YK
-Opt.LabelToggle = 0 # label domains
+Opt.LabelToggle = 1 # label domains
 Opt.AFMLayer = "ZSensor" #Matched Phase ZSensor
 Opt.AFMLevel = 3  # 0 = none 1 = Median 2= Median of Dif 3 = polyfit
 Opt.AFMPDeg = 5 # degree of polynomial.
+Opt.AngMP = 5
 
 # Following is GUI supported
 #Opt.EDToggle=0; #ED/LER
@@ -237,6 +238,7 @@ class GUI:
         self.AngTogN=tk.Radiobutton(self.Angf,text="None",variable=Opt.AngDetToggle, value=0).pack(side=tk.LEFT)
         self.AngTogEC=tk.Radiobutton(self.Angf,text="Edge/Center",variable=Opt.AngDetToggle, value=1).pack(side=tk.LEFT)
         self.AngTogS=tk.Radiobutton(self.Angf,text="Sobel", variable=Opt.AngDetToggle, value=2).pack(side=tk.LEFT)
+        self.AngTogMP=tk.Radiobutton(self.Angf,text="MidPoint", variable=Opt.AngDetToggle, value=3).pack(side=tk.LEFT)
         Opt.AngDetToggle.set(1) # pick EC as default
 
         self.Skelef= tk.ttk.Labelframe(Page1)
@@ -527,11 +529,12 @@ for ImNum in range(0, len(FNFull) ):
         Output.DomSize=SkelArray.sum()/scipy.ndimage.measurements.label(SkelArray,structure=np.ones((3,3)))[1]
         #calculate domain size. This is here for now
     #%% Angle Detection
-    
+    if Opt.AngDetToggle==3:
+        AngDetA = IAFun.AngMid( BinArray, Opt, SkelArray = SkelArray)
     if Opt.AngDetToggle==2:
-            AngDetA=IAFun.AngSobel( ArrayIn ) # old method
+        AngDetA=IAFun.AngSobel( ArrayIn ) # old method
     if Opt.AngDetToggle==1:
-            AngDetA=IAFun.AngEC( BinArray, Opt)          # new method
+        AngDetA=IAFun.AngEC( BinArray, Opt)          # new method
             
     #%% What to do with angles? 
     if Opt.AngDetToggle!=0:

@@ -500,7 +500,8 @@ def Label(im, Opt):
     """
     Part 2 doing domains top.bottom
     """
-    Size=int(Opt.NmPP*10) # what is the top zone height? here 10 nm
+    #Size=int(Opt.NmPP*10) # what is the top zone height? here 10 nm
+    Size = 2 # cus lower res IDE 
     TLab=np.unique(LabArray[:Size]);BLab=np.unique(LabArray[-Size:]); # What areas are at top? Which are at bottom?   
     ThroughLab=np.intersect1d(TLab,BLab, assume_unique=True);
     ThroughLab=ThroughLab[ThroughLab!=0]; # remove zero as it is background
@@ -547,7 +548,7 @@ def Skeleton(im,Opt):
         LASkelI.save(os.path.join(Opt.FPath,"output",Opt.FName+"Skel.tif"))
 
     
-    AdCount=scipy.signal.convolve(SkelArray, np.ones((3,3)),mode='same')
+    AdCount=scipy.signal.convolve(SkelArray, np.ones((3,3)),mode='same',method='direct')
     # Remove Opt.DefEdge pixels at edge to prevent edge effects. be sure to account for area difference
     (CIMH,CIMW)=im.shape
     AdCount[0:int(Opt.DefEdge-1),:]=0; AdCount[int(CIMH+1-Opt.DefEdge):int(CIMH),:]=0; 
@@ -558,7 +559,7 @@ def Skeleton(im,Opt):
     TLog = ((AdCount==2) * (SkelArray== 1)) # if next to 1 + on skel
     TCount = (TLog==1).sum()
     TCA=TCount/DefArea
-    TLog = scipy.signal.convolve(TLog, np.ones((3,3)),mode='same')
+    TLog = scipy.signal.convolve(TLog, np.ones((3,3)),mode='same',method='direct')
     
     
     SkelT= Image.fromarray(30*SkelArray+100*TLog)
@@ -575,7 +576,7 @@ def Skeleton(im,Opt):
     
     JCount = (JLog==1).sum()
     JCA=JCount/DefArea
-    JLog = scipy.signal.convolve(JLog, np.ones((3,3)),mode='same')
+    JLog = scipy.signal.convolve(JLog, np.ones((3,3)),mode='same',method='direct')
     
     
     SkelJ= Image.fromarray(30*SkelArray+100*JLog)
@@ -778,6 +779,7 @@ def AngSobel(im):
     
     return(AngDet.AngArray)
 
+
 def AngEC(im, Opt, EDArray='none', SkelArray='none'):
     """
     Angle detection using the angle from edge of binary image to center of image
@@ -821,6 +823,69 @@ def AngEC(im, Opt, EDArray='none', SkelArray='none'):
         AngPlot.show() #
     if Opt.AECSa==1: #Replace save
         AngPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "AngEC.png"), dpi=300)
+    plt.close(AngPlot)
+    return(AngArray)
+    
+
+def AngMid(im, Opt, SkelArray='none'):
+    """
+    Angle detection using N point averaging
+    V0.1
+    """
+    #
+    AngArray = np.zeros(im.shape)
+    AngArray[:] = np.nan
+    
+    # recalc the skel array if we aren't passed it
+    if SkelArray=='none':
+        SkelArray=skimage.morphology.skeletonize(im).astype('i1')
+    # Make a copy of the skeleton array to keep track of where we have been
+    TrackArray = np.copy(SkelArray)
+    # first we need a list of all terminals then we can step from, first calc adjacency
+    Adj = scipy.signal.convolve(SkelArray, np.ones((3,3)),mode='same',method='direct').astype('i1')
+    # if adjacent = 2 and it's on a line it's a terminal
+    Term = (( Adj==2)*SkelArray).astype('i1')
+    TrackArray *= (Adj <= 3) # mark junction as stop points eg zeros
+    TermR, TermC = np.nonzero(Term) # termR is now Rows, TermC : Columns of Terminals
+    MoveCoord = np.array([[0, 1], # this is simply the set of moves we allow eg 8 moves
+                 [1, 1],
+                 [-1, 1],
+                 [1, 0],
+                 [-1, 0],
+                 [-1, 1],
+                 [-1, -1],
+                 [-1, 0]])
+    
+    for i in np.arange(len(TermR)):
+        # now we need to make a blank Opt.AngMP x 2 array that will carry the x, y coords
+        Coord = np.zeros( (Opt.AngMP,2),dtype=int)
+        # ok now where are we
+        Coord[0,:] = TermR[i],TermC[i] # set coords
+        TrackArray[TermR[i],TermC[i]] = 0 # mark we've been here
+        Rollin = 1 # now we rollin :)
+        while Rollin == 1: # yah yah while loops are a trap, lets not fall in eh?
+            for TCount in np.arange(8): # we have 8 possible moves
+                TestMove = (Coord[0,:] + MoveCoord[TCount, :])
+                if (TestMove.min() >= 0) and ((TestMove < TrackArray.shape).all):
+                    if TrackArray[TestMove[0],TestMove[1]] == 1: # if we are on the skeleton
+                        np.roll(Coord,2) # roll back the coordinates
+                        Coord[0,:] = np.copy(TestMove) # assign the new coords
+                        TrackArray[Coord[0,0],Coord[0,1]] = 0 # mark we've been here
+                        if Coord[Opt.AngMP-1,:].sum() != 0: # if we have enough data eg the matrix is full
+                            # calculate the distance as current coordinates minus last coords
+                            Dist = Coord[0,:] - Coord[-1,:] # note this is [RDist , ColumnDist] aka [DY, DX]
+                            print (Dist)
+                            AngArray[Coord[(Opt.AngMP-1)/2,0],Coord[(Opt.AngMP-1)/2,1]] = (np.arctan2(Dist[1],Dist[0])*180/np.pi) + 180
+                        break # go back to while loop and restart for loop
+                if TCount == 7: # if we are on the last move and we didn't break we ended our run
+                    Rollin = 0 # we ran out of moves and found no valid ones so pick a new terminal
+    AngPlot=plt.figure()
+    AngPlot1=AngPlot.add_subplot(111)
+    AngPlot1.imshow(AngArray)
+    if Opt.AECSh == 1: #REPLACE show
+        AngPlot.show() #
+    if Opt.AECSa==1: #Replace save
+        AngPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "AngMid.png"), dpi=300)
     plt.close(AngPlot)
     return(AngArray)
     

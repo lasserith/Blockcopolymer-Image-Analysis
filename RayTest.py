@@ -58,6 +58,8 @@ Opt.AFMLayer = "Phase" #Matched Phase ZSensor
 Opt.AFMLevel = 3  # 0 = none 1 = Median 2= Median of Dif 3 = polyfit
 Opt.AFMPDeg = 5 # degree of polynomial.
 Opt.NmPP = 0 # Nanometers per pixel scaling
+Opt.AngMP = 5 # Do a midpoint average based on this many points
+# EG AngMP = 5 then 1 2 3 4 5, 3 will be calc off angle 1 - 5
 
 # Following is GUI supported
 #Opt.EDToggle=0; #ED/LER
@@ -500,7 +502,7 @@ TermSum = Term.sum(axis=2)
 JuncSum = Junc.sum(axis=2)
 #%% Also let's look at interface will move into loop if useful DONE > EDOut
 InterOut = np.zeros((ThreshOut.shape)).astype('i1')
-for i in range(0,273): # (len(FNFull))
+for i in range(0,(len(FNFull))): # (len(FNFull))
     InterOut[:,:,i] = ThreshOut[:,:,i]-skimage.morphology.binary_erosion(ThreshOut[:,:,i])
 InterCum=InterOut.sum(axis=2)
 
