@@ -36,19 +36,29 @@ def AFMPara(RawIn,Opt,FiltOut,ThreshOut,AdOut,SkelOut, EDOut, AngOut, ii):
         pass
 
 #    RawIn[:,:,ii]=AutoDetect( FNFull[ii], Opt) # moved to preloop due to library incompatability
-    
-    FiltOut[:,:,ii] = Denoising(RawIn[:,:,ii], Opt, 50)[0]
-    FiltOut[:,:,ii] = BPFilter(FiltOut[:,:,ii],Opt.NmPP,LW=100,Axes='x') #FFT Filtering
-    FiltOut[:,:,ii] = BPFilter(FiltOut[:,:,ii],Opt.NmPP,HW=500,Axes='y') #FFT Filtering
+    if Opt.DenToggle == 1:
+        FiltOut[:,:,ii] = Denoising(RawIn[:,:,ii], Opt, 50)[0]
+    if Opt.BPToggle == 1:
+        FiltOut[:,:,ii] = BPFilter(FiltOut[:,:,ii],Opt.NmPP,LW=100,Axes='x') #FFT Filtering
+        FiltOut[:,:,ii] = BPFilter(FiltOut[:,:,ii],Opt.NmPP,HW=500,Axes='y') #FFT Filtering
     #ArrayIn = np.multiply(ArrayIn,Mask) #mask in loop
 
     ThreshOut[:,:,ii] = FiltOut[:,:,ii] > 11
 
     
     #Thresh = IAFun.Thresholding(ArrayIn, Opt, 50)[0]
-    SkelOut[:,:,ii] = skimage.morphology.skeletonize(ThreshOut[:,:,ii])
-    EDOut[:,:,ii] = (ThreshOut[:,:,ii]-skimage.morphology.binary_erosion(ThreshOut[:,:,ii], np.ones((3,3))))
-    AngOut[:,:,ii] = AngEC(ThreshOut[:,:,ii], Opt, EDArray=EDOut[:,:,ii], SkelArray=SkelOut[:,:,ii])
+    if Opt.SkeleToggle == 1:
+        SkelOut[:,:,ii] = skimage.morphology.skeletonize(ThreshOut[:,:,ii])
+    if Opt.EDToggle == 1:
+        EDOut[:,:,ii] = (ThreshOut[:,:,ii]-skimage.morphology.binary_erosion(ThreshOut[:,:,ii], np.ones((3,3))))
+    
+    if Opt.AngDetToggle==3:
+        AngOut[:,:,ii] = AngMid( ThreshOut[:,:,ii], Opt, SkelArray = SkelOut[:,:,ii])
+    if Opt.AngDetToggle==2:
+        AngOut[:,:,ii] = AngSobel( FiltOut[:,:,ii] ) # old method
+    if Opt.AngDetToggle==1:
+        AngOut[:,:,ii] = AngEC(ThreshOut[:,:,ii], Opt, EDArray=EDOut[:,:,ii], SkelArray=SkelOut[:,:,ii])          # new method
+    
     
     AdOut[:,:,ii] = scipy.signal.convolve(SkelOut[:,:,ii], np.ones((3,3)),mode='same',method='direct').astype('i1')
     AdOut[:,:,ii] = np.multiply(AdOut[:,:,ii], SkelOut[:,:,ii])
@@ -421,6 +431,10 @@ def Thresholding(im, Opt, l0):
     if Opt.ThreshSa==1:
         AdaptThresh.save(os.path.join(Opt.FPath,"output",Opt.FName+"AThresh.tif"))
     return(AdaptBin,Thresh)
+    
+#%%
+def gaussian(x, amp, cen, wid):
+    return amp * np.exp(-(x-cen)**2 / (2*wid**2))
 #%%
 def RSO(im, Opt):
     """
@@ -435,7 +449,48 @@ def RSO(im, Opt):
         RSOI.save(os.path.join(Opt.FPath,"output",Opt.FName+"LADRSO.tif"))
     return(RSO);
 
+def MSD(im, Opt):
+    Crop = np.array([130, 350])
+    PCount = 10 # should have 10 at each location
+    
+    D1 = np.gradient(im , axis = 0)
+    D2 = np.gradient(D1 , axis = 0)
+    
+    PRough = np.zeros((im.shape[0], len(Crop)*PCount))
+    Peaks = np.zeros((im.shape[0], len(Crop)*PCount))
+    PWidth = np.zeros((im.shape[0], len(Crop)*PCount))
+    Drift = np.zeros((im.shape[0]))
+    
+    for RI in np.arange(im.shape[0]): # go by row
+        Max = np.where( (np.append(np.sign(D1[RI,:-1]) != np.sign(D1[RI,1:]),0))*(D2[RI,:] < 0))[0]
+        if len(Max) > PCount*len(Crop):
+            for i in np.arange(len(Crop)):
+                PDist = np.abs(Max - Crop[i]) # find distance to peaks
+                for PC in np.arange(PCount):
+    
+                    CPeak = np.where(PDist == PDist.min())[0]
+                    if len(CPeak!=1): CPeak = CPeak[0] # if two are equidistant just pick 1
+                    
+                    PeakNum = PC+i*PCount
+    
+    
+                    PRough[RI, PeakNum] = Max[CPeak] # save index of closest peak
+                    PDist[CPeak] = PDist.max()       
+            PRough[RI, :] = np.sort(PRough[RI, :])
+            Drift[RI] = np.mean(PRough[RI]-PRough[0]) # calc drift
+    
+    DLin = np.polyfit(np.arange(len(Drift)),Drift,deg=1)
+    DCorrect = np.polyval(DLin, np.arange(len(Drift)))
+    
+    for RI in np.arange(im.shape[0]):
+        Peaks[RI,:] = PRough[RI,:] - DCorrect[RI]
+    
+    
 
+    PMean = np.mean(Peaks, axis = 0)
+    
+                    
+    return(Peaks)
 
 def BPFilter(im, NmPP, LW='NA', HW='NA' , Axes='Circ'):
     """
@@ -539,16 +594,15 @@ def Skeleton(im,Opt):
     v0.1
     """
     
-    SkelArray= skimage.morphology.skeletonize(im)
-    LASkelI= Image.fromarray(100*SkelArray)
-    LASkelI=LASkelI.convert(mode="RGB")
+    SkelArray = skimage.morphology.skeletonize(im)
+    LASkelI = Image.fromarray(100*SkelArray)
+    LASkelI = LASkelI.convert(mode="RGB")
     if Opt.SkeleSh == 1:
         LASkelI.show()
-    if Opt.SkeleSa==1:
-        LASkelI.save(os.path.join(Opt.FPath,"output",Opt.FName+"Skel.tif"))
+    if Opt.SkeleSa == 1:
+        LASkelI.save(os.path.join(Opt.FPath, "output", Opt.FName+"Skel.tif"))
 
-    
-    AdCount=scipy.signal.convolve(SkelArray, np.ones((3,3)),mode='same',method='direct')
+    AdCount = scipy.signal.convolve(SkelArray, np.ones((3,3)), mode='same', method='direct')
     # Remove Opt.DefEdge pixels at edge to prevent edge effects. be sure to account for area difference
     (CIMH,CIMW)=im.shape
     AdCount[0:int(Opt.DefEdge-1),:]=0; AdCount[int(CIMH+1-Opt.DefEdge):int(CIMH),:]=0; 
@@ -762,7 +816,7 @@ def EdgeDetect(im, Opt, SkelArray):
 
 
 #%% Angle Detection
-def AngSobel(im):
+def AngSobel(im, Opt):
     """
     Uses sobel derivatives to calculate the maximum gradient direction allowing for 
     rough but noisy orientation detection.
@@ -776,7 +830,17 @@ def AngSobel(im):
     AngDet.A1stDX=np.absolute(scipy.ndimage.sobel(im, axis=1))
     AngDet.AngArray=np.float32(np.arctan2(AngDet.A1stDY,AngDet.A1stDX))    
     AngDet.AngArray*=180/np.pi
-    
+    if Opt.AECSh == 1 or Opt.AECSa == 1:
+        AngPlot=plt.figure()
+        AngPlot1=AngPlot.add_subplot(111)
+        AngPlot1.imshow(AngDet.AngArray)
+    if Opt.AECSh == 1: #REPLACE show
+
+        AngPlot.show() #
+    if Opt.AECSa==1: #Replace save
+        AngPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "AngEC.png"), dpi=300)
+    try:plt.close(AngPlot)
+    except:pass
     return(AngDet.AngArray)
 
 
@@ -815,15 +879,17 @@ def AngEC(im, Opt, EDArray='none', SkelArray='none'):
     
     # note that due to the algo the angle is not defined aside from the edges
     # this masking insures the array conveys this fact
-    AngPlot=plt.figure()
-    AngPlot1=AngPlot.add_subplot(111)
-    AngPlot1.imshow(AngArray)
+    if Opt.AECSh == 1 or Opt.AECSa == 1:
+        AngPlot=plt.figure()
+        AngPlot1=AngPlot.add_subplot(111)
+        AngPlot1.imshow(AngArray)
     if Opt.AECSh == 1: #REPLACE show
 
         AngPlot.show() #
     if Opt.AECSa==1: #Replace save
         AngPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "AngEC.png"), dpi=300)
-    plt.close(AngPlot)
+    try:plt.close(AngPlot)
+    except:pass
     return(AngArray)
     
 
@@ -839,13 +905,17 @@ def AngMid(im, Opt, SkelArray='none'):
     # recalc the skel array if we aren't passed it
     if SkelArray=='none':
         SkelArray=skimage.morphology.skeletonize(im).astype('i1')
+    # First break at every junction
     # Make a copy of the skeleton array to keep track of where we have been
-    TrackArray = np.copy(SkelArray)
-    # first we need a list of all terminals then we can step from, first calc adjacency
+    TrackArray = np.copy(SkelArray) # zeros in this = non valid moves!
     Adj = scipy.signal.convolve(SkelArray, np.ones((3,3)),mode='same',method='direct').astype('i1')
-    # if adjacent = 2 and it's on a line it's a terminal
-    Term = (( Adj==2)*SkelArray).astype('i1')
     TrackArray *= (Adj <= 3) # mark junction as stop points eg zeros
+    
+    # Now calculate where all the terminals are with the junctions as breaks
+    Adj = scipy.signal.convolve(TrackArray, np.ones((3,3)),mode='same',method='direct').astype('i1')
+    # if adjacent = 2 and it's on a line it's a terminal
+    Term = (( Adj==2)*TrackArray).astype('i1')
+    
     TermR, TermC = np.nonzero(Term) # termR is now Rows, TermC : Columns of Terminals
     MoveCoord = np.array([[0, 1], # this is simply the set of moves we allow eg 8 moves
                  [1, 1],
@@ -863,30 +933,36 @@ def AngMid(im, Opt, SkelArray='none'):
         Coord[0,:] = TermR[i],TermC[i] # set coords
         TrackArray[TermR[i],TermC[i]] = 0 # mark we've been here
         Rollin = 1 # now we rollin :)
+        
         while Rollin == 1: # yah yah while loops are a trap, lets not fall in eh?
             for TCount in np.arange(8): # we have 8 possible moves
                 TestMove = (Coord[0,:] + MoveCoord[TCount, :])
-                if (TestMove.min() >= 0) and ((TestMove < TrackArray.shape).all):
+                if (TestMove.min() >= 0) and ((TestMove < TrackArray.shape).all()):
                     if TrackArray[TestMove[0],TestMove[1]] == 1: # if we are on the skeleton
-                        np.roll(Coord,2) # roll back the coordinates
+                        Coord = np.roll(Coord,2) # roll back the coordinates
                         Coord[0,:] = np.copy(TestMove) # assign the new coords
                         TrackArray[Coord[0,0],Coord[0,1]] = 0 # mark we've been here
+                        
                         if Coord[Opt.AngMP-1,:].sum() != 0: # if we have enough data eg the matrix is full
+                            
                             # calculate the distance as current coordinates minus last coords
                             Dist = Coord[0,:] - Coord[-1,:] # note this is [RDist , ColumnDist] aka [DY, DX]
-                            print (Dist)
-                            AngArray[Coord[(Opt.AngMP-1)/2,0],Coord[(Opt.AngMP-1)/2,1]] = (np.arctan2(Dist[1],Dist[0])*180/np.pi) + 180
+                            
+
+                            AngArray[Coord[int((Opt.AngMP-1)/2),0],Coord[int((Opt.AngMP-1)/2),1]] = (np.arctan2(Dist[1],Dist[0])*180/np.pi) + 180
                         break # go back to while loop and restart for loop
                 if TCount == 7: # if we are on the last move and we didn't break we ended our run
                     Rollin = 0 # we ran out of moves and found no valid ones so pick a new terminal
-    AngPlot=plt.figure()
-    AngPlot1=AngPlot.add_subplot(111)
-    AngPlot1.imshow(AngArray)
+    if Opt.AECSh == 1 or Opt.AECSa == 1:
+        AngPlot=plt.figure()
+        AngPlot1=AngPlot.add_subplot(111)
+        AngPlot1.imshow(AngArray)
     if Opt.AECSh == 1: #REPLACE show
         AngPlot.show() #
     if Opt.AECSa==1: #Replace save
         AngPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "AngMid.png"), dpi=300)
-    plt.close(AngPlot)
+    try:plt.close(AngPlot)
+    except:pass
     return(AngArray)
     
 

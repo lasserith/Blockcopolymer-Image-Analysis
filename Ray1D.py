@@ -55,7 +55,7 @@ ShowImage = 0 # Show images?
 Opt.IDEToggle = 0 # Mask out the electrodes for YK
 Opt.LabelToggle = 0 # label domains
 Opt.AFMLayer = "Phase" #Matched Phase ZSensor
-Opt.AFMLevel = 3  # 0 = none 1 = Median 2= Median of Dif 3 = polyfit
+Opt.AFMLevel = 0  # 0 = none 1 = Median 2= Median of Dif 3 = polyfit
 Opt.AFMPDeg = 5 # degree of polynomial.\
 Opt.BPToggle = 0 # bandpass filtering?
 
@@ -453,15 +453,16 @@ firstim = IAFun.AutoDetect( FNFull[ImNum], Opt)
 Shap0 =firstim.shape[0]
 Shap1 = firstim.shape[1]
 RawIn = np.zeros((Shap0,Shap1,len(FNFull)))
-SkelOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
-FiltOut = np.zeros((Shap0,Shap1,len(FNFull)))
-AdOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
-EDOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
-AngOut = np.zeros((Shap0,Shap1,len(FNFull)))
-ThreshOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
-CropSkelOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
-FiltCum = np.zeros((Shap0,Shap1))
-ThreshCum = np.zeros((Shap0,Shap1)).astype('i2')
+RawComp = np.zeros((Shap0,Shap1*len(FNFull)))
+#SkelOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
+#FiltOut = np.zeros((Shap0,Shap1,len(FNFull)))
+#AdOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
+#EDOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
+#AngOut = np.zeros((Shap0,Shap1,len(FNFull)))
+#ThreshOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
+#CropSkelOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
+#FiltCum = np.zeros((Shap0,Shap1))
+#ThreshCum = np.zeros((Shap0,Shap1)).astype('i2')
 
 
 #%% Import data ( can't be parallelized as it breaks the importer )
@@ -472,353 +473,131 @@ for ii in range(0, len(FNFull)):
         pass
     RawIn[:,:,ii]=IAFun.AutoDetect( FNFull[ii], Opt) # autodetect the machine, nmpp and return the raw data array
     print('Loading raw data %i/%i' %(ii,len(FNFull)))
+#    if ii%2 == 1:
+#        RawIn[:,:,ii] = np.flipud(RawIn[:,:,ii]) # if odd flip upside down
+    RawComp[:,ii*Shap1:(ii+1)*Shap1] = RawIn[:,:,ii] # make one array with all data in an order
 
-#%% Processing
-if __name__ == '__main__':
-    __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
-    Parallel(n_jobs=12,verbose=50, backend = 'threading')(delayed(IAFun.AFMPara)(RawIn,Opt,FiltOut,ThreshOut,AdOut,SkelOut, EDOut, AngOut, ImNum) # backend='threading' removed
-        for ImNum in range(0, len(FNFull)))
-    print('Done')
-#    
+#%% Find the markers between arrays
 
+SavFil = scipy.signal.savgol_filter(RawComp,5,2,axis = 0)
+D1SavFil = scipy.signal.savgol_filter(RawComp,5,2,deriv = 1,axis = 0)
+D2SavFil = scipy.signal.savgol_filter(RawComp,5,2, deriv = 2,axis = 0)
 
+FPlot = plt.figure()
+FPlot.suptitle('SavGol Filter and Derivatives')
+Xplot = range(0, Shap0)
+scipy.signal.savgol_filter(RawComp,5,2)
+FPlot1 = FPlot.add_subplot(311)
+FPlot1.plot(Xplot,RawComp[:,3],Xplot,SavFil[:,3])
+
+FPlot2 = FPlot.add_subplot(312)
+FPlot2.plot(Xplot,RawComp[:,3],Xplot,D1SavFil[:,3])
+
+FPlot3 = FPlot.add_subplot(313)
+FPlot3.plot(Xplot,RawComp[:,3],Xplot,D2SavFil[:,3])
+FPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "SVG.png"), dpi=300)
+# What is the peak corresponding to pattern?
 #%%
-ThreshCum = ThreshOut.sum(axis=2)
-FiltCum = FiltOut.sum(axis=2)    
-SkelCum = (SkelOut.sum(axis=2))
-SkelMove = np.abs(SkelCum-SkelCum.max()/2) # rescale so most stable is max
-SkelAcross = np.abs(SkelOut.sum(axis=0)-SkelCum.sum(axis=0).max()/2)
-SkelAlong = np.abs(SkelOut.sum(axis=1)-SkelCum.sum(axis=1).max()/2)
+Pat = 228;
+PatSpace = np.round(500/Opt.NmPP)
+PolyP1 = 3 # first poly peak
 
 
-Term = AdOut == 2
+PatPeak = np.zeros((100,RawComp.shape[1]))
+PolyPeak =  np.zeros((150,RawComp.shape[1]))
+FPeak =  np.zeros((150,RawComp.shape[1]))
+FPWidth = np.zeros((150,RawComp.shape[1]))
 
-Junc = AdOut > 3
+PSpace = Output.l0/Opt.NmPP*.5 # peaks must be at least 70% of L0 apart
+FitWidth = int(Output.l0/Opt.NmPP*.4)
 
-#%% Look at scan/rescan
+for tt in range(0,RawComp.shape[1]):
+    Peak = np.zeros((0,0))
+    Valley = np.zeros((0,0))
+    CPeak = np.zeros((0,0))
+    # go across space and find peaks/valleys
+    for xx in range(0,RawComp.shape[0]-1):
+        if D1SavFil[xx,tt]*D1SavFil[xx+1,tt] <= 0:
+            if (D2SavFil[xx,tt]+D2SavFil[xx+1,tt])/2 <= 0:
+                Peak = np.append(Peak,xx)
+            else: Valley = np.append(Valley,xx)
+    #now clean em up
+    
+    
+    
+    for pp in range(0,len(Peak)-1):
+        if (Peak[pp+1]-Peak[pp]) < PSpace: # if peaks too close
+            if SavFil[int(Peak[pp]),tt] >= SavFil[int(Peak[pp+1]),tt]:
+                CPeak = np.append(CPeak, Peak[pp]) 
+            else: # keep the higher value
+                CPeak = np.append(CPeak, Peak[pp+1])
+        else: CPeak = np.append(CPeak, Peak[pp])
+    CPeak = np.unique(CPeak)
+    
+    PatCut = CPeak[(CPeak-Pat)%PatSpace <= PSpace] # used to asign stuff cus python can't do it on the fly
+    
+    PatPeak[:len(PatCut),tt] = np.copy(PatCut) # if it is less than L0 from pattern expected location
+    # set the remaining peaks to cpeak
+    CPeak = CPeak[(CPeak-Pat)%PatSpace > PSpace]
+    #index peaks uniquely using the polyp1 and the L0
+    PeakIndex = np.round((CPeak-PolyP1)/Output.l0*Opt.NmPP*2).astype(int)
+    
+#    PolyPeak[:(len(CPeak)-len(PatCut)),tt] = np.copy(CPeak[(CPeak-Pat)%PatSpace > PSpace])
+    PolyPeak[PeakIndex,tt] = np.copy(CPeak)
+    for pp in range(0,150):
+        PCur=PolyPeak[pp,tt]
+        if PCur != 0:
+            PLow = int(np.maximum((PCur-FitWidth),0))
+            PHigh = int(np.min((PCur+FitWidth+1,Shap1-1)))
+            
+            Inits = (5, PCur, FitWidth) #amp cent and width
+            try:
+                Res, CoVar = scipy.optimize.curve_fit(IAFun.gaussian, Xplot[PLow:PHigh], RawComp[PLow:PHigh,tt], p0=Inits)
+                FPeak[pp,tt] = np.copy(Res[1])
+                FPWidth[pp,tt] = np.copy(Res[2]*2.35482*Opt.NmPP) # FWHM in NM
+            except:
+                FPeak[pp,tt] = np.nan
+                FPWidth[pp,tt] = np.nan
+        else:
+            FPeak[pp,tt] = np.nan
+            FPWidth[pp,tt] = np.nan
 
-#TermSum = np.zeros((Shap0,Shap1))
-#JuncSum = np.zeros((Shap0,Shap1))
-#for n in range(1,len(FNFull),2):
-#    TermSum += Term[:,:,n]
-#    JuncSum += Junc[:,:,n]
-TermSum = Term.sum(axis=2)
-JuncSum = Junc.sum(axis=2)
-#%% Also let's look at interface will move into loop if useful DONE > EDOut
-InterOut = np.zeros((ThreshOut.shape)).astype('i1')
-for i in range(0,(len(FNFull))): # (len(FNFull))
-    InterOut[:,:,i] = ThreshOut[:,:,i]-skimage.morphology.binary_erosion(ThreshOut[:,:,i])
-InterCum=InterOut.sum(axis=2)
-
-##%% Masking
-#R, C = np.indices(firstim.shape)
-#Mask = np.ones_like(firstim)
-#
-#RYT=85;LYT=70; # right y top (85 70)
-#RYB=123;LYB=159; # right y bottom (127 157)
-## ((LYB-LYT)-(RYB-RYT))/512 calc slope in case
-#
-#SlTop = (RYT-LYT)/C.max() # Slope of top of wedge (Rside y - Lside y * dx) 85 70
-#SlBot = (RYB-LYB)/C.max() # slope of bottom of wedge 127 157
-#Mask[ R < C*SlTop+LYT] = float('nan') # Lside Y top 70
-#Mask[ R > C*SlBot+LYB ] = float('nan') # Lside Y bot 157
-#
-#
-#DefMask = np.ones_like(firstim)
-#DefMask[ R < C*SlTop+LYT] = 0 # Lside Y top 70
-#DefMask[ R > C*SlBot+LYB-10 ] = 0 # Lside Y bot 157
-#for i in range(0,5):DefMask = skimage.morphology.binary_erosion(DefMask) # how many pixels to remove for edge protect on the defects
-#    
-#
-#
-#TermSum = DefMask*TermSum
-#JuncSum = DefMask*JuncSum
-#
-#ThreshCum=Mask*ThreshCum
-#FiltCum=Mask*FiltCum
-#SkelCum=Mask*SkelCum
-#
-#SkelMove=Mask*SkelMove
-#
-#InterCum=Mask*InterCum
-#
-#SkelAlong[0:60,:] = float('nan')
-#SkelAlong[140:,:] = float('nan')
-#%% Synthetics
-
-SkelMean = np.ma.masked_invalid(SkelMove).mean(axis=0) # average across the channel
-SkelSTD = np.ma.masked_invalid(SkelMove).std(axis=0)
-
-InterMean = np.ma.masked_invalid(InterCum).sum(axis=0)/len(FNFull) # average across the channel divide by number of frames
-InterSTD = np.ma.masked_invalid(InterCum).std(axis=0)
+#%% Calculate statistics
+StatFPeak = np.copy(FPeak)
+PeakMean = np.zeros((1,1))
 
 
-#%% Plotting
-MPlot = plt.figure()
-MPlot.suptitle('Stability of Domain Skeletons')
-MPlot1 = MPlot.add_subplot(311)
-MPlot1.axvline(x=42,color='k')
-MPlot1.axvline(x=121,color='k')
-MPlot1.axvline(x=206,color='k')
-MPlot1.axvline(x=283,color='k')
-MPlot1.axvline(x=334,color='k')
-MPlot1.axvline(x=422,color='k')
-MPlot1.axvline(x=478,color='k')
-CPlot = MPlot1.imshow(SkelMove, cmap='magma')
-#MPlot.colorbar(CPlot)
-MPlot1.set_ylim(60,160)
-
-MPlot2 = MPlot.add_subplot(312)
-MPlot2.plot( SkelMean)
-MPlot2.axvline(x=42,color='k')
-MPlot2.axvline(x=121,color='k')
-MPlot2.axvline(x=206,color='k')
-MPlot2.axvline(x=283,color='k')
-MPlot2.axvline(x=334,color='k')
-MPlot2.axvline(x=422,color='k')
-MPlot2.axvline(x=478,color='k')
-#MPlot2.set_xlim(0, 512)
-MPlot2.set_ylabel('Mean Stability')
-
-MPlot3 = MPlot.add_subplot(313)
-MPlot3.plot( SkelSTD )
-MPlot3.axvline(x=42,color='k')
-MPlot3.axvline(x=121,color='k')
-MPlot3.axvline(x=206,color='k')
-MPlot3.axvline(x=283,color='k')
-MPlot3.axvline(x=334,color='k')
-MPlot3.axvline(x=422,color='k')
-MPlot3.axvline(x=478,color='k')
-#MPlot3.set_xlim(0, 512)
-MPlot3.set_xlabel('Distance along channel (px)')
-MPlot3.set_ylabel('STD Stability')
-#%% Plotting
-IPlot = plt.figure()
-IPlot.suptitle('Interfacial Area (IE Thermodynamic penalty)')
-IPlot1 = IPlot.add_subplot(211)
-IPlot1.axvline(x=42,color='k')
-IPlot1.axvline(x=121,color='k')
-IPlot1.axvline(x=206,color='k')
-IPlot1.axvline(x=283,color='k')
-IPlot1.axvline(x=334,color='k')
-IPlot1.axvline(x=422,color='k')
-IPlot1.axvline(x=478,color='k')
-IPlot1.plot( InterMean )
-#IPlot1.set_xlim(1, 510)
-#IPlot1.set_ylim(70,90)
-IPlot1.set_ylabel('Mean Number of Interfaces')
-
-IPlot2 = IPlot.add_subplot(212)
-IPlot2.plot( InterSTD )
-IPlot2.axvline(x=42,color='k')
-IPlot2.axvline(x=121,color='k')
-IPlot2.axvline(x=206,color='k')
-IPlot2.axvline(x=283,color='k')
-IPlot2.axvline(x=334,color='k')
-IPlot2.axvline(x=422,color='k')
-IPlot2.axvline(x=478,color='k')
-#IPlot2.set_xlim(1, 510)
-IPlot2.set_xlabel('Distance along channel (px)')
-IPlot2.set_ylabel('STD Interface')
-
-IPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Interfacial.png"), dpi=300)
-
-#%% Fluctuations in space
-
-FluctPlot = plt.figure()
-FluctPlot.suptitle('Fluctuations averaged across the channel')
-FluctPlot1 = FluctPlot.add_subplot(121)
-FluctPlot1.imshow(SkelAcross)
-FluctPlot2 = FluctPlot.add_subplot(122)
-FluctPlot2.imshow(np.log10(np.abs( np.fft.fftshift(np.fft.fft2(np.nan_to_num(SkelAcross))))**2))
-FluctPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Fluct Across.png"), dpi=300)
+PeakMap = np.zeros_like(StatFPeak)
+PeakMap[:] = -1
+PeakId = 0 # start at 0
+# Ok : Need Lamella ID, Time and then Position
+for xx in range(0,RawComp.shape[0]):
+    Check = np.multiply(((StatFPeak - xx )< FitWidth),(PeakMap == -1))
+    
+    test = np.nanmean(StatFPeak[ Check ]) 
+    if test != 0: # if we catch something
+        if ((test - PeakMean[-1]) < FitWidth) or PeakMean[-1] == 0: # if its the first peak, or close to previous peak
+            PeakMap[ Check ] = PeakId # assign the id's
+            PeakMean[PeakId] = np.nanmean(StatFPeak[PeakMap == PeakId]) # calculate mean again
+        else: # otherwise must be new peak so make a new peakid and such
+            PeakId += 1
+            PeakMap[ Check ] = PeakId # assign the id's
+            PeakMean = np.append(PeakMean, test)
+                
 #%%
-FAlongPlot = plt.figure()
-FAlongPlot.suptitle('Fluctuations averaged along the channel')
-FAlongPlot1 = FAlongPlot.add_subplot(121)
-FAlongPlot1.imshow((SkelAlong))
-FAlongPlot2 = FAlongPlot.add_subplot(122)
-FAlongPlot2.imshow(np.log10(np.abs( np.fft.fftshift(np.fft.fft2(np.nan_to_num(SkelAlong))))**2))
-FAlongPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Fluct Along.png"), dpi=300)
-#%%
-FThroughPlot = plt.figure()
-FThroughPlot.suptitle('Fluctuations averaged through time')
-FThroughPlot1 = FThroughPlot.add_subplot(121)
-FThroughPlot1.imshow(SkelMove)
-FThroughPlot2 = FThroughPlot.add_subplot(122)
-FThroughPlot2.imshow(np.log10(np.abs( np.fft.fftshift(np.fft.fft2(np.nan_to_num(SkelMove))))**2))
-FThroughPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Fluct Through.png"), dpi=300)
+KLa = StatFPeak - PeakMean[PeakMap.astype(int)]
+MSDFig = plt.figure()        
+MSDFig.suptitle('Mean Squared Displacement over time')
+MSF1 = MSDFig.add_subplot((111))
+for xx in range(0,KLa.shape[0]):
+    MSF1.plot(KLa[xx,:],'k.')
+MSF1.axis((0, KLa.shape[1],-15,15))
 
-#%% Plotting
-INPlot = plt.figure()
-INPlot.suptitle('Time Averaged Width of Interfaces (Entropic Chain Penalty)')
-INPlot1 = INPlot.add_subplot(211)
-INPlot1.axvline(x=42,color='k')
-INPlot1.axvline(x=121,color='k')
-INPlot1.axvline(x=206,color='k')
-INPlot1.axvline(x=283,color='k')
-INPlot1.axvline(x=334,color='k')
-INPlot1.axvline(x=422,color='k')
-INPlot1.axvline(x=478,color='k')
-INPlot1.plot( np.divide(np.ma.masked_invalid(Mask).sum(axis=0)*Opt.NmPP,InterMean) )
-INPlot1.set_xlim(1, 510)
-INPlot1.set_ylim(24,30)
-INPlot1.set_ylabel('Mean Interfacial Width')
+MSDFig.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "MSD.png"), dpi=300)
 
-INPlot2 = INPlot.add_subplot(212)
-INPlot2.plot( InterSTD )
-INPlot2.axvline(x=42,color='k')
-INPlot2.axvline(x=121,color='k')
-INPlot2.axvline(x=206,color='k')
-INPlot2.axvline(x=283,color='k')
-INPlot2.axvline(x=334,color='k')
-INPlot2.axvline(x=422,color='k')
-INPlot2.axvline(x=478,color='k')
-INPlot2.set_xlim(1, 510)
-INPlot2.set_xlabel('Distance along channel (px)')
-INPlot2.set_ylabel('STD Interfacial Width')
+#%% Filter test
 
-INPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "InterNorm.png"), dpi=300)
+FiltOut =  IAFun.Denoising(RawComp, Opt, 50)[0] #FFT Filtering
+#FiltOut = IAFun.BPFilter(FiltOut,Opt.NmPP,HW=25,Axes='y')
 
-#%%
-TPlot = plt.figure()
-TPlot.suptitle('Movement of Terminal Defects')
-TPlot1 = TPlot.add_subplot(211)
-TPlot1.axvline(x=42,color='k')
-TPlot1.axvline(x=121,color='k')
-TPlot1.axvline(x=206,color='k')
-TPlot1.axvline(x=283,color='k')
-TPlot1.axvline(x=334,color='k')
-TPlot1.axvline(x=422,color='k')
-TPlot1.axvline(x=478,color='k')
-CPlot = TPlot1.imshow(TermSum, cmap='Blues')
-#TPlot.colorbar(CPlot)
-TPlot1.set_ylim(50,150) #50 150
-
-TPlot2 = TPlot.add_subplot(212)
-TPlot2.plot( (TermSum).sum(axis=0) )
-TPlot2.axvline(x=42,color='k')
-TPlot2.axvline(x=121,color='k')
-TPlot2.axvline(x=206,color='k')
-TPlot2.axvline(x=283,color='k')
-TPlot2.axvline(x=334,color='k')
-TPlot2.axvline(x=422,color='k')
-TPlot2.axvline(x=478,color='k')
-TPlot2.set_xlim(0, 512)
-TPlot2.set_ylim(0,30)
-TPlot2.set_xlabel('Distance along channel (px)')
-TPlot2.set_ylabel('Sum Terminals')
-
-TPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Terminals.png"), dpi=300)
-#%%
-JPlot = plt.figure()
-JPlot.suptitle('Movement of Junctions')
-JPlot1 = JPlot.add_subplot(211)
-JPlot1.axvline(x=42,color='k')
-JPlot1.axvline(x=121,color='k')
-JPlot1.axvline(x=206,color='k')
-JPlot1.axvline(x=283,color='k')
-JPlot1.axvline(x=334,color='k')
-JPlot1.axvline(x=422,color='k')
-JPlot1.axvline(x=478,color='k')
-CPlot = JPlot1.imshow(JuncSum, cmap='Reds')
-#JPlot.colorbar(CPlot)
-JPlot1.set_ylim(50,150)
-
-JPlot2 = JPlot.add_subplot(212)
-JPlot2.plot( (JuncSum).sum(axis=0) )
-JPlot2.axvline(x=42,color='k')
-JPlot2.axvline(x=121,color='k')
-JPlot2.axvline(x=206,color='k')
-JPlot2.axvline(x=283,color='k')
-JPlot2.axvline(x=334,color='k')
-JPlot2.axvline(x=422,color='k')
-JPlot2.axvline(x=478,color='k')
-JPlot2.set_xlim(0, 512)
-#JPlot2.set_ylim(0,100)
-JPlot2.set_xlabel('Distance along channel (px)')
-JPlot2.set_ylabel('Sum Junctions')
-JPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Junctions.png"), dpi=300)
-
-#%% Ratio of Defects
-
-#RDefPlot = plt.figure()
-#RDefPlot.suptitle('Ratio of Junctions to Terminal Defects')
-#RDefPlot1 = RDefPlot.add_subplot(111)
-##RDefPlot1.axvline(x=42,color='k')
-##RDefPlot1.axvline(x=121,color='k')
-##RDefPlot1.axvline(x=206,color='k')
-##RDefPlot1.axvline(x=283,color='k')
-##RDefPlot1.axvline(x=334,color='k')
-##RDefPlot1.axvline(x=422,color='k')
-##RDefPlot1.axvline(x=478,color='k')
-#RDefPlot1.semilogy(np.divide(JuncSum.sum(axis=0),TermSum.sum(axis=0)))
-
-
-#%%
-DefPlot = plt.figure()
-DefPlot.suptitle('Movement of Defects')
-DefPlot1 = DefPlot.add_subplot(211)
-DefPlot1.axvline(x=42,color='k')
-DefPlot1.axvline(x=121,color='k')
-DefPlot1.axvline(x=206,color='k')
-DefPlot1.axvline(x=283,color='k')
-DefPlot1.axvline(x=334,color='k')
-DefPlot1.axvline(x=422,color='k')
-DefPlot1.axvline(x=478,color='k')
-CPlot = DefPlot1.imshow((TermSum+JuncSum), cmap='Purples')
-#DefPlot.colorbar(CPlot)
-DefPlot1.set_ylim(50,150)
-
-DefPlot2 = DefPlot.add_subplot(212)
-DefPlot2.plot(  np.divide(((TermSum+JuncSum)).sum(axis=0),DefMask.sum(axis=0)) )
-DefPlot2.axvline(x=42,color='k')
-DefPlot2.axvline(x=121,color='k')
-DefPlot2.axvline(x=206,color='k')
-DefPlot2.axvline(x=283,color='k')
-DefPlot2.axvline(x=334,color='k')
-DefPlot2.axvline(x=422,color='k')
-DefPlot2.axvline(x=478,color='k')
-DefPlot2.set_xlim(0, 512)
-#DefPlot2.set_ylim(0,100)
-DefPlot2.set_xlabel('Distance along channel (px)')
-DefPlot2.set_ylabel('Sum Defects')
-DefPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Defects.png"), dpi=300)
-#%%
-
-
-#%% Animation Setup
-MovieFig = plt.figure(dpi=300)
-MovieSubplot = MovieFig.add_subplot(111)
-
-#ims = []
-#for ii in range(0, len(FNFull) ):
-#
-#    Frame = plt.imshow(SkelOut[:,:,ImNum], animated=True)
-#    ims.append([Frame])
-
-ims=[]
-for ImNum in range(0, len(FNFull)):
-    Frame=MovieSubplot.imshow(DefMask*Mask*(Junc[:,:,ImNum]*50+Term[:,:,ImNum]*100), animated=True)
-    ims.append([Frame])
-    print(ImNum)
-ani = manimation.ArtistAnimation(MovieFig, ims,blit=True)
-#%%
-MWriter = manimation.FFMpegWriter( fps=10, extra_args=['-c:v','libx264' ,'-b:v','3000k', '-profile:v', 'high', '-level:v' ,'4.0', '-pix_fmt' ,'yuv420p' ,'-crf' ,'22'])
-ani.save('Defects.mp4' , writer=MWriter, dpi=300)
-plt.clf()
-#%%
-MovieFig = plt.figure(dpi=300)
-MovieSubplot = MovieFig.add_subplot(111)
-
-ims=[]
-for ImNum in range(0, len(FNFull) ):
-#    Frame=MovieSubplot.imshow(Mask*(np.nan_to_num(AngOut[:,:,ImNum])+ThreshOut[:,:,ImNum]*50),cmap='magma', animated=True)
-    Frame=MovieSubplot.imshow(Mask*(AngOut[:,:,ImNum]),cmap='magma', vmin = 0, vmax = 360, animated=True)
-    ims.append([Frame])
-    print(ImNum)
-ani = manimation.ArtistAnimation(MovieFig, ims,blit=True)
-
-#%% Save animation
-MWriter = manimation.FFMpegWriter( fps=10, extra_args=['-c:v','libx264' ,'-b:v','3000k', '-profile:v', 'high', '-level:v' ,'4.0', '-pix_fmt' ,'yuv420p' ,'-crf' ,'22'])
-ani.save('AngMid.mp4' , writer=MWriter, dpi=300)
+plt.imshow(FiltOut)
