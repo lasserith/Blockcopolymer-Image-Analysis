@@ -438,16 +438,7 @@ FOpen.withdraw()
 
 #%% Do Once
 ImNum = 0
-Opt.Name = FNFull[ImNum] # this hold the full file name
-Opt.FPath, Opt.BName= os.path.split(Opt.Name)  # File Path/ File Name
-(Opt.FName, Opt.FExt) = os.path.splitext(Opt.BName) # File name/File Extension split
-    
-    
-# Make output folder if needed
-try:
-    os.stat(os.path.join(Opt.FPath,"output"))
-except:
-    os.mkdir(os.path.join(Opt.FPath,"output"))
+
 
 firstim = IAFun.AutoDetect( FNFull[ImNum], Opt)
 Shap0 =firstim.shape[0]
@@ -475,46 +466,58 @@ for ii in range(0, len(FNFull)):
     print('Loading raw data %i/%i' %(ii,len(FNFull)))
 #    if ii%2 == 1:
 #        RawIn[:,:,ii] = np.flipud(RawIn[:,:,ii]) # if odd flip upside down
-    RawComp[:,ii*Shap1:(ii+1)*Shap1] = RawIn[:,:,ii] # make one array with all data in an order
+#    RawComp[:,ii*Shap1:(ii+1)*Shap1] = RawIn[:,:,ii] # make one array with all data in an order not used do as seperate experiments
 
 #%% Find the markers between arrays
-
-SavFil = scipy.signal.savgol_filter(RawComp,5,2,axis = 0)
-D1SavFil = scipy.signal.savgol_filter(RawComp,5,2,deriv = 1,axis = 0)
-D2SavFil = scipy.signal.savgol_filter(RawComp,5,2, deriv = 2,axis = 0)
-
-FPlot = plt.figure()
-FPlot.suptitle('SavGol Filter and Derivatives')
-Xplot = range(0, Shap0)
-scipy.signal.savgol_filter(RawComp,5,2)
-FPlot1 = FPlot.add_subplot(311)
-FPlot1.plot(Xplot,RawComp[:,3],Xplot,SavFil[:,3])
-
-FPlot2 = FPlot.add_subplot(312)
-FPlot2.plot(Xplot,RawComp[:,3],Xplot,D1SavFil[:,3])
-
-FPlot3 = FPlot.add_subplot(313)
-FPlot3.plot(Xplot,RawComp[:,3],Xplot,D2SavFil[:,3])
-FPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "SVG.png"), dpi=300)
-# What is the peak corresponding to pattern?
+# per image
+for ImNum in range(0, len(FNFull)):
+    
+    
+    Opt.Name = FNFull[ImNum] # this hold the full file name
+    Opt.FPath, Opt.BName= os.path.split(Opt.Name)  # File Path/ File Name
+    (Opt.FName, Opt.FExt) = os.path.splitext(Opt.BName) # File name/File Extension split
+        
+    # Make output folder if needed
+    try:
+        os.stat(os.path.join(Opt.FPath,"output"))
+    except:
+        os.mkdir(os.path.join(Opt.FPath,"output"))
+   
+    RawComp = RawIn[:,:,ii].sum(axis=1) # sum along the channels to get a good idea where peaks are
+    SavFil = scipy.signal.savgol_filter(RawComp,5,2,axis = 0)
+    D1SavFil = scipy.signal.savgol_filter(RawComp,5,2,deriv = 1,axis = 0)
+    D2SavFil = scipy.signal.savgol_filter(RawComp,5,2, deriv = 2,axis = 0)
+    
+    FPlot = plt.figure()
+    FPlot.suptitle('SavGol Filter and Derivatives in black (Raw is Blue)')
+    Xplot = range(0, Shap0)
+    
+    FPlot1 = FPlot.add_subplot(311)
+    FPlot1.plot(Xplot,RawComp,'b',Xplot,SavFil,'k')
+    
+    FPlot2 = FPlot.add_subplot(312)
+    FPlot2.plot(Xplot,RawComp,'b',Xplot,D1SavFil,'k')
+    
+    FPlot3 = FPlot.add_subplot(313)
+    FPlot3.plot(Xplot,RawComp,'b',Xplot,D2SavFil,'k')
+    FPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "SVG.png"), dpi=300)
+    # What is the peak corresponding to pattern?
 #%%
-Pat = 228;
-PatSpace = np.round(500/Opt.NmPP)
-PolyP1 = 3 # first poly peak
+#Following is per image. Find the peaks
 
-
-PatPeak = np.zeros((100,RawComp.shape[1]))
-PolyPeak =  np.zeros((150,RawComp.shape[1]))
-FPeak =  np.zeros((150,RawComp.shape[1]))
-FPWidth = np.zeros((150,RawComp.shape[1]))
-
-PSpace = Output.l0/Opt.NmPP*.5 # peaks must be at least 70% of L0 apart
+#PatPeak = np.zeros((100,RawComp.shape[1]))
+#PolyPeak =  np.zeros((150,RawComp.shape[1]))
+#FPeak =  np.zeros((150,RawComp.shape[1]))
+#FPWidth = np.zeros((150,RawComp.shape[1]))
+PSpace = int(np.floor(Output.l0/Opt.NmPP*.5)) # peaks must be at least 70% of L0 apart
 FitWidth = int(Output.l0/Opt.NmPP*.4)
 
+Peak = np.zeros((0,0))
+Valley = np.zeros((0,0))
+CPeak = np.zeros((0,0))
+
 for tt in range(0,RawComp.shape[1]):
-    Peak = np.zeros((0,0))
-    Valley = np.zeros((0,0))
-    CPeak = np.zeros((0,0))
+    
     # go across space and find peaks/valleys
     for xx in range(0,RawComp.shape[0]-1):
         if D1SavFil[xx,tt]*D1SavFil[xx+1,tt] <= 0:
