@@ -19,6 +19,7 @@ import lmfit
 from PIL import Image
 from joblib import Parallel, delayed
 import numpy as np
+import pandas as pd
 import scipy
 import skimage
 from skimage import restoration, morphology, filters, feature
@@ -446,7 +447,7 @@ firstim = IAFun.AutoDetect( FNFull[ImNum], Opt)
 Shap0 =firstim.shape[0]
 Shap1 = firstim.shape[1]
 RawIn = np.zeros((Shap0,Shap1,len(FNFull)))
-RawComp = np.zeros((Shap0,Shap1*len(FNFull)))
+RawComb = np.zeros((Shap0,Shap1*len(FNFull)))
 #SkelOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
 #FiltOut = np.zeros((Shap0,Shap1,len(FNFull)))
 #AdOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
@@ -459,6 +460,7 @@ RawComp = np.zeros((Shap0,Shap1*len(FNFull)))
 
 
 #%% Import data ( can't be parallelized as it breaks the importer )
+
 for ii in range(0, len(FNFull)):
     try:
         if Opt.NmPPSet!=0:Opt.NmPP=Opt.NmPPSet # so if we set one then just set it
@@ -466,14 +468,14 @@ for ii in range(0, len(FNFull)):
         pass
     RawIn[:,:,ii]=IAFun.AutoDetect( FNFull[ii], Opt) # autodetect the machine, nmpp and return the raw data array
     print('Loading raw data %i/%i' %(ii,len(FNFull)))
-#    if ii%2 == 1:
-#        RawIn[:,:,ii] = np.flipud(RawIn[:,:,ii]) # if odd flip upside down
-#    RawComp[:,ii*Shap1:(ii+1)*Shap1] = RawIn[:,:,ii] # make one array with all data in an order not used do as seperate experiments
+    #if ii%2 == 1:
+     #   RawIn[:,:,ii] = np.flipud(RawIn[:,:,ii]) # if odd flip upside down
+    RawComb[:,ii*Shap1:(ii+1)*Shap1] = RawIn[:,:,ii] # make one array with all data in an order not used do as seperate experiments
 
 #%% Find the markers between arrays
 # per image
-for ImNum in range(0, len(FNFull)):
-    
+#for ImNum in range(0, len(FNFull)):
+for ImNum in range(0,1):    
     
     Opt.Name = FNFull[ImNum] # this hold the full file name
     Opt.FPath, Opt.BName= os.path.split(Opt.Name)  # File Path/ File Name
@@ -529,60 +531,79 @@ for xx in range(len(SavFil)-1):
             Valley = np.append(Valley,xx)
 #% add the last value as a potential pat separator
 PatSep = np.append(PatSep,len(SavFil)-1)
-            
-#%%
 
+#%%
+#Dump raws
+
+np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "Valley.txt"),Valley,fmt='%3u')
+np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "Peak.txt"),Peak,fmt='%3u')
 #%% Clean up the peaks of the pattern
-CPeak = np.zeros((0,0))
-for pp in range(len(Peak)-1):
-    if (Peak[pp+1]-Peak[pp]) < PSpace: # if peaks too close
-        if SavFil[int(Peak[pp])] >= SavFil[int(Peak[pp+1])]:
-            CPeak = np.append(CPeak, Peak[pp]) 
-        else: # keep the higher value
-            CPeak = np.append(CPeak, Peak[pp+1])
-    elif ((Peak[pp]-Peak[pp-1]) >= PSpace) or pp == 0 : 
-        CPeak = np.append(CPeak, Peak[pp])
-if (Peak[-1]-Peak[-2]) >= PSpace: # catch the last peak 
-    CPeak = np.append(CPeak, Peak[-1])
-CPeak = np.unique(CPeak)
+#CPeak = np.zeros((0,0))
+#for pp in range(len(Peak)-1):
+#    if (Peak[pp+1]-Peak[pp]) < PSpace: # if peaks too close
+#        if SavFil[int(Peak[pp])] >= SavFil[int(Peak[pp+1])]:
+#            CPeak = np.append(CPeak, Peak[pp]) 
+#        else: # keep the higher value
+#            CPeak = np.append(CPeak, Peak[pp+1])
+#    elif ((Peak[pp]-Peak[pp-1]) >= PSpace) or pp == 0 : 
+#        CPeak = np.append(CPeak, Peak[pp])
+#if (Peak[-1]-Peak[-2]) >= PSpace: # catch the last peak 
+#    CPeak = np.append(CPeak, Peak[-1])
+#CPeak = np.unique(CPeak)
+#%% Clean up the valleys
+#CPeak = np.zeros((0,0))
+#for pp in range(len(Peak)-1):
+#    if (Peak[pp+1]-Peak[pp]) < PSpace: # if peaks too close
+#        if SavFil[int(Peak[pp])] >= SavFil[int(Peak[pp+1])]:
+#            CPeak = np.append(CPeak, Peak[pp]) 
+#        else: # keep the higher value
+#            CPeak = np.append(CPeak, Peak[pp+1])
+#    elif ((Peak[pp]-Peak[pp-1]) >= PSpace) or pp == 0 : 
+#        CPeak = np.append(CPeak, Peak[pp])
+#if (Peak[-1]-Peak[-2]) >= PSpace: # catch the last peak 
+#    CPeak = np.append(CPeak, Peak[-1])
+#CPeak = np.unique(CPeak)
+##%% clean up the pattern separators
+#CPatSep = np.zeros((0,0))
+#for pp in range(len(PatSep)-1):
+#    if (PatSep[pp+1]-PatSep[pp]) < PSpace*5: # if PatSeps too close
+#        if SavFil[int(PatSep[pp])] >= SavFil[int(PatSep[pp+1])]:
+#            CPatSep = np.append(CPatSep, PatSep[pp]) 
+#        else: # keep the higher value
+#            CPatSep = np.append(CPatSep, PatSep[pp+1])
+#    elif ((PatSep[pp]-PatSep[pp-1]) >= PSpace*5) or pp == 0: 
+#        CPatSep = np.append(CPatSep, PatSep[pp])
+#if (PatSep[-1]-PatSep[-2]) >= PSpace*5: # catch the last PatSep 
+#    CPatSep = np.append(CPatSep, PatSep[-1])
+#
+#CPatSep = np.unique(CPatSep)
+#%%200C Manual
+CPatSep = np.array([80,150,250,330,420,500])
+CValley = np.array([92,99,106,114,121,129,136,143,171,178,186,194,204,212,220,228,263,270,278,285,293,300,308,315,349,356,363,371,379,385,393,401,435,442,450,457,465,472,480,488])
 
 
-#%% clean up the pattern separators
-CPatSep = np.zeros((0,0))
-for pp in range(len(PatSep)-1):
-    if (PatSep[pp+1]-PatSep[pp]) < PSpace*5: # if PatSeps too close
-        if SavFil[int(PatSep[pp])] >= SavFil[int(PatSep[pp+1])]:
-            CPatSep = np.append(CPatSep, PatSep[pp]) 
-        else: # keep the higher value
-            CPatSep = np.append(CPatSep, PatSep[pp+1])
-    elif ((PatSep[pp]-PatSep[pp-1]) >= PSpace*5) or pp == 0: 
-        CPatSep = np.append(CPatSep, PatSep[pp])
-if (PatSep[-1]-PatSep[-2]) >= PSpace*5: # catch the last PatSep 
-    CPatSep = np.append(CPatSep, PatSep[-1])
-
-CPatSep = np.unique(CPatSep)
 
 #%%
-CBins = np.digitize(CPeak,CPatSep)
-BinCount = np.histogram(CPeak,CPatSep)[0]
+CBins = np.digitize(CValley,CPatSep)
+BinCount = np.histogram(CValley,CPatSep)[0]
 #%%
-FPeak =  np.zeros((len(CPeak),RawIn.shape[1]))
-FPWidth = np.zeros((len(CPeak),RawIn.shape[1]))
+FPeak =  np.zeros((len(CValley),RawIn.shape[1]))
+FPWidth = np.zeros((len(CValley),RawIn.shape[1]))
 FitWidth = int(Output.l0/Opt.NmPP*.4)
 FitWidth = int(3)
 for tt in range(RawIn.shape[1]): # now lets go through time\
 #for tt in range(1):
     print("Time step ",tt," out of ",RawIn.shape[1],"\n")
-    for pp in range(len(CPeak)): #len(CPeak)
-        PCur = CPeak[pp]
+    for pp in range(len(CValley)): #len(CPeak)
+        PCur = CValley[pp]
         PLow = int(np.maximum((PCur-FitWidth),0))
-        PHigh = int(np.min((PCur+FitWidth,Shap1-1)))
+        PHigh = int(np.min((PCur+FitWidth+1,Shap1-1)))
         
         Inits = (abs(min(RawIn[PLow:PHigh,tt,ImNum])), PCur, FitWidth) #amp cent and width
         try:
-            Res, CoVar = scipy.optimize.curve_fit(IAFun.gaussian, range(PLow,PHigh), RawIn[PLow:PHigh,tt,ImNum]-min(RawIn[PLow:PHigh,tt,ImNum]), p0=Inits)
+            Res, CoVar = scipy.optimize.curve_fit(IAFun.gaussian, range(PLow,PHigh), abs((RawIn[PLow:PHigh,tt,ImNum]-max(RawIn[PLow:PHigh,tt,ImNum]))), p0=Inits)
             FPeak[pp,tt] = np.copy(Res[1])
-            FPWidth[pp,tt] = np.copy(Res[2]*2.35482*Opt.NmPP) # FWHM in NM
+            FPWidth[pp,tt] = abs(np.copy(Res[2]*2.35482*Opt.NmPP)) # FWHM in NM
             if (abs(Res[1] - PCur) > 100) or (Res[2] > 500):
                 FPWidth[pp,tt] = np.nan
                 FPeak[pp,tt] = np.nan
@@ -590,49 +611,113 @@ for tt in range(RawIn.shape[1]): # now lets go through time\
             FPeak[pp,tt] = np.nan
             FPWidth[pp,tt] = np.nan
 
-
 #%% Calc Displacement
-FDisp = (FPeak.transpose() - np.nanmean(FPeak,axis=1)).transpose()
+FDisp = ((FPeak.transpose() - np.nanmean(FPeak,axis=1)).transpose())
+#MSDisp = (np.subtract(FPeak.transpose(),FPeak[:,0])).transpose()**2
+MSDisp = (np.subtract(FPeak.transpose(),np.nanmean(FPeak,axis=1)).transpose())**2
+PanDisp = pd.DataFrame(data=FDisp.transpose())
+PanMSD = pd.DataFrame(data=MSDisp.transpose())
+PanWidth = pd.DataFrame(data=FPWidth.transpose())
+#%% Cross Corref 
+CCF , CCAx = plt.subplots()
+CCF.suptitle('Peak displacement correlations (Pearson)')
+CCIm = CCAx.imshow(PanDisp.corr(), cmap="seismic_r", vmin=-1, vmax=1)
+CCF.colorbar(CCIm)
+CCF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "DisplacementCC.png"), dpi=600)
+#%%
+CCWidthF , CCWidthAx = plt.subplots()
+CCWidthF.suptitle('FWHM correlations (Pearson)')
+CCWidthIm = CCWidthAx.imshow(PanWidth.corr(), cmap="seismic_r", vmin=-1, vmax=1)
+CCWidthF.colorbar(CCWidthIm)
+CCWidthF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "WidthCC.png"), dpi=600)
+#%% Autocorrelation Opt.AcSize
+ACPeak = pd.DataFrame()
+CCPeak = pd.DataFrame()
+ACMSD = pd.DataFrame()
+CCMSD = pd.DataFrame()
+ACWidth = pd.DataFrame() 
+CCWidth = pd.DataFrame()
 
+for lag in range(Opt.ACSize):
+    ACPeak = ACPeak.append( PanDisp.corrwith(PanDisp.shift(periods=lag)).rename('lag%i' %lag))
+    CCPeak = CCPeak.append( PanDisp.corrwith(PanDisp.shift(periods=lag).shift(1,axis=1)).rename('lag%i' %lag))
+    ACMSD = ACMSD.append( PanMSD.corrwith(PanMSD.shift(periods=lag)).rename('lag%i' %lag))
+    CCMSD = CCMSD.append( PanMSD.corrwith(PanMSD.shift(periods=lag).shift(1,axis=1)).rename('lag%i' %lag))
+    ACWidth = ACWidth.append( PanWidth.corrwith(PanWidth.shift(periods=lag)).rename('lag%i' %lag))
+    CCWidth = CCWidth.append( PanWidth.corrwith(PanWidth.shift(periods=lag).shift(1,axis=1)).rename('lag%i' %lag))
+    
+#%% Autocorrelation
+ACDispF , ACDispAx = plt.subplots()
+ACDispF.suptitle('Peak displacement Autocorrelation')
+ACDispIm = ACDispAx.imshow(ACPeak, cmap="seismic_r", vmin=-1, vmax=1)
+ACDispF.colorbar(ACDispIm)
+ACDispF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "DisplacementAC.png"), dpi=600)
+#%% MSD AC
+ACMSDF , ACMSDAx = plt.subplots()
+ACMSDF.suptitle('Peak displacement Autocorrelation')
+ACMSDIm = ACMSDAx.imshow(ACMSD, cmap="seismic_r", vmin=-1, vmax=1)
+ACMSDF.colorbar(ACMSDIm)
+ACMSDF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "MSDAC.png"), dpi=600)
+
+#%%width
+ACWidthF , ACWidthAx = plt.subplots()
+ACWidthF.suptitle('Peak FWHM Autocorrelation')
+ACWidthIm = ACWidthAx.imshow(ACWidth, cmap="seismic_r", vmin=-1, vmax=1)
+ACWidthF.colorbar(ACWidthIm)
+ACWidthF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "WidthAC.png"), dpi=600)
 
 #%%
-PWidF , PWidAx = plt.subplots(CBins.max(),1, sharex='all', figsize=(16,8))
-PWidF.suptitle('Peak Width for each set of lines')
-for nn in range(CBins.max()):
-    PWidAx[nn].imshow(np.abs(FPWidth[CBins==nn+1,:]), vmin=0, vmax=40, cmap='gray')
-   
-PWidF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "WidIm.png"), dpi=600)
-
-#%%
-PWidBF , PWidBAx = plt.subplots(CBins.max(),1, sharex='all', figsize=(16,8))
-PWidBF.suptitle('Mean Peak Width for each set of lines')
-for nn in range(CBins.max()):
-    PWidBAx[nn].bar(range((CBins==nn+1).sum()),np.nanmean(np.abs(FPWidth[CBins==nn+1,:]),axis=1))
-    PWidBAx[nn].set_ylim([10,30])
-PWidF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "WidBar.png"), dpi=600)
-
-#%%
-DispF , DispAx = plt.subplots(CBins.max(),BinCount.max(), sharex='col',figsize=(12,12))
-DispF.suptitle('Displacement for each line (Histogram)')
+MSDF , MSDAx = plt.subplots(CBins.max(),BinCount.max(), figsize=(16,16))
+MSDF.suptitle('Mean Squared Displacement per line')
 for nn in range(CBins.max()):
     for ll in range(BinCount.max()):
         try:
-            DispAx[nn,ll].hist(FDisp[CBins==nn+1,:][ll,:][~np.isnan(FDisp[CBins==nn+1,:][ll,:])],bins = np.arange(-10,10))
-            DispAx[nn,ll].set_title('StDev '+str(np.round(np.std(FDisp[CBins==nn+1,:][ll,:][~np.isnan(FDisp[CBins==nn+1,:][ll,:])]),2)))
+            ACMSD[nn*CBins.max()+ll].plot(ax=MSDAx[nn,ll])
+            MSDAx[nn,ll].set_ylim([0, 1])
+            MSDAx[nn,ll].set_xlim([0, 15])
+            MSDAx[nn,ll].set_ticks([])
         except:
             pass
-        DispAx[nn,ll].get_yaxis().set_visible(False)
-DispF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Displacement.png"), dpi=600)
+MSDF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "MSD.png"), dpi=600)
 
 #%%
-CrossCorF , CrossCorAx = plt.subplots(CBins.max(),BinCount.max()-1, figsize=(16,16))
-CrossCorF.suptitle('Line/Line Correlation for each set of lines, X axis is line, Y axis is next line')
-for nn in range(CBins.max()):
-    for ll in range(BinCount.max()):
-        try:
-            CrossCorAx[nn,ll].scatter(FDisp[CBins==nn+1,:][ll,:],FDisp[CBins==nn+1,:][ll+1,:])
-            CrossCorAx[nn,ll].set_xlim([-7, 7])
-            CrossCorAx[nn,ll].set_ylim([-7, 7])
-        except:
-            pass
-CrossCorF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "CrossCor.png"), dpi=600)
+#PWidF , PWidAx = plt.subplots(CBins.max(),1, sharex='all', figsize=(16,8))
+#PWidF.suptitle('Peak Width for each set of lines')
+#for nn in range(CBins.max()):
+#    PWidAx[nn].imshow(np.abs(FPWidth[CBins==nn+1,:]), vmin=0, vmax=30, cmap='gray')
+#   
+#PWidF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "WidIm.png"), dpi=600)
+
+#%%
+#PWidBF , PWidBAx = plt.subplots(CBins.max(),1, sharex='all', figsize=(16,8))
+#PWidBF.suptitle('Mean Peak Width for each set of lines')
+#for nn in range(CBins.max()):
+#    PWidBAx[nn].bar(range((CBins==nn+1).sum()),np.nanmean(np.abs(FPWidth[CBins==nn+1,:]),axis=1))
+#    PWidBAx[nn].set_ylim([10,30])
+#PWidF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "WidBar.png"), dpi=600)
+
+##%%
+#DispF , DispAx = plt.subplots(CBins.max(),BinCount.max(), sharex='col',figsize=(12,12))
+#DispF.suptitle('Displacement for each line (Histogram)')
+#for nn in range(CBins.max()):
+#    for ll in range(BinCount.max()):
+#        try:
+#            DispAx[nn,ll].hist(FDisp[CBins==nn+1,:][ll,:][~np.isnan(FDisp[CBins==nn+1,:][ll,:])],bins = np.arange(-10,10))
+#            DispAx[nn,ll].set_title('StDev '+str(np.round(np.std(FDisp[CBins==nn+1,:][ll,:][~np.isnan(FDisp[CBins==nn+1,:][ll,:])]),2)))
+#        except:
+#            pass
+#        DispAx[nn,ll].get_yaxis().set_visible(False)
+#DispF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Displacement.png"), dpi=600)
+#
+###%%
+#CrossCorF , CrossCorAx = plt.subplots(CBins.max(),BinCount.max()-1, figsize=(16,16))
+#CrossCorF.suptitle('Line/Line Correlation for each set of lines, X axis is line, Y axis is next line')
+#for nn in range(CBins.max()):
+#    for ll in range(BinCount.max()):
+#        try:
+#            CrossCorAx[nn,ll].scatter(FDisp[CBins==nn+1,:][ll,:],FDisp[CBins==nn+1,:][ll+1,:])
+#            CrossCorAx[nn,ll].set_xlim([-7, 7])
+#            CrossCorAx[nn,ll].set_ylim([-7, 7])
+#        except:
+#            pass
+#CrossCorF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "CrossCor.png"), dpi=600)

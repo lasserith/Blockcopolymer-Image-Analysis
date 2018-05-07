@@ -14,6 +14,7 @@ from tkinter import messagebox
 import os
 import csv
 import numpy as np
+import pandas as pd
 import skimage
 from skimage import restoration, morphology, filters, feature
 import exifread #needed to read tif tags
@@ -157,6 +158,20 @@ def Crop( imarray , Opt ):
     CropArray=imarray[int(0+Opt.CropT):int(IMH-Opt.CropB),int(Opt.CropL):int(IMW-Opt.CropR)]
     (CIMH,CIMW)=CropArray.shape
     return (CropArray, CIMH, CIMW);
+
+#%% Do a time lagged cross correlation based off stackoverflow.com/questions/33171413/
+    
+def df_shifted(df, target=None, lag=0):
+    if not lag and not target:
+        return df       
+    new = {}
+    for c in df.columns:
+        if c == target:
+            new[c] = df[target]
+        else:
+            new[c] = df[c].shift(periods=lag)
+    return  pd.DataFrame(data=new)
+
 #%% Flood Fill
     """
     We need to pass this function an image array in which 0 is the area not yet filled
