@@ -41,7 +41,7 @@ Opt.AutoThresh = 1
 
 Opt.Inversion = 0
 Opt.ACToggle = 0 #autocorrelation (currently broken)
-Opt.ACCutoff = 0
+Opt.ACCutoff = 50
 Opt.ACSize = 50
 
 Opt.SchCO = 5 # Step in from 'Ide' in nm
@@ -610,11 +610,14 @@ for tt in range(RawIn.shape[1]): # now lets go through time\
         except:
             FPeak[pp,tt] = np.nan
             FPWidth[pp,tt] = np.nan
+#%% Save filtered data
+np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "FitPeak.csv"),FPeak,delimiter=',')
+np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "FitFWHM.csv"),FPWidth,delimiter=',')      
 
 #%% Calc Displacement
 FDisp = ((FPeak.transpose() - np.nanmean(FPeak,axis=1)).transpose())
 #MSDisp = (np.subtract(FPeak.transpose(),FPeak[:,0])).transpose()**2
-MSDisp = (np.subtract(FPeak.transpose(),np.nanmean(FPeak,axis=1)).transpose())**2
+#MSDisp = (np.subtract(FPeak.transpose(),np.nanmean(FPeak,axis=1)).transpose())**2
 PanDisp = pd.DataFrame(data=FDisp.transpose())
 PanMSD = pd.DataFrame(data=MSDisp.transpose())
 PanWidth = pd.DataFrame(data=FPWidth.transpose())
