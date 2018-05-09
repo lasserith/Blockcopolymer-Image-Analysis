@@ -42,7 +42,7 @@ Opt.AutoThresh = 1
 Opt.Inversion = 0
 Opt.ACToggle = 0 #autocorrelation (currently broken)
 Opt.ACCutoff = 50
-Opt.ACSize = 50
+Opt.ACSize = 200
 
 Opt.SchCO = 5 # Step in from 'Ide' in nm
 
@@ -448,15 +448,7 @@ Shap0 =firstim.shape[0]
 Shap1 = firstim.shape[1]
 RawIn = np.zeros((Shap0,Shap1,len(FNFull)))
 RawComb = np.zeros((Shap0,Shap1*len(FNFull)))
-#SkelOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
-#FiltOut = np.zeros((Shap0,Shap1,len(FNFull)))
-#AdOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
-#EDOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
-#AngOut = np.zeros((Shap0,Shap1,len(FNFull)))
-#ThreshOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
-#CropSkelOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
-#FiltCum = np.zeros((Shap0,Shap1))
-#ThreshCum = np.zeros((Shap0,Shap1)).astype('i2')
+
 
 
 #%% Import data ( can't be parallelized as it breaks the importer )
@@ -488,7 +480,11 @@ for ImNum in range(0,1):
         os.mkdir(os.path.join(Opt.FPath,"output"))
    
     RawComp = RawIn[:,:,ii].sum(axis=1) # sum along the channels to get a good idea where peaks are
+    RawTop = RawIn[:,:5,ii].sum(axis=1)
+    RawBot = RawIn[:,-5:,ii].sum(axis=1)
     SavFil = scipy.signal.savgol_filter(RawComp,5,2,axis = 0)
+    TopFil = scipy.signal.savgol_filter(RawTop,5,2,axis = 0)
+    BotFil = scipy.signal.savgol_filter(RawBot,5,2,axis = 0)
     D1SavFil = scipy.signal.savgol_filter(RawComp,5,2,deriv = 1,axis = 0)
     D2SavFil = scipy.signal.savgol_filter(RawComp,5,2, deriv = 2,axis = 0)
     
@@ -500,10 +496,10 @@ for ImNum in range(0,1):
     FPlot1.plot(Xplot,RawComp,'b',Xplot,SavFil,'k')
     
     FPlot2 = FPlot.add_subplot(312)
-    FPlot2.plot(Xplot,RawComp,'b',Xplot,D1SavFil,'k')
+    FPlot2.plot(Xplot,D1SavFil,'k',Xplot,D2SavFil,'r')
     
     FPlot3 = FPlot.add_subplot(313)
-    FPlot3.plot(Xplot,RawComp,'b',Xplot,D2SavFil,'k')
+    FPlot3.plot(Xplot,TopFil,'b',Xplot,BotFil,'k')
     FPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "SVG.png"), dpi=300)
     # What is the peak corresponding to pattern?
 #%%
@@ -589,8 +585,8 @@ BinCount = np.histogram(CValley,CPatSep)[0]
 #%%
 FPeak =  np.zeros((len(CValley),RawIn.shape[1]))
 FPWidth = np.zeros((len(CValley),RawIn.shape[1]))
-FitWidth = int(Output.l0/Opt.NmPP*.4)
-FitWidth = int(3)
+FitWidth = int(Output.l0/Opt.NmPP*.5)
+#FitWidth = int(4)
 for tt in range(RawIn.shape[1]): # now lets go through time\
 #for tt in range(1):
     print("Time step ",tt," out of ",RawIn.shape[1],"\n")
@@ -598,13 +594,13 @@ for tt in range(RawIn.shape[1]): # now lets go through time\
         PCur = CValley[pp]
         PLow = int(np.maximum((PCur-FitWidth),0))
         PHigh = int(np.min((PCur+FitWidth+1,Shap1-1)))
-        
-        Inits = (abs(min(RawIn[PLow:PHigh,tt,ImNum])), PCur, FitWidth) #amp cent and width
+        #LocalCurve = abs((RawIn[PLow:PHigh,tt,ImNum]-max(RawIn[PLow:PHigh,tt,ImNum]))) # use with range(PLow,PHigh)
+        #Inits = (max(LocalCurve), PCur, FitWidth/2) #amp cent and width
         try:
-            Res, CoVar = scipy.optimize.curve_fit(IAFun.gaussian, range(PLow,PHigh), abs((RawIn[PLow:PHigh,tt,ImNum]-max(RawIn[PLow:PHigh,tt,ImNum]))), p0=Inits)
+            Res, CoVar = scipy.optimize.curve_fit(IAFun.gaussian, range(PLow,PHigh), LocalCurve, p0=Inits)
             FPeak[pp,tt] = np.copy(Res[1])
             FPWidth[pp,tt] = abs(np.copy(Res[2]*2.35482*Opt.NmPP)) # FWHM in NM
-            if (abs(Res[1] - PCur) > 100) or (Res[2] > 500):
+            if (abs(Res[1] - PCur) > 100) or (Res[2] > 50):
                 FPWidth[pp,tt] = np.nan
                 FPeak[pp,tt] = np.nan
         except:
@@ -616,11 +612,9 @@ np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "FitFWHM.csv"),FPWidth,de
 
 #%% Calc Displacement
 FDisp = ((FPeak.transpose() - np.nanmean(FPeak,axis=1)).transpose())
-#MSDisp = (np.subtract(FPeak.transpose(),FPeak[:,0])).transpose()**2
-#MSDisp = (np.subtract(FPeak.transpose(),np.nanmean(FPeak,axis=1)).transpose())**2
 PanDisp = pd.DataFrame(data=FDisp.transpose())
-PanMSD = pd.DataFrame(data=MSDisp.transpose())
 PanWidth = pd.DataFrame(data=FPWidth.transpose())
+
 #%% Cross Corref 
 CCF , CCAx = plt.subplots()
 CCF.suptitle('Peak displacement correlations (Pearson)')
@@ -636,6 +630,7 @@ CCWidthF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "WidthCC.png"), dpi
 #%% Autocorrelation Opt.AcSize
 ACPeak = pd.DataFrame()
 CCPeak = pd.DataFrame()
+
 ACMSD = pd.DataFrame()
 CCMSD = pd.DataFrame()
 ACWidth = pd.DataFrame() 
@@ -644,8 +639,7 @@ CCWidth = pd.DataFrame()
 for lag in range(Opt.ACSize):
     ACPeak = ACPeak.append( PanDisp.corrwith(PanDisp.shift(periods=lag)).rename('lag%i' %lag))
     CCPeak = CCPeak.append( PanDisp.corrwith(PanDisp.shift(periods=lag).shift(1,axis=1)).rename('lag%i' %lag))
-    ACMSD = ACMSD.append( PanMSD.corrwith(PanMSD.shift(periods=lag)).rename('lag%i' %lag))
-    CCMSD = CCMSD.append( PanMSD.corrwith(PanMSD.shift(periods=lag).shift(1,axis=1)).rename('lag%i' %lag))
+    ACMSD = ACMSD.append(((PanDisp.shift(periods=lag)-PanDisp)**2).mean().rename('lag%i' %lag))
     ACWidth = ACWidth.append( PanWidth.corrwith(PanWidth.shift(periods=lag)).rename('lag%i' %lag))
     CCWidth = CCWidth.append( PanWidth.corrwith(PanWidth.shift(periods=lag).shift(1,axis=1)).rename('lag%i' %lag))
     
@@ -677,7 +671,7 @@ for nn in range(CBins.max()):
         try:
             ACMSD[nn*CBins.max()+ll].plot(ax=MSDAx[nn,ll])
             MSDAx[nn,ll].set_ylim([0, 1])
-            MSDAx[nn,ll].set_xlim([0, 15])
+            MSDAx[nn,ll].set_xlim([0, 10])
             MSDAx[nn,ll].set_ticks([])
         except:
             pass
