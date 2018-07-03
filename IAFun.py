@@ -66,26 +66,8 @@ def AFMPara(RawIn,Opt,FiltOut,ThreshOut,AdOut,SkelOut, EDOut, AngOut, ii):
     
 
 
-#%%
 
-def PeakPara(RawIn, NmPP, CValley, FitWidth, FPeak, FPWidth, ImNum, tt):
-    Length = RawIn.shape[1]
-    for pp in range(len(CValley)): #len(CPeak)
-        PCur = CValley[pp]
-        PLow = int(np.maximum((PCur-FitWidth),0))
-        PHigh = int(np.min((PCur+FitWidth+1,Length-1)))
-        LocalCurve = abs((RawIn[PLow:PHigh,tt,ImNum]-max(RawIn[PLow:PHigh,tt,ImNum]))) # use with range(PLow,PHigh)
-        Inits = (max(LocalCurve), PCur, FitWidth/2) #amp cent and width
-        try:
-            Res, CoVar = scipy.optimize.curve_fit(gaussian, range(PLow,PHigh), LocalCurve, p0=Inits)
-            FPeak[pp,tt] = np.copy(Res[1])
-            FPWidth[pp,tt] = abs(np.copy(Res[2]*2.35482*NmPP)) # FWHM in NM
-            if (abs(Res[1] - PCur) > 5) or (Res[2] > 50):
-                FPWidth[pp,tt] = np.nan
-                FPeak[pp,tt] = np.nan
-        except:
-            FPeak[pp,tt] = np.nan
-            FPWidth[pp,tt] = np.nan
+
     #%%
 def AutoDetect( FileName , Opt ):
     """
