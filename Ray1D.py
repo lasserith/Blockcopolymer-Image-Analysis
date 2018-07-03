@@ -101,17 +101,18 @@ def AutoDetect( FileName , Opt ):
 #        print("Instrument was not detected, and NmPP was not set. Please set NmPP and rerun")
     return(imarray);
 
-def PeakPara(RawIn, NmPP, CValley, FitWidth, FPeak, FPWidth, ImNum, tt):
-    Length = RawIn.shape[1]
+def PeakPara(LineIn, NmPP, CValley, FitWidth):
+    Length = LineIn.size
     gmodel = lmfit.Model(gaussian)
     Inits = gmodel.make_params()
-    
+    FPeak = np.zeros(CValley.shape)
+    FPWidth = np.zeros(CValley.shape)
     
     for pp in range(len(CValley)): #loop through peak positions (guesstimates)
         PCur = CValley[pp]
         PLow = int(np.maximum((PCur-FitWidth),0))
         PHigh = int(np.min((PCur+FitWidth+1,Length-1)))
-        LocalCurve = abs((RawIn[PLow:PHigh,tt,ImNum]-max(RawIn[PLow:PHigh,tt,ImNum]))) # use with range(PLow,PHigh)
+        LocalCurve = abs((LineIn[PLow:PHigh]-max(LineIn[PLow:PHigh]))) # use with range(PLow,PHigh)
         # set our initial conditions
         #Inits['amp']=lmfit.Parameter(name='amp', value= max(LocalCurve), min=0, max=max(LocalCurve)+5)
         #Inits['wid']=lmfit.Parameter(name='wid', value= FitWidth, min=0, max=100)
@@ -122,12 +123,12 @@ def PeakPara(RawIn, NmPP, CValley, FitWidth, FPeak, FPWidth, ImNum, tt):
         Inits['cen']=lmfit.Parameter(name='cen', value= PCur, min=PCur-7, max=PCur+7)
     
         Res = gmodel.fit(LocalCurve, Inits, x=np.arange(PLow,PHigh))
-        FPeak[pp,tt] = Res.best_values['cen']
-        FPWidth[pp,tt] = abs(np.copy(Res.best_values['wid']*2.35482*NmPP)) # FWHM in NM
+        FPeak[pp] = Res.best_values['cen']
+        FPWidth[pp] = abs(np.copy(Res.best_values['wid']*2.35482*NmPP)) # FWHM in NM
         if (abs(Res.best_values['cen'] - PCur) > 5) or (Res.best_values['wid'] > 50) or (Res.best_values['cen']==PCur):
-            FPWidth[pp,tt] = np.nan
-            FPeak[pp,tt] = np.nan
-
+            FPWidth[pp] = np.nan
+            FPeak[pp] = np.nan
+    return( FPeak, FPWidth)
             
 #%%
 def gaussian(x, amp, cen, wid):
@@ -332,18 +333,19 @@ if __name__ == '__main__':
         CBins = np.digitize(CValley,CPatSep)
         BinCount = np.histogram(CValley,CPatSep)[0]
         #%%
-        FPeak =  np.zeros((len(CValley),RawIn.shape[1]))
-        FPWidth = np.zeros((len(CValley),RawIn.shape[1]))
         FitWidth = int(Opt.l0/Opt.NmPP*.5)
         #FitWidth = int(4)
-        #% Parallel cus gotta go fast, currently borked though :()
+        #% Parallel cus gotta go fast
         __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
 
-        Parallel(n_jobs=8,verbose=5)(delayed(PeakPara)(RawIn, Opt.NmPP, CValley, FitWidth, FPeak, FPWidth, ImNum, tt) # backend='threading' removed
+        POut = Parallel(n_jobs=8,verbose=5)(delayed(PeakPara)(RawIn[:,tt,ImNum], Opt.NmPP, CValley, FitWidth) # backend='threading' removed
             for tt in range(RawIn.shape[1]))
+        
+        FPTuple, FPWTuple = zip(*POut)
+        FPeak = np.array(FPTuple).transpose()
+        FPWidth = np.array(FPWTuple).transpose()
         print('Done')
-        
-        
+
         #%% Save filtered data
         np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "FitPeak.csv"),FPeak,delimiter=',')
         np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "FitFWHM.csv"),FPWidth,delimiter=',')      
@@ -440,18 +442,18 @@ if __name__ == '__main__':
         ACDispF.clf()
         plt.close(ACDispF)        
         #%% MSD AC
-        ACMSDF , ACMSDAx = plt.subplots()
+        ACMSDF , ACMSDAx = plt.subplots(figsize=(15,3))
         ACMSDF.suptitle('Peak displacement Autocorrelation')
-        ACMSDIm = ACMSDAx.imshow(ACMSD, cmap="seismic_r", vmin=-1, vmax=1)
+        ACMSDIm = ACMSDAx.imshow(ACMSD.transpose(), cmap="seismic_r", vmin=-1, vmax=1)
         ACMSDF.colorbar(ACMSDIm)
         ACMSDF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "MSDAC.png"), dpi=300)
         ACMSDF.clf()
         plt.close(ACMSDF)        
         
         #%%width
-        ACWidthF , ACWidthAx = plt.subplots()
+        ACWidthF , ACWidthAx = plt.subplots( figsize=(15,3))
         ACWidthF.suptitle('Peak FWHM Autocorrelation')
-        ACWidthIm = ACWidthAx.imshow(ACWidth, cmap="seismic_r", vmin=-1, vmax=1)
+        ACWidthIm = ACWidthAx.imshow(ACWidth.transpose(), cmap="seismic_r", vmin=-1, vmax=1)
         ACWidthF.colorbar(ACWidthIm)
         ACWidthF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "WidthAC.png"), dpi=300)
         ACWidthF.clf()
@@ -462,62 +464,44 @@ if __name__ == '__main__':
         for nn in range(CBins.max()):
             for ll in range(BinCount.max()):
                 ACMSD[nn*CBins.max()+ll].plot(ax=MSDAx[nn,ll])
-                MSDAx[nn,ll].set_ylim([0, 2])
+                MSDAx[nn,ll].set_ylim([0, 10])
                 MSDAx[nn,ll].set_xlim([0, 100])
         MSDF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "MSD.png"), dpi=300)
-        #MSDF.clf()
-        #plt.close(MSDF)
+        MSDF.clf()
+        plt.close(MSDF)
         
-        #%% save the kappa/KT
+        #%% save the kappa/KT calculated from disp squared
         PSeudoEA = np.nanmean(( FDispCorrect**-2),axis=1)
         PSeudoEA = PSeudoEA.reshape((4,7))
         if ImNum == 0:
             EAOut = PSeudoEA
         else:
             EAOut = np.concatenate((EAOut, PSeudoEA))
+        #%% what about from the variance?
+        VarEA = np.zeros((1,8))
+        
+        EAF , EAAx = plt.subplots(2,4, figsize=(16,16))
+        # set up the fig first  
+        gmodel = lmfit.Model(gaussian) # then the model
+        # ok now histogram
+        Count , Bin = np.histogram(StackDisp[np.isfinite(StackDisp)],bins=100)
+        BinX = BinX = Bin[:-1]+(Bin[1]-Bin[0])*0.5 # what is the center of each bin?
+        Inits = gmodel.make_params( amp=Count.max(), cen=0, wid=4) # make some initial guess
+        Res = gmodel.fit(Count, Inits, x=BinX) # and fit
+        VarEA[0,0] = (Res.best_values['wid']*Opt.NmPP)**-2
+        
+        EAAx[0,0].plot(BinX, Count, 'bo')
+        EAAx[0,0].plot(BinX, Res.best_fit, 'r-')
+        EAAx[0,0].set_title('Overall fit Kappa/KbT = %f'%(VarEA[0]))
+        if ImNum == 0:
+            VarEAOut = VarEA
+        else:
+            VarEAOut = np.concatenate((VarEAOut, VarEA))
+
+        #%%
+        EAF , EAAx = plt.subplots(2,4, figsize=(16,16))
+        
+    #outside of imnum loop
     np.savetxt(os.path.join(Opt.FPath,"output","SummedEA.csv"),EAOut,delimiter=',')
     
-    #%% 
-    
-    
-    #%%
-    #PWidF , PWidAx = plt.subplots(CBins.max(),1, sharex='all', figsize=(16,8))
-    #PWidF.suptitle('Peak Width for each set of lines')
-    #for nn in range(CBins.max()):
-    #    PWidAx[nn].imshow(np.abs(FPWidth[CBins==nn+1,:]), vmin=0, vmax=30, cmap='gray')
-    #   
-    #PWidF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "WidIm.png"), dpi=600)
-    
-    #%%
-    #PWidBF , PWidBAx = plt.subplots(CBins.max(),1, sharex='all', figsize=(16,8))
-    #PWidBF.suptitle('Mean Peak Width for each set of lines')
-    #for nn in range(CBins.max()):
-    #    PWidBAx[nn].bar(range((CBins==nn+1).sum()),np.nanmean(np.abs(FPWidth[CBins==nn+1,:]),axis=1))
-    #    PWidBAx[nn].set_ylim([10,30])
-    #PWidF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "WidBar.png"), dpi=600)
-    
-    ##%%
-    #DispF , DispAx = plt.subplots(CBins.max(),BinCount.max(), sharex='col',figsize=(12,12))
-    #DispF.suptitle('Displacement for each line (Histogram)')
-    #for nn in range(CBins.max()):
-    #    for ll in range(BinCount.max()):
-    #        try:
-    #            DispAx[nn,ll].hist(FDisp[CBins==nn+1,:][ll,:][~np.isnan(FDisp[CBins==nn+1,:][ll,:])],bins = np.arange(-10,10))
-    #            DispAx[nn,ll].set_title('StDev '+str(np.round(np.std(FDisp[CBins==nn+1,:][ll,:][~np.isnan(FDisp[CBins==nn+1,:][ll,:])]),2)))
-    #        except:
-    #            pass
-    #        DispAx[nn,ll].get_yaxis().set_visible(False)
-    #DispF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Displacement.png"), dpi=600)
-    #
-    ###%%
-    #CrossCorF , CrossCorAx = plt.subplots(CBins.max(),BinCount.max()-1, figsize=(16,16))
-    #CrossCorF.suptitle('Line/Line Correlation for each set of lines, X axis is line, Y axis is next line')
-    #for nn in range(CBins.max()):
-    #    for ll in range(BinCount.max()):
-    #        try:
-    #            CrossCorAx[nn,ll].scatter(FDisp[CBins==nn+1,:][ll,:],FDisp[CBins==nn+1,:][ll+1,:])
-    #            CrossCorAx[nn,ll].set_xlim([-7, 7])
-    #            CrossCorAx[nn,ll].set_ylim([-7, 7])
-    #        except:
-    #            pass
-    #CrossCorF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "CrossCor.png"), dpi=600)
+
