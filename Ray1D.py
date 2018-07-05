@@ -111,13 +111,13 @@ def PeakPara(LineIn, NmPP, CValley, SetFWidth):
     # this just says where sign of 1D changes
     
     for pp in range(len(CValley)): #loop through peak positions (guesstimates)
-        PCur = CValley[pp] # this is our current *peak* guesstimate
+        PCur = int(CValley[pp]) # this is our current *peak* guesstimate
         # first goal : Refine the peak guesstimate for this line
         FitWidth = SetFWidth # look at local area only
         PLow = int(np.maximum((PCur-FitWidth),0))
         PHigh = int(np.min((PCur+FitWidth+1,Length-1)))
 
-        try:PCur = np.arange(PLow,PHigh)[np.argmax(GradCurve[PLow:PHigh])+1] 
+        try:PCur = int(np.arange(PLow,PHigh)[np.argmax(GradCurve[PLow:PHigh])+1])
         except:pass
         # set peak as the minimum (max 2nd div) 
         # the +1 is to fix the derivative offset from data
@@ -128,11 +128,11 @@ def PeakPara(LineIn, NmPP, CValley, SetFWidth):
         
         # now fix the point to the Right of the valley
         # Remember we are looking for mim of second derivative +1 is to fix diff offset
-        PHigh = PCur +  np.argmin(GradCurve[PCur:PHigh]) +1 
+        PHigh = int(PCur +  np.argmin(GradCurve[PCur:PHigh]) +1) 
         # now fix the point to the left of the valley. 
         #Do the flip so the first point we find is closest to peak
         # do -1 cus we're moving otherway
-        PLow = PCur - np.argmin(np.flip(GradCurve[PLow:PCur],0)) -1
+        PLow = int(PCur - np.argmin(np.flip(GradCurve[PLow:PCur],0)) -1)
         # PLow is now the max peak to the left of the current valley 
         # PHigh is now the max peak to the right of the current valley
 
@@ -416,6 +416,9 @@ if __name__ == '__main__':
             CrossCorAx[nn].hexbin(PDStackD.values[:,nn],PDStackD.values[:,nn+1],gridsize=20,extent=(-10, 10, -10, 10))
             CrossCorAx[nn].set_aspect('equal')
         CrossCorF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "CrossCor.png"), dpi=600)
+        CrossCorF.clf()
+        plt.close(CrossCorF)
+        
         #%% Autocorrelation Opt.AcSize
         ACPeak = pd.DataFrame()
         CCPeak = pd.DataFrame()
@@ -514,8 +517,8 @@ if __name__ == '__main__':
             EAAx[rc,cc].set_xlim([-10, 10])
          #% plot  
         EAF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Variance Fitting.png"), dpi=300)
-        #EAF.clf()
-        #plt.close(EAF)
+        EAF.clf()
+        plt.close(EAF)
         if ImNum == 0:
             VarEAOut = VarEA
         else:
