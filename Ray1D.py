@@ -101,35 +101,62 @@ def AutoDetect( FileName , Opt ):
 #        print("Instrument was not detected, and NmPP was not set. Please set NmPP and rerun")
     return(imarray);
 
-def PeakPara(LineIn, NmPP, CValley, FitWidth):
+def PeakPara(LineIn, NmPP, CValley, SetFWidth):
     Length = LineIn.size
     gmodel = lmfit.Model(gaussian)
     Inits = gmodel.make_params()
     FPeak = np.zeros(CValley.shape)
     FPWidth = np.zeros(CValley.shape)
+    GradCurve = np.diff(np.sign((np.gradient(LineIn)))) 
+    # this just says where sign of 1D changes
     
     for pp in range(len(CValley)): #loop through peak positions (guesstimates)
-        PCur = CValley[pp]
+        PCur = CValley[pp] # this is our current *peak* guesstimate
+        # first goal : Refine the peak guesstimate for this line
+        FitWidth = SetFWidth # look at local area only
         PLow = int(np.maximum((PCur-FitWidth),0))
         PHigh = int(np.min((PCur+FitWidth+1,Length-1)))
-        LocalCurve = abs((LineIn[PLow:PHigh]-max(LineIn[PLow:PHigh]))) # use with range(PLow,PHigh)
-        # set our initial conditions
-        #Inits['amp']=lmfit.Parameter(name='amp', value= max(LocalCurve), min=0, max=max(LocalCurve)+5)
-        #Inits['wid']=lmfit.Parameter(name='wid', value= FitWidth, min=0, max=100)
-        #Inits['cen']=lmfit.Parameter(name='cen', value= PCur, min=PCur-7, max=PCur+7)
+
+        try:PCur = np.arange(PLow,PHigh)[np.argmax(GradCurve[PLow:PHigh])+1] 
+        except:pass
+        # set peak as the minimum (max 2nd div) 
+        # the +1 is to fix the derivative offset from data
+        #now expand our range to the next domains
+        FitWidth = SetFWidth * 2
+        PLow = int(np.maximum((PCur-FitWidth),0))
+        PHigh = int(np.min((PCur+FitWidth+1,Length-1)))
         
+        # now fix the point to the Right of the valley
+        # Remember we are looking for mim of second derivative +1 is to fix diff offset
+        PHigh = PCur +  np.argmin(GradCurve[PCur:PHigh]) +1 
+        # now fix the point to the left of the valley. 
+        #Do the flip so the first point we find is closest to peak
+        # do -1 cus we're moving otherway
+        PLow = PCur - np.argmin(np.flip(GradCurve[PLow:PCur],0)) -1
+        # PLow is now the max peak to the left of the current valley 
+        # PHigh is now the max peak to the right of the current valley
+
+        LocalCurve = abs((LineIn[PLow:PHigh]-max(LineIn[PLow:PHigh])))
+        
+        # this just flips the curve to be right side up with a minimum of 0
+        # so we can map it onto the typical gaussian        
         Inits['amp']=lmfit.Parameter(name='amp', value= max(LocalCurve))
         Inits['wid']=lmfit.Parameter(name='wid', value= FitWidth)
         Inits['cen']=lmfit.Parameter(name='cen', value= PCur, min=PCur-7, max=PCur+7)
     
-        Res = gmodel.fit(LocalCurve, Inits, x=np.arange(PLow,PHigh))
-        FPeak[pp] = Res.best_values['cen']
-        FPWidth[pp] = abs(np.copy(Res.best_values['wid']*2.35482*NmPP)) # FWHM in NM
-        if (abs(Res.best_values['cen'] - PCur) > 5) or (Res.best_values['wid'] > 50) or (Res.best_values['cen']==PCur):
+        try:
+            Res = gmodel.fit(LocalCurve, Inits, x=np.arange(PLow,PHigh))
+            FPeak[pp] = Res.best_values['cen']
+            FPWidth[pp] = abs(np.copy(Res.best_values['wid']*2.35482*NmPP)) # FWHM in NM
+            if (abs(Res.best_values['cen'] - PCur) > 5) or (Res.best_values['wid'] > 50) or (Res.best_values['cen']==PCur):
+                FPWidth[pp] = np.nan
+                FPeak[pp] = np.nan
+        except:
             FPWidth[pp] = np.nan
             FPeak[pp] = np.nan
     return( FPeak, FPWidth)
             
+
 #%%
 def gaussian(x, amp, cen, wid):
     return amp * np.exp(-(x-cen)**2 / (2*wid**2))
@@ -146,6 +173,18 @@ if __name__ == '__main__':
     class Output:
         pass
     #%% Default options
+    #% This control the shift of the course peak positions. 
+    #We will fine tune later but this must be +/-4
+    #for 150 as is
+    # for 175 , -22
+    #for 200 - 22
+    # for 210  -19
+    # for 220 
+    # for 230
+    #for 240 add 4
+    #PicDelt = -22
+    
+    
     #IndividualLog =1; # Write a log for each sample?
     CombLog = 1 # If One write a combined log, if two clean it out each time(don't append)
     ShowImage = 0 # Show images?
@@ -272,61 +311,21 @@ if __name__ == '__main__':
         
         np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "Valley.txt"),Valley,fmt='%3u')
         np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "Peak.txt"),Peak,fmt='%3u')
-        #%% Clean up the peaks of the pattern
-        #CPeak = np.zeros((0,0))
-        #for pp in range(len(Peak)-1):
-        #    if (Peak[pp+1]-Peak[pp]) < PSpace: # if peaks too close
-        #        if SavFil[int(Peak[pp])] >= SavFil[int(Peak[pp+1])]:
-        #            CPeak = np.append(CPeak, Peak[pp]) 
-        #        else: # keep the higher value
-        #            CPeak = np.append(CPeak, Peak[pp+1])
-        #    elif ((Peak[pp]-Peak[pp-1]) >= PSpace) or pp == 0 : 
-        #        CPeak = np.append(CPeak, Peak[pp])
-        #if (Peak[-1]-Peak[-2]) >= PSpace: # catch the last peak 
-        #    CPeak = np.append(CPeak, Peak[-1])
-        #CPeak = np.unique(CPeak)
-        #%% Clean up the valleys
-        #CPeak = np.zeros((0,0))
-        #for pp in range(len(Peak)-1):
-        #    if (Peak[pp+1]-Peak[pp]) < PSpace: # if peaks too close
-        #        if SavFil[int(Peak[pp])] >= SavFil[int(Peak[pp+1])]:
-        #            CPeak = np.append(CPeak, Peak[pp]) 
-        #        else: # keep the higher value
-        #            CPeak = np.append(CPeak, Peak[pp+1])
-        #    elif ((Peak[pp]-Peak[pp-1]) >= PSpace) or pp == 0 : 
-        #        CPeak = np.append(CPeak, Peak[pp])
-        #if (Peak[-1]-Peak[-2]) >= PSpace: # catch the last peak 
-        #    CPeak = np.append(CPeak, Peak[-1])
-        #CPeak = np.unique(CPeak)
-        ##%% clean up the pattern separators
-        #CPatSep = np.zeros((0,0))
-        #for pp in range(len(PatSep)-1):
-        #    if (PatSep[pp+1]-PatSep[pp]) < PSpace*5: # if PatSeps too close
-        #        if SavFil[int(PatSep[pp])] >= SavFil[int(PatSep[pp+1])]:
-        #            CPatSep = np.append(CPatSep, PatSep[pp]) 
-        #        else: # keep the higher value
-        #            CPatSep = np.append(CPatSep, PatSep[pp+1])
-        #    elif ((PatSep[pp]-PatSep[pp-1]) >= PSpace*5) or pp == 0: 
-        #        CPatSep = np.append(CPatSep, PatSep[pp])
-        #if (PatSep[-1]-PatSep[-2]) >= PSpace*5: # catch the last PatSep 
-        #    CPatSep = np.append(CPatSep, PatSep[-1])
-        #
-        #CPatSep = np.unique(CPatSep)
+
         #%%200C Manual
         #CPatSep = np.array([80,150,250,330,420,500])
         #CValley = np.array([92,99,106,114,121,129,136,143,171,178,186,194,204,212,220,228,263,270,278,285,293,300,308,315,349,356,363,371,379,385,393,401,435,442,450,457,465,472,480,488])
         #%% 2018-0611 Manual
-        CValley = np.array([37, 44, 52, 60, 68, 76, 83 ,166, 174, 182, 189, 197, 205, 212, 296, 303, 311, 318, 325, 333, 341, 425, 433, 440, 448, 455, 463, 471])
-        CPatSep = np.array([30,160,290, 420, 500])
-        
-        #%% for 150 as is
-        # for 175 , -22
-        #for 200 - 22
-        # for 210  -19
-        # for 220 
-        #for 240 add 4
-        CValley += -22
-        CPatSep += -22
+        # basically manually find the peaks and the separator for one set
+        SetValley = np.array([37, 44, 52, 60, 68, 76, 83 ,166, 174, 182, 189, 197, 205, 212, 296, 303, 311, 318, 325, 333, 341, 425, 433, 440, 448, 455, 463, 471])
+        SetPatSep = np.array([30,160,290, 420, 500])
+        # now find how far this image is shifted from these
+        TrueValley = Valley[SavFil[Valley.astype(int)]<-1000]
+        # find valleys where the sum of the phase is  -1000 or lower
+        PicDelt = TrueValley[0]-SetValley[0]
+        # adjust for pic delt
+        CValley = SetValley + PicDelt
+        CPatSep = SetPatSep + PicDelt
         
         
         #%%
@@ -477,31 +476,55 @@ if __name__ == '__main__':
             EAOut = PSeudoEA
         else:
             EAOut = np.concatenate((EAOut, PSeudoEA))
-        #%% what about from the variance?
+#%% what about from the variance? Change if changing domain counts
         VarEA = np.zeros((1,8))
-        
+
         EAF , EAAx = plt.subplots(2,4, figsize=(16,16))
         # set up the fig first  
         gmodel = lmfit.Model(gaussian) # then the model
         # ok now histogram
-        Count , Bin = np.histogram(StackDisp[np.isfinite(StackDisp)],bins=100)
+        Count , Bin = np.histogram(StackDisp[np.isfinite(StackDisp)],bins=200,range=(-20,20))
         BinX = BinX = Bin[:-1]+(Bin[1]-Bin[0])*0.5 # what is the center of each bin?
-        Inits = gmodel.make_params( amp=Count.max(), cen=0, wid=4) # make some initial guess
+        VarRt = np.sqrt(np.nanvar(StackDisp))  # calculate variance exactly
+        Inits = gmodel.make_params( amp=Count.max(), cen=0, wid=VarRt) # make some initial guess
+        Inits['wid'] = lmfit.Parameter(name='wid', value=VarRt, vary=False) # force it to use variance
+        
         Res = gmodel.fit(Count, Inits, x=BinX) # and fit
         VarEA[0,0] = (Res.best_values['wid']*Opt.NmPP)**-2
-        
+
         EAAx[0,0].plot(BinX, Count, 'bo')
         EAAx[0,0].plot(BinX, Res.best_fit, 'r-')
-        EAAx[0,0].set_title('Overall fit Kappa/KbT = %f'%(VarEA[0]))
+        EAAx[0,0].set_title('Overall fit Kappa/KbT = %f'%(VarEA[0,0]))
+        EAAx[0,0].set_xlim([-10, 10])
+        for dd in range(7):
+            Count , Bin = np.histogram(StackDisp[:,dd][np.isfinite(StackDisp[:,dd])],bins=200,range=(-20,20))
+            BinX = BinX = Bin[:-1]+(Bin[1]-Bin[0])*0.5 # what is the center of each bin?
+            VarRt = np.sqrt(np.nanvar(StackDisp[:,dd]))  # calculate variance exactly
+            Inits = gmodel.make_params( amp=Count.max(), cen=0, wid=VarRt) # make some initial guess
+            Inits['wid'] = lmfit.Parameter(name='wid', value=VarRt, vary=False) # force it to use variance
+
+            Res = gmodel.fit(Count, Inits, x=BinX) # and fit
+            VarEA[0,dd+1] = (Res.best_values['wid']*Opt.NmPP)**-2
+            # add to the plot
+            rc = int((dd+1)/4) # the plot goes on the 0th row if dd <3
+            cc = int((dd+1)%4) # plot goes on column related to modulo 4
+            EAAx[rc,cc].plot(BinX, Count, 'bo')
+            EAAx[rc,cc].plot(BinX, Res.best_fit, 'r-')
+            EAAx[rc,cc].set_title('Domain %i fit Kappa/KbT = %f'%(dd+1, VarEA[0,(dd+1)]))
+            EAAx[rc,cc].set_xlim([-10, 10])
+         #% plot  
+        EAF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Variance Fitting.png"), dpi=300)
+        #EAF.clf()
+        #plt.close(EAF)
         if ImNum == 0:
             VarEAOut = VarEA
         else:
             VarEAOut = np.concatenate((VarEAOut, VarEA))
 
         #%%
-        EAF , EAAx = plt.subplots(2,4, figsize=(16,16))
         
     #outside of imnum loop
     np.savetxt(os.path.join(Opt.FPath,"output","SummedEA.csv"),EAOut,delimiter=',')
+    np.savetxt(os.path.join(Opt.FPath,"output","VarEA.csv"),VarEAOut,delimiter=',')
     
 
