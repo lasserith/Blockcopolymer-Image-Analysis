@@ -187,7 +187,8 @@ if __name__ == '__main__':
     
     #IndividualLog =1; # Write a log for each sample?
     CombLog = 1 # If One write a combined log, if two clean it out each time(don't append)
-    ShowImage = 0 # Show images?
+    #ShowImage = 0 # Show images?
+    plt.ioff()
     Opt.NmPP = 0 # Nanometers per pixel scaling (will autodetect)
     Opt.l0 = 50 # nanometer l0
     
@@ -255,9 +256,9 @@ if __name__ == '__main__':
         except:
             os.mkdir(os.path.join(Opt.FPath,"output"))
        
-        RawComp = RawIn[:,:,ii].sum(axis=1) # sum along the channels to get a good idea where peaks are
-        RawTop = RawIn[:,:5,ii].sum(axis=1)
-        RawBot = RawIn[:,-5:,ii].sum(axis=1)
+        RawComp = RawIn[:,:,ImNum].sum(axis=1) # sum along the channels to get a good idea where peaks are
+        RawTop = RawIn[:,:5,ImNum].sum(axis=1)
+        RawBot = RawIn[:,-5:,ImNum].sum(axis=1)
         SavFil = scipy.signal.savgol_filter(RawComp,5,2,axis = 0)
         TopFil = scipy.signal.savgol_filter(RawTop,5,2,axis = 0)
         BotFil = scipy.signal.savgol_filter(RawBot,5,2,axis = 0)
@@ -335,6 +336,7 @@ if __name__ == '__main__':
         FitWidth = int(Opt.l0/Opt.NmPP*.5)
         #FitWidth = int(4)
         #% Parallel cus gotta go fast
+        print('\n Image '+Opt.FName+'\n')
         __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
 
         POut = Parallel(n_jobs=8,verbose=5)(delayed(PeakPara)(RawIn[:,tt,ImNum], Opt.NmPP, CValley, FitWidth) # backend='threading' removed
