@@ -8,7 +8,7 @@ AFM test for Raybin
 import tkinter as tk
 from tkinter import filedialog, ttk
 import os
-import csv
+import sys
 import lmfit
 from PIL import Image
 from joblib import Parallel, delayed
@@ -146,7 +146,7 @@ def PeakPara(LineIn, NmPP, CValley, SetFWidth):
     
         try:
             Res = gmodel.fit(LocalCurve, Inits, x=np.arange(PLow,PHigh))
-            FPeak[pp] = Res.best_values['cen']
+            FPeak[pp] = Res.best_values['cen']*NmPP
             FPWidth[pp] = abs(np.copy(Res.best_values['wid']*2.35482*NmPP)) # FWHM in NM
             if (abs(Res.best_values['cen'] - PCur) > 5) or (Res.best_values['wid'] > 50) or (Res.best_values['cen']==PCur):
                 FPWidth[pp] = np.nan
@@ -157,6 +157,28 @@ def PeakPara(LineIn, NmPP, CValley, SetFWidth):
     return( FPeak, FPWidth)
             
 
+#%%
+def onclick(event):
+    global XPeak
+    XPeak = np.append(XPeak, event.xdata)
+    FPlot1.axvline(x=event.xdata,linewidth=2, color='r')
+    plt.draw()
+
+def onkey(event):
+    global Block
+    global XPeak
+    sys.stdout.flush()
+    if event.key == "escape":   
+        Block = 0
+        FPlot.canvas.mpl_disconnect(cid) # disconnect both click    
+        FPlot.canvas.mpl_disconnect(kid) # and keypress events
+    if event.key == "c":
+        XPeak = np.array([])
+        FPlot1.cla()
+        FPlot1.plot(Xplot,RawComp,'b',Xplot,SavFil,'k')
+        FPlot1.legend(['Raw','Filt.'],loc="upper right")
+        plt.draw()
+    
 #%%
 def gaussian(x, amp, cen, wid):
     return amp * np.exp(-(x-cen)**2 / (2*wid**2))
@@ -191,6 +213,7 @@ if __name__ == '__main__':
     plt.ioff()
     Opt.NmPP = 0 # Nanometers per pixel scaling (will autodetect)
     Opt.l0 = 50 # nanometer l0
+    Opt.DomPerTrench = 7 # how many domains are there in a trench?
     
     #%% AFM Settings
     Opt.AFMLayer = "Phase" #Matched Phase ZSensor
@@ -199,7 +222,7 @@ if __name__ == '__main__':
     
     # Autocorrelation max shift
     Opt.ACCutoff = 50
-    Opt.ACSize = 200
+    Opt.ACSize = 400
     
     Opt.AngMP = 5 # Do a midpoint average based on this many points
     # EG AngMP = 5 then 1 2 3 4 5, 3 will be calc off angle 1 - 5
@@ -226,7 +249,8 @@ if __name__ == '__main__':
     Shap1 = firstim.shape[1]
     RawIn = np.zeros((Shap0,Shap1,len(FNFull)))
     RawComb = np.zeros((Shap0,Shap1*len(FNFull)))
-    
+    XPeak = np.array([])
+    Block = 1
     
     
     #%% Import data ( can't be parallelized as it breaks the importer )
@@ -259,24 +283,33 @@ if __name__ == '__main__':
         RawComp = RawIn[:,:,ImNum].sum(axis=1) # sum along the channels to get a good idea where peaks are
         RawTop = RawIn[:,:5,ImNum].sum(axis=1)
         RawBot = RawIn[:,-5:,ImNum].sum(axis=1)
+        
+        #%%
         SavFil = scipy.signal.savgol_filter(RawComp,5,2,axis = 0)
         TopFil = scipy.signal.savgol_filter(RawTop,5,2,axis = 0)
         BotFil = scipy.signal.savgol_filter(RawBot,5,2,axis = 0)
         D1SavFil = scipy.signal.savgol_filter(RawComp,5,2,deriv = 1,axis = 0)
         D2SavFil = scipy.signal.savgol_filter(RawComp,5,2, deriv = 2,axis = 0)
-        
-        FPlot = plt.figure()
-        FPlot.suptitle('SavGol Filter and Derivatives in black (Raw is Blue)')
+        FPlot = plt.figure(figsize=(8,3))
+        FPlot.clf()
+        FPlot.suptitle('Click the first domain (valley) for each trench. Then hit ESCAPE \n'
+                       +'Hit c to Cancel and restart if you did an oopsy')
         Xplot = range(0, Shap0)
         
-        FPlot1 = FPlot.add_subplot(311)
+        FPlot1 = FPlot.add_subplot(211)
         FPlot1.plot(Xplot,RawComp,'b',Xplot,SavFil,'k')
+        FPlot1.legend(['Raw','Filt.'],loc="upper right")
         
-        FPlot2 = FPlot.add_subplot(312)
-        FPlot2.plot(Xplot,D1SavFil,'k',Xplot,D2SavFil,'r')
+        FPlot2 = FPlot.add_subplot(212)
+        FPlot2.plot(Xplot,D1SavFil,'r',Xplot,D2SavFil,'k')
+        FPlot2.legend(['1st Deriv','2nd Deriv'],loc="upper right")
         
-        FPlot3 = FPlot.add_subplot(313)
-        FPlot3.plot(Xplot,TopFil,'b',Xplot,BotFil,'k')
+        FPlot.show()
+        if Block == 1:
+            cid = FPlot.canvas.mpl_connect('button_press_event', onclick)
+            kid = FPlot.canvas.mpl_connect('key_press_event', onkey)
+            while Block == 1:
+                plt.pause(1)
         FPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "SVG.png"), dpi=300)
         FPlot.clf()
         plt.close(FPlot)
@@ -307,26 +340,37 @@ if __name__ == '__main__':
         #% add the last value as a potential pat separator
         PatSep = np.append(PatSep,len(SavFil)-1)
         
-        #%%
+        #%% use manual sep clicked earlier to do the clean up
+        CPatSep = np.zeros_like(XPeak)
+        for xx in range(XPeak.size):
+            CPatSep[xx] = Valley[np.argmin(abs(Valley-XPeak[xx]))]
+        CPatSep = np.unique(CPatSep) # just in case we accidentally double clicked a peak
+        CValley = np.zeros(int(CPatSep.size*Opt.DomPerTrench))
+        for xx in range(CPatSep.size):
+            CPatSepInd = np.nonzero(Valley == CPatSep[xx])[0][0]
+            CValley[Opt.DomPerTrench*xx:Opt.DomPerTrench*(xx+1)] = Valley[CPatSepInd:(CPatSepInd+Opt.DomPerTrench)]
+        CPatSep -= 5 #scoot our separators off the peak
+        CPatSep = np.append(CPatSep, len(SavFil)-1)
+        #%% old stuff from doing it manually (Remove when auto works)
         #Dump raws
         
-        np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "Valley.txt"),Valley,fmt='%3u')
-        np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "Peak.txt"),Peak,fmt='%3u')
+        #np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "Valley.txt"),Valley,fmt='%3u')
+        #np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "Peak.txt"),Peak,fmt='%3u')
 
         #%%200C Manual
         #CPatSep = np.array([80,150,250,330,420,500])
         #CValley = np.array([92,99,106,114,121,129,136,143,171,178,186,194,204,212,220,228,263,270,278,285,293,300,308,315,349,356,363,371,379,385,393,401,435,442,450,457,465,472,480,488])
         #%% 2018-0611 Manual
-        # basically manually find the peaks and the separator for one set
-        SetValley = np.array([37, 44, 52, 60, 68, 76, 83 ,166, 174, 182, 189, 197, 205, 212, 296, 303, 311, 318, 325, 333, 341, 425, 433, 440, 448, 455, 463, 471])
-        SetPatSep = np.array([30,160,290, 420, 500])
-        # now find how far this image is shifted from these
-        TrueValley = Valley[SavFil[Valley.astype(int)]<-1000]
-        # find valleys where the sum of the phase is  -1000 or lower
-        PicDelt = TrueValley[0]-SetValley[0]
-        # adjust for pic delt
-        CValley = SetValley + PicDelt
-        CPatSep = SetPatSep + PicDelt
+#        # basically manually find the peaks and the separator for one set
+##        SetValley = np.array([37, 44, 52, 60, 68, 76, 83 ,166, 174, 182, 189, 197, 205, 212, 296, 303, 311, 318, 325, 333, 341, 425, 433, 440, 448, 455, 463, 471])
+##        SetPatSep = np.array([30,160,290, 420, 500])
+#        # now find how far this image is shifted from these
+#        TrueValley = Valley[SavFil[Valley.astype(int)]<-1000]
+#        # find valleys where the sum of the phase is  -1000 or lower
+#        PicDelt = TrueValley[0]-SetValley[0]
+#        # adjust for pic delt
+#        CValley = SetValley + PicDelt
+#        CPatSep = SetPatSep + PicDelt
         
         
         #%%
@@ -346,6 +390,7 @@ if __name__ == '__main__':
         FPeak = np.array(FPTuple).transpose()
         FPWidth = np.array(FPWTuple).transpose()
         print('Done')
+        #Everything past here is already in Nanometers. PEAK FITTING OUTPUTS IT
 
         #%% Save filtered data
         np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "FitPeak.csv"),FPeak,delimiter=',')
@@ -366,8 +411,8 @@ if __name__ == '__main__':
         TDF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "ThermalDrift.png"), dpi=600)
         TDF.clf()
         plt.close(TDF)
-        #%% now correct the data and put in NanoMeters!
-        FDispCorrect = (FDisp - TDPlot)*Opt.NmPP
+        #%% now correct the data for drift
+        FDispCorrect = (FDisp - TDPlot)
         #%% move on
         
         
@@ -380,15 +425,13 @@ if __name__ == '__main__':
         #StackDisp 
         #StackWidth
         #%% Cross Corref 
-        
-        StackDisp = np.concatenate((FDispCorrect.transpose()[:,0:7],
-                                    FDispCorrect.transpose()[:,7:14],
-                                    FDispCorrect.transpose()[:,14:21],
-                                    FDispCorrect.transpose()[:,21:]))
-        StackWidth = np.concatenate((FPWidth.transpose()[:,0:7],
-                                    FPWidth.transpose()[:,7:14],
-                                    FPWidth.transpose()[:,14:21],
-                                    FPWidth.transpose()[:,21:]))
+        StackDisp = FDispCorrect.transpose()[:,0:Opt.DomPerTrench]
+        StackWidth = FPWidth.transpose()[:,0:Opt.DomPerTrench]
+        for xx in np.arange(1,CPatSep.size-1):
+            StackDisp=np.concatenate( (StackDisp,FDispCorrect.transpose()[:,xx*Opt.DomPerTrench:(xx+1)*Opt.DomPerTrench]) )
+            StackWidth=np.concatenate((StackWidth,FPWidth.transpose()[:,xx*Opt.DomPerTrench:(xx+1)*Opt.DomPerTrench]))
+            
+
         PDStackD = pd.DataFrame(data=StackDisp)
         PDStackW = pd.DataFrame(data=StackWidth)
         
@@ -412,9 +455,9 @@ if __name__ == '__main__':
         CCWidthF.clf()
         plt.close(CCWidthF)
         #%%
-        CrossCorF , CrossCorAx = plt.subplots(1,6, figsize=(15,4))
+        CrossCorF , CrossCorAx = plt.subplots(1,Opt.DomPerTrench-1, figsize=(15,4))
         CrossCorF.suptitle('Line/Line Correlation for each set of lines, X axis is line, Y axis is next line')
-        for nn in range(6):
+        for nn in range(Opt.DomPerTrench-1):
             CrossCorAx[nn].hexbin(PDStackD.values[:,nn],PDStackD.values[:,nn+1],gridsize=20,extent=(-10, 10, -10, 10))
             CrossCorAx[nn].set_aspect('equal')
         CrossCorF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "CrossCor.png"), dpi=600)
@@ -438,21 +481,22 @@ if __name__ == '__main__':
             CCWidth = CCWidth.append( PanWidth.corrwith(PanWidth.shift(periods=lag).shift(1,axis=1)).rename('lag%i' %lag))
             
         #%% Autocorrelation
-        ACDispF , ACDispAx = plt.subplots()
+        ACDispF , ACDispAx = plt.subplots(nrows=2)
         ACDispF.suptitle('Peak displacement Autocorrelation')
-        ACDispIm = ACDispAx.imshow(ACPeak, cmap="seismic_r", vmin=-1, vmax=1)
+        ACDispIm = ACDispAx[0].imshow(ACPeak.transpose(), cmap="seismic_r", vmin=-1, vmax=1)
         ACDispF.colorbar(ACDispIm)
         ACDispF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "DisplacementAC.png"), dpi=300)
-        ACDispF.clf()
-        plt.close(ACDispF)        
+#        ACDispF.clf()
+#        plt.close(ACDispF)        
         #%% MSD AC
-        ACMSDF , ACMSDAx = plt.subplots(figsize=(15,3))
-        ACMSDF.suptitle('Peak displacement Autocorrelation')
-        ACMSDIm = ACMSDAx.imshow(ACMSD.transpose(), cmap="seismic_r", vmin=-1, vmax=1)
+        ACMSDF , ACMSDAx = plt.subplots(nrows=2,figsize=(15,3))
+        ACMSDF.suptitle('MSD Autocorrelation')
+        ACMSDIm = ACMSDAx[0].imshow(ACMSD.transpose(), cmap="plasma", vmin=0, vmax=15)
         ACMSDF.colorbar(ACMSDIm)
+        ACMSDAx[1].plot(ACMSD.agg('mean',axis="columns"))
         ACMSDF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "MSDAC.png"), dpi=300)
-        ACMSDF.clf()
-        plt.close(ACMSDF)        
+        #ACMSDF.clf()
+        #plt.close(ACMSDF)        
         
         #%%width
         ACWidthF , ACWidthAx = plt.subplots( figsize=(15,3))
@@ -469,25 +513,25 @@ if __name__ == '__main__':
             for ll in range(BinCount.max()):
                 ACMSD[nn*CBins.max()+ll].plot(ax=MSDAx[nn,ll])
                 MSDAx[nn,ll].set_ylim([0, 10])
-                MSDAx[nn,ll].set_xlim([0, 100])
+                MSDAx[nn,ll].set_xlim([0, 500])
         MSDF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "MSD.png"), dpi=300)
         MSDF.clf()
         plt.close(MSDF)
         
         #%% save the kappa/KT calculated from disp squared
         PSeudoEA = np.nanmean(( FDispCorrect**-2),axis=1)
-        PSeudoEA = PSeudoEA.reshape((4,7))
+        PSeudoEA = PSeudoEA.reshape((CPatSep.size-1,Opt.DomPerTrench))
         if ImNum == 0:
             EAOut = PSeudoEA
         else:
             EAOut = np.concatenate((EAOut, PSeudoEA))
 #%% what about from the variance? Change if changing domain counts
-        VarEA = np.zeros((1,8))
+        VarEA = np.zeros((1,Opt.DomPerTrench+1))
 
         EAF , EAAx = plt.subplots(2,4, figsize=(16,16))
         # set up the fig first  
         gmodel = lmfit.Model(gaussian) # then the model
-        # ok now histogram
+        # ok now histogram remember StackDisp comes from FDispCorrect so is already NM
         Count , Bin = np.histogram(StackDisp[np.isfinite(StackDisp)],bins=200,range=(-20,20))
         BinX = BinX = Bin[:-1]+(Bin[1]-Bin[0])*0.5 # what is the center of each bin?
         VarRt = np.sqrt(np.nanvar(StackDisp))  # calculate variance exactly
@@ -495,13 +539,13 @@ if __name__ == '__main__':
         Inits['wid'] = lmfit.Parameter(name='wid', value=VarRt, vary=False) # force it to use variance
         
         Res = gmodel.fit(Count, Inits, x=BinX) # and fit
-        VarEA[0,0] = (Res.best_values['wid']*Opt.NmPP)**-2
+        VarEA[0,0] = (Res.best_values['wid'])**-2
 
         EAAx[0,0].plot(BinX, Count, 'bo')
         EAAx[0,0].plot(BinX, Res.best_fit, 'r-')
         EAAx[0,0].set_title('Overall fit Kappa/KbT = %f'%(VarEA[0,0]))
         EAAx[0,0].set_xlim([-10, 10])
-        for dd in range(7):
+        for dd in range(Opt.DomPerTrench):
             Count , Bin = np.histogram(StackDisp[:,dd][np.isfinite(StackDisp[:,dd])],bins=200,range=(-20,20))
             BinX = BinX = Bin[:-1]+(Bin[1]-Bin[0])*0.5 # what is the center of each bin?
             VarRt = np.sqrt(np.nanvar(StackDisp[:,dd]))  # calculate variance exactly
@@ -509,7 +553,7 @@ if __name__ == '__main__':
             Inits['wid'] = lmfit.Parameter(name='wid', value=VarRt, vary=False) # force it to use variance
 
             Res = gmodel.fit(Count, Inits, x=BinX) # and fit
-            VarEA[0,dd+1] = (Res.best_values['wid']*Opt.NmPP)**-2
+            VarEA[0,dd+1] = (Res.best_values['wid'])**-2
             # add to the plot
             rc = int((dd+1)/4) # the plot goes on the 0th row if dd <3
             cc = int((dd+1)%4) # plot goes on column related to modulo 4
