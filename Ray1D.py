@@ -183,6 +183,10 @@ def onkey(event):
 def gaussian(x, amp, cen, wid):
     return amp * np.exp(-(x-cen)**2 / (2*wid**2))
 
+#%%
+def Hooks(x, K, Offset):
+    return 0.5*x**2*K+Offset
+#%%
 if __name__ == '__main__':
     # OK
     
@@ -195,22 +199,16 @@ if __name__ == '__main__':
     class Output:
         pass
     #%% Default options
-    #% This control the shift of the course peak positions. 
-    #We will fine tune later but this must be +/-4
-    #for 150 as is
-    # for 175 , -22
-    #for 200 - 22
-    # for 210  -19
-    # for 220 
-    # for 230
-    #for 240 add 4
-    #PicDelt = -22
+
     
     
     #IndividualLog =1; # Write a log for each sample?
     CombLog = 1 # If One write a combined log, if two clean it out each time(don't append)
     #ShowImage = 0 # Show images?
     plt.ioff()
+    Opt.Boltz = 8.617e-5 # boltzmann, using eV/K here
+    Opt.TempC = 200
+    
     Opt.NmPP = 0 # Nanometers per pixel scaling (will autodetect)
     Opt.l0 = 50 # nanometer l0
     Opt.DomPerTrench = 7 # how many domains are there in a trench?
@@ -227,7 +225,7 @@ if __name__ == '__main__':
     Opt.AngMP = 5 # Do a midpoint average based on this many points
     # EG AngMP = 5 then 1 2 3 4 5, 3 will be calc off angle 1 - 5
     Opt.Machine = "Unknown"
-    
+    Opt.Temp = Opt.TempC+273.15
     
     #%% Open
     FOpen=tk.Tk()
@@ -435,6 +433,27 @@ if __name__ == '__main__':
         PDStackD = pd.DataFrame(data=StackDisp)
         PDStackW = pd.DataFrame(data=StackWidth)
         
+        StackD1O = np.zeros((0,2)) # 1 over correlation
+        StackW1O = np.zeros((0,2)) # ditto for width
+        StackD2O = np.zeros((0,2)) # 2 over correlation
+        StackW2O = np.zeros((0,2)) # ditto for width
+        StackD3O = np.zeros((0,2)) # 3 over correlation
+        StackW3O = np.zeros((0,2)) # ditto for width
+
+        
+        
+        for nn in range(Opt.DomPerTrench-1):
+            StackD1O = np.append( StackD1O, np.array((PDStackD.values[:,nn],PDStackD.values[:,nn+1])).transpose(),axis = 0 )
+            StackW1O = np.append( StackW1O, np.array((PDStackW.values[:,nn],PDStackW.values[:,nn+1])).transpose(),axis = 0 )
+            if nn < Opt.DomPerTrench-2:
+                StackD2O = np.append( StackD2O, np.array((PDStackD.values[:,nn],PDStackD.values[:,nn+2])).transpose(),axis = 0 )
+                StackW2O = np.append( StackW2O, np.array((PDStackW.values[:,nn],PDStackW.values[:,nn+2])).transpose(),axis = 0 )
+            if nn < Opt.DomPerTrench-3:
+                StackD3O = np.append( StackD3O, np.array((PDStackD.values[:,nn],PDStackD.values[:,nn+3])).transpose(),axis = 0 )
+                StackW3O = np.append( StackW3O, np.array((PDStackW.values[:,nn],PDStackW.values[:,nn+3])).transpose(),axis = 0 )
+        
+        
+        
         CCDisp = PDStackD.corr() # calcualte cross correlations
         CCWidth = PDStackW.corr() # calcualte cross correlations
 
@@ -455,12 +474,17 @@ if __name__ == '__main__':
         CCWidthF.clf()
         plt.close(CCWidthF)
         #%%
-        CrossCorF , CrossCorAx = plt.subplots(1,Opt.DomPerTrench-1, figsize=(15,4))
-        CrossCorF.suptitle('Line/Line Correlation for each set of lines, X axis is line, Y axis is next line')
-        for nn in range(Opt.DomPerTrench-1):
-            CrossCorAx[nn].hexbin(PDStackD.values[:,nn],PDStackD.values[:,nn+1],gridsize=20,extent=(-10, 10, -10, 10))
-            CrossCorAx[nn].set_aspect('equal')
+        CrossCorF , CrossCorAx = plt.subplots(1,3, figsize=(12,4))
+        CrossCorF.suptitle('1st Order Correlations, 2nd Order Correlations, Third Order Correlations')
+        CrossCorAx[0].hexbin(StackD1O[:,0],StackD1O[:,1],gridsize=20,extent=(-10, 10, -10, 10))
+        CrossCorAx[0].set_aspect('equal')
+        CrossCorAx[1].hexbin(StackD2O[:,0],StackD2O[:,1],gridsize=20,extent=(-10, 10, -10, 10))
+        CrossCorAx[1].set_aspect('equal')
+        CrossCorAx[2].hexbin(StackD3O[:,0],StackD3O[:,1],gridsize=20,extent=(-10, 10, -10, 10))
+        CrossCorAx[2].set_aspect('equal')
+        
         CrossCorF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "CrossCor.png"), dpi=600)
+        #%%
         CrossCorF.clf()
         plt.close(CrossCorF)
         
@@ -486,8 +510,8 @@ if __name__ == '__main__':
         ACDispIm = ACDispAx[0].imshow(ACPeak.transpose(), cmap="seismic_r", vmin=-1, vmax=1)
         ACDispF.colorbar(ACDispIm)
         ACDispF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "DisplacementAC.png"), dpi=300)
-#        ACDispF.clf()
-#        plt.close(ACDispF)        
+        ACDispF.clf()
+        plt.close(ACDispF)        
         #%% MSD AC
         ACMSDF , ACMSDAx = plt.subplots(nrows=2,figsize=(15,3))
         ACMSDF.suptitle('MSD Autocorrelation')
@@ -495,8 +519,8 @@ if __name__ == '__main__':
         ACMSDF.colorbar(ACMSDIm)
         ACMSDAx[1].plot(ACMSD.agg('mean',axis="columns"))
         ACMSDF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "MSDAC.png"), dpi=300)
-        #ACMSDF.clf()
-        #plt.close(ACMSDF)        
+        ACMSDF.clf()
+        plt.close(ACMSDF)        
         
         #%%width
         ACWidthF , ACWidthAx = plt.subplots( figsize=(15,3))
@@ -539,11 +563,11 @@ if __name__ == '__main__':
         Inits['wid'] = lmfit.Parameter(name='wid', value=VarRt, vary=False) # force it to use variance
         
         Res = gmodel.fit(Count, Inits, x=BinX) # and fit
-        VarEA[0,0] = (Res.best_values['wid'])**-2
+        VarEA[0,0] = (Res.best_values['wid'])**-2 * Opt.Boltz*Opt.Temp
 
         EAAx[0,0].plot(BinX, Count, 'bo')
         EAAx[0,0].plot(BinX, Res.best_fit, 'r-')
-        EAAx[0,0].set_title('Overall fit Kappa/KbT = %f'%(VarEA[0,0]))
+        EAAx[0,0].set_title('Overall fit Kappa = %f eV/nm^2'%(VarEA[0,0]))
         EAAx[0,0].set_xlim([-10, 10])
         for dd in range(Opt.DomPerTrench):
             Count , Bin = np.histogram(StackDisp[:,dd][np.isfinite(StackDisp[:,dd])],bins=200,range=(-20,20))
@@ -553,13 +577,13 @@ if __name__ == '__main__':
             Inits['wid'] = lmfit.Parameter(name='wid', value=VarRt, vary=False) # force it to use variance
 
             Res = gmodel.fit(Count, Inits, x=BinX) # and fit
-            VarEA[0,dd+1] = (Res.best_values['wid'])**-2
+            VarEA[0,dd+1] = (Res.best_values['wid'])**-2 * Opt.Boltz * Opt.Temp
             # add to the plot
             rc = int((dd+1)/4) # the plot goes on the 0th row if dd <3
             cc = int((dd+1)%4) # plot goes on column related to modulo 4
             EAAx[rc,cc].plot(BinX, Count, 'bo')
             EAAx[rc,cc].plot(BinX, Res.best_fit, 'r-')
-            EAAx[rc,cc].set_title('Domain %i fit Kappa/KbT = %f'%(dd+1, VarEA[0,(dd+1)]))
+            EAAx[rc,cc].set_title('Domain %i fit Kappa = %f eV/nm^2'%(dd+1, VarEA[0,(dd+1)]))
             EAAx[rc,cc].set_xlim([-10, 10])
          #% plot  
         EAF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Variance Fitting.png"), dpi=300)
@@ -569,7 +593,27 @@ if __name__ == '__main__':
             VarEAOut = VarEA
         else:
             VarEAOut = np.concatenate((VarEAOut, VarEA))
-
+        #%% Delta G plot
+        DeltaGF,DeltaGAx = plt.subplots(1,1)
+        DeltaGAx.set_ylabel('DeltaG (eV)')
+        DeltaGAx.set_xlabel('Displacement (nm)')
+        Count , Bin = np.histogram(StackDisp[np.isfinite(StackDisp)],bins=200,range=(-20,20))
+        BinX = BinX = Bin[:-1]+(Bin[1]-Bin[0])*0.5 # what is the center of each bin?
+        GCount = np.log(Count/Count.sum())*(-Opt.Boltz*Opt.Temp)
+        
+        Filter = np.isfinite(GCount)
+        
+        hmodel = lmfit.Model(Hooks)
+        Inits = hmodel.make_params(K=0, Offset = 0.1)
+        Inits['K'] = lmfit.Parameter(name='K', value=VarEA[0,0], vary=False) # force it to use EA calculated earlier
+        Res = hmodel.fit(GCount[Filter], Inits, x=BinX[Filter]) # and fit
+        
+        GOff = Res.best_values['Offset']
+        GTheory = VarEA[0,0]*0.5*BinX**2
+        GTheory += GOff
+        DeltaGAx.plot(BinX[Filter],GCount[Filter],'k.',BinX[Filter],GTheory[Filter],'r')
+        DeltaGF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Hooks Law Restoring Force"), dpi=300)
+        
         #%%
         
     #outside of imnum loop
