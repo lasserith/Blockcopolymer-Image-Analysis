@@ -207,7 +207,7 @@ if __name__ == '__main__':
     #ShowImage = 0 # Show images?
     plt.ioff()
     Opt.Boltz = 8.617e-5 # boltzmann, using eV/K here
-    Opt.TempC = 200
+    
     
     Opt.NmPP = 0 # Nanometers per pixel scaling (will autodetect)
     Opt.l0 = 50 # nanometer l0
@@ -225,7 +225,7 @@ if __name__ == '__main__':
     Opt.AngMP = 5 # Do a midpoint average based on this many points
     # EG AngMP = 5 then 1 2 3 4 5, 3 will be calc off angle 1 - 5
     Opt.Machine = "Unknown"
-    Opt.Temp = Opt.TempC+273.15
+    
     
     #%% Open
     FOpen=tk.Tk()
@@ -249,7 +249,8 @@ if __name__ == '__main__':
     RawComb = np.zeros((Shap0,Shap1*len(FNFull)))
     XPeak = np.array([])
     Block = 1
-    
+    Opt.TempC = float(input('Temperature in Celsius :'))
+    Opt.Temp = Opt.TempC+273.15
     
     #%% Import data ( can't be parallelized as it breaks the importer )
     
@@ -349,31 +350,15 @@ if __name__ == '__main__':
             CValley[Opt.DomPerTrench*xx:Opt.DomPerTrench*(xx+1)] = Valley[CPatSepInd:(CPatSepInd+Opt.DomPerTrench)]
         CPatSep -= 5 #scoot our separators off the peak
         CPatSep = np.append(CPatSep, len(SavFil)-1)
-        #%% old stuff from doing it manually (Remove when auto works)
-        #Dump raws
         
-        #np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "Valley.txt"),Valley,fmt='%3u')
-        #np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "Peak.txt"),Peak,fmt='%3u')
-
-        #%%200C Manual
-        #CPatSep = np.array([80,150,250,330,420,500])
-        #CValley = np.array([92,99,106,114,121,129,136,143,171,178,186,194,204,212,220,228,263,270,278,285,293,300,308,315,349,356,363,371,379,385,393,401,435,442,450,457,465,472,480,488])
-        #%% 2018-0611 Manual
-#        # basically manually find the peaks and the separator for one set
-##        SetValley = np.array([37, 44, 52, 60, 68, 76, 83 ,166, 174, 182, 189, 197, 205, 212, 296, 303, 311, 318, 325, 333, 341, 425, 433, 440, 448, 455, 463, 471])
-##        SetPatSep = np.array([30,160,290, 420, 500])
-#        # now find how far this image is shifted from these
-#        TrueValley = Valley[SavFil[Valley.astype(int)]<-1000]
-#        # find valleys where the sum of the phase is  -1000 or lower
-#        PicDelt = TrueValley[0]-SetValley[0]
-#        # adjust for pic delt
-#        CValley = SetValley + PicDelt
-#        CPatSep = SetPatSep + PicDelt
-        
-        
-        #%%
         CBins = np.digitize(CValley,CPatSep)
         BinCount = np.histogram(CValley,CPatSep)[0]
+        MidInd = np.zeros(CPatSep.size-1,dtype='uint')
+        EdgeInd = np.zeros((CPatSep.size-1)*2,dtype='uint')
+        for bb in range(CPatSep.size-1):
+            MidInd[bb] = bb*Opt.DomPerTrench+((Opt.DomPerTrench-1)/2)
+            EdgeInd[bb*2] = bb*Opt.DomPerTrench
+            EdgeInd[bb*2+1] = (bb+1)*Opt.DomPerTrench-1
         #%%
         FitWidth = int(Opt.l0/Opt.NmPP*.5)
         #FitWidth = int(4)
@@ -381,7 +366,7 @@ if __name__ == '__main__':
         print('\n Image '+Opt.FName+'\n')
         __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
 
-        POut = Parallel(n_jobs=8,verbose=5)(delayed(PeakPara)(RawIn[:,tt,ImNum], Opt.NmPP, CValley, FitWidth) # backend='threading' removed
+        POut = Parallel(n_jobs=-1,verbose=5)(delayed(PeakPara)(RawIn[:,tt,ImNum], Opt.NmPP, CValley, FitWidth) # backend='threading' removed
             for tt in range(RawIn.shape[1]))
         
         FPTuple, FPWTuple = zip(*POut)
@@ -505,11 +490,16 @@ if __name__ == '__main__':
             CCWidth = CCWidth.append( PanWidth.corrwith(PanWidth.shift(periods=lag).shift(1,axis=1)).rename('lag%i' %lag))
             
         #%% Autocorrelation
-        ACDispF , ACDispAx = plt.subplots(nrows=2)
+        ACDispF , ACDispAx = plt.subplots(nrows=2,figsize=(15,3))
         ACDispF.suptitle('Peak displacement Autocorrelation')
-        ACDispIm = ACDispAx[0].imshow(ACPeak.transpose(), cmap="seismic_r", vmin=-1, vmax=1)
+        ACDispIm = ACDispAx[0].imshow(ACPeak.transpose(), cmap="seismic_r", vmin=-1, vmax=1)   
         ACDispF.colorbar(ACDispIm)
+        ACDispAx[1].plot(ACPeak.values.mean(axis=1),label='Overall')
+        ACDispAx[1].plot(ACPeak.values[:,EdgeInd].mean(axis=1),label='Edge')
+        ACDispAx[1].plot(ACPeak.values[:,MidInd].mean(axis=1),label='Center')
+        ACDispAx[1].legend()
         ACDispF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "DisplacementAC.png"), dpi=300)
+        #%%
         ACDispF.clf()
         plt.close(ACDispF)        
         #%% MSD AC
@@ -517,17 +507,26 @@ if __name__ == '__main__':
         ACMSDF.suptitle('MSD Autocorrelation')
         ACMSDIm = ACMSDAx[0].imshow(ACMSD.transpose(), cmap="plasma", vmin=0, vmax=15)
         ACMSDF.colorbar(ACMSDIm)
-        ACMSDAx[1].plot(ACMSD.agg('mean',axis="columns"))
+        ACMSDAx[1].plot(ACMSD.values.mean(axis=1),label='Overall')
+        ACMSDAx[1].plot(ACMSD.values[:,EdgeInd].mean(axis=1),label='Edge')
+        ACMSDAx[1].plot(ACMSD.values[:,MidInd].mean(axis=1),label='Center')
+        ACMSDAx[1].legend()
         ACMSDF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "MSDAC.png"), dpi=300)
+        #%%
         ACMSDF.clf()
         plt.close(ACMSDF)        
         
         #%%width
-        ACWidthF , ACWidthAx = plt.subplots( figsize=(15,3))
+        ACWidthF , ACWidthAx = plt.subplots(nrows=2, figsize=(15,3))
         ACWidthF.suptitle('Peak FWHM Autocorrelation')
-        ACWidthIm = ACWidthAx.imshow(ACWidth.transpose(), cmap="seismic_r", vmin=-1, vmax=1)
+        ACWidthIm = ACWidthAx[0].imshow(ACWidth.transpose(), cmap="seismic_r", vmin=-1, vmax=1)
         ACWidthF.colorbar(ACWidthIm)
+        ACWidthAx[1].plot(ACWidth.values.mean(axis=1),label='Overall')
+        ACWidthAx[1].plot(ACWidth.values[:,EdgeInd].mean(axis=1),label='Edge')
+        ACWidthAx[1].plot(ACWidth.values[:,MidInd].mean(axis=1),label='Center')
+        ACWidthAx[1].legend()
         ACWidthF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "WidthAC.png"), dpi=300)
+        #%%
         ACWidthF.clf()
         plt.close(ACWidthF)
         #%% MSD per line
@@ -544,7 +543,7 @@ if __name__ == '__main__':
         
         #%% save the kappa/KT calculated from disp squared
         PSeudoEA = np.nanmean(( FDispCorrect**-2),axis=1)
-        PSeudoEA = PSeudoEA.reshape((CPatSep.size-1,Opt.DomPerTrench))
+        PSeudoEA = PSeudoEA.reshape((CPatSep.size-1,Opt.DomPerTrench))*Opt.Boltz*Opt.Temp
         if ImNum == 0:
             EAOut = PSeudoEA
         else:
@@ -586,7 +585,7 @@ if __name__ == '__main__':
             EAAx[rc,cc].set_title('Domain %i fit Kappa = %f eV/nm^2'%(dd+1, VarEA[0,(dd+1)]))
             EAAx[rc,cc].set_xlim([-10, 10])
          #% plot  
-        EAF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Variance Fitting.png"), dpi=300)
+        EAF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "VarianceFitting.png"), dpi=300)
         EAF.clf()
         plt.close(EAF)
         if ImNum == 0:
@@ -612,12 +611,14 @@ if __name__ == '__main__':
         GTheory = VarEA[0,0]*0.5*BinX**2
         GTheory += GOff
         DeltaGAx.plot(BinX[Filter],GCount[Filter],'k.',BinX[Filter],GTheory[Filter],'r')
-        DeltaGF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Hooks Law Restoring Force"), dpi=300)
-        
+        DeltaGF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "HooksLaw"), dpi=300)
+        DeltaGF.clf()
+        plt.close(DeltaGF)
         #%%
         
     #outside of imnum loop
     np.savetxt(os.path.join(Opt.FPath,"output","SummedEA.csv"),EAOut,delimiter=',')
     np.savetxt(os.path.join(Opt.FPath,"output","VarEA.csv"),VarEAOut,delimiter=',')
     
+    print('All Done')
 
