@@ -462,12 +462,12 @@ if __name__ == '__main__':
         #%% Show Odd EVEN
         OddEveF,OddEveAx = plt.subplots()
         
-        OddEveAx.plot(Xplot[0::2],FEL[0,0::2],'b.',label='Left Even')
-        OddEveAx.plot(Xplot[0::2],FPeak[0,0::2],'b',label='Peak Even')
-        OddEveAx.plot(Xplot[0::2],FER[0,0::2],'b.',label='Right Even')
-        OddEveAx.plot(Xplot[1::2],FEL[0,1::2],'r.',label='Left Even')
-        OddEveAx.plot(Xplot[1::2],FPeak[0,1::2],'r',label='Peak Even')
-        OddEveAx.plot(Xplot[1::2],FER[0,1::2],'r.',label='Right Even')
+        OddEveAx.plot(Xplot[0::2],FEL[4,0::2],'b.',label='Left Even')
+        OddEveAx.plot(Xplot[0::2],FPeak[4,0::2],'b',label='Peak Even')
+        OddEveAx.plot(Xplot[0::2],FER[4,0::2],'b.',label='Right Even')
+        OddEveAx.plot(Xplot[1::2],FEL[4,1::2],'r.',label='Left Even')
+        OddEveAx.plot(Xplot[1::2],FPeak[4,1::2],'r',label='Peak Even')
+        OddEveAx.plot(Xplot[1::2],FER[4,1::2],'r.',label='Right Even')
         OddEveF.legend()
         OddEveF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "OddEven.png"), dpi=600)
         
