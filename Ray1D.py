@@ -155,6 +155,86 @@ def PeakPara(LineIn, NmPP, CValley, SetFWidth):
             FPWidth[pp] = np.nan
             FPeak[pp] = np.nan
     return( FPeak, FPWidth)
+    
+def LERPara(LineIn, NmPP, CValley, SetFWidth):
+    Length = LineIn.size
+    gmodel = lmfit.Model(gaussian)
+    Inits = gmodel.make_params()
+    FPeak = np.zeros(CValley.shape)
+    FEdgeL = np.zeros(CValley.shape)
+    FEdgeR = np.zeros(CValley.shape)
+    FPWidth = np.zeros(CValley.shape)
+    FirstDer = np.gradient(LineIn)
+    GradCurve = np.diff(np.sign((FirstDer))) 
+    # this just says where sign of 1D changes
+    
+    for pp in range(len(CValley)): #loop through peak positions (guesstimates)
+        PCur = int(CValley[pp]) # this is our current *peak* guesstimate
+        # first goal : Refine the peak guesstimate for this line
+        FitWidth = SetFWidth # look at local area only
+        PLow = int(np.maximum((PCur-FitWidth),0))
+        PHigh = int(np.min((PCur+FitWidth+1,Length-1)))
+
+        try:PCur = int(np.arange(PLow,PHigh)[np.argmax(GradCurve[PLow:PHigh])+1])
+        except:pass
+        # set peak as the minimum (max 2nd div) 
+        # the +1 is to fix the derivative offset from data
+        #now expand our range to the next domains
+        FitWidth = SetFWidth * 2
+        PLow = int(np.maximum((PCur-FitWidth),0))
+        PHigh = int(np.min((PCur+FitWidth+1,Length-1)))
+        
+        # now fix the point to the Right of the valley
+        # Remember we are looking for mim of second derivative +1 is to fix diff offset
+        PHigh = int(PCur +  np.argmin(GradCurve[PCur:PHigh]) +1) 
+        # now fix the point to the left of the valley. 
+        #Do the flip so the first point we find is closest to peak
+        # do -1 cus we're moving otherway
+        PLow = int(PCur - np.argmin(np.flip(GradCurve[PLow:PCur],0)) -1)
+        # PLow is now the max peak to the left of the current valley 
+        # PHigh is now the max peak to the right of the current valley
+        
+        #%% Fit Left Edge
+        
+        # now we want to fit edges. so max or mins of derivative. 
+        #flip
+        LocalCurve = abs((FirstDer[PLow:PCur]-max(FirstDer[PLow:PCur])))
+        
+        # this just flips the curve to be right side up with a minimum of 0
+        # so we can map it onto the typical gaussian        
+        Inits['amp']=lmfit.Parameter(name='amp', value= max(LocalCurve))
+        Inits['wid']=lmfit.Parameter(name='wid', value= FitWidth/2)
+        Inits['cen']=lmfit.Parameter(name='cen', value= (PLow+PCur)/2, min=PLow, max=PCur)
+    
+        try:
+            Res = gmodel.fit(LocalCurve, Inits, x=np.arange(PLow,PCur))
+            FEdgeL[pp] = Res.best_values['cen']*NmPP
+            if (abs(Res.best_values['cen'] <= PLow)) or (abs(Res.best_values['cen'] >= PCur)):
+                FEdgeL[pp] = np.nan
+        except:
+            FEdgeL[pp] = np.nan
+            
+        #%% Fit Right Edge
+
+        LocalCurve = abs((FirstDer[PCur:PHigh]-min(FirstDer[PCur:PHigh])))
+        
+        # dont flip       
+        Inits['amp']=lmfit.Parameter(name='amp', value= max(LocalCurve))
+        Inits['wid']=lmfit.Parameter(name='wid', value= FitWidth/2)
+        Inits['cen']=lmfit.Parameter(name='cen', value= (PCur+PHigh)/2, min=PCur, max=PHigh)
+    
+        try:
+            Res = gmodel.fit(LocalCurve, Inits, x=np.arange(PCur,PHigh))
+            FEdgeR[pp] = Res.best_values['cen']*NmPP
+            if (abs(Res.best_values['cen'] <= PCur)) or (abs(Res.best_values['cen'] >= PHigh)):
+                FEdgeR[pp] = np.nan
+        except:
+            FEdgeR[pp] = np.nan
+    
+    FPWidth= FEdgeR - FEdgeL
+    FPeak = 0.5*(FEdgeL+FEdgeR)
+            
+    return( FPeak, FPWidth, FEdgeL, FEdgeR)
             
 
 #%%
@@ -369,21 +449,42 @@ if __name__ == '__main__':
         print('\n Image '+Opt.FName+'\n')
         __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
 
-        POut = Parallel(n_jobs=-1,verbose=5)(delayed(PeakPara)(RawIn[:,tt,ImNum], Opt.NmPP, CValley, FitWidth) # backend='threading' removed
+        POut = Parallel(n_jobs=-1,verbose=5)(delayed(LERPara)(RawIn[:,tt,ImNum], Opt.NmPP, CValley, FitWidth) # backend='threading' removed
             for tt in range(RawIn.shape[1]))
-        
-        FPTuple, FPWTuple = zip(*POut)
+        #%%
+        FPTuple, FPWTuple, FELTup, FERTup = zip(*POut)
         FPeak = np.array(FPTuple).transpose()
         FPWidth = np.array(FPWTuple).transpose()
+        FEL = np.array(FELTup).transpose()
+        FER = np.array(FERTup).transpose()
         print('Done')
         #Everything past here is already in Nanometers. PEAK FITTING OUTPUTS IT
+        #%% Show Odd EVEN
+        OddEveF,OddEveAx = plt.subplots()
+        
+        OddEveAx.plot(Xplot[0::2],FEL[0,0::2],'b.',label='Left Even')
+        OddEveAx.plot(Xplot[0::2],FPeak[0,0::2],'b',label='Peak Even')
+        OddEveAx.plot(Xplot[0::2],FER[0,0::2],'b.',label='Right Even')
+        OddEveAx.plot(Xplot[1::2],FEL[0,1::2],'r.',label='Left Even')
+        OddEveAx.plot(Xplot[1::2],FPeak[0,1::2],'r',label='Peak Even')
+        OddEveAx.plot(Xplot[1::2],FER[0,1::2],'r.',label='Right Even')
+        OddEveF.legend()
+        OddEveF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "OddEven.png"), dpi=600)
+        
+        #%%
+        OddEveF.clf()
+        plt.close(OddEveF)
 
         #%% Save filtered data
         np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "FitPeak.csv"),FPeak,delimiter=',')
-        np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "FitFWHM.csv"),FPWidth,delimiter=',')      
+        np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "FitFWHM.csv"),FPWidth,delimiter=',')  
+        np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "FitEdgeL.csv"),FEL,delimiter=',')
+        np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "FitEdgeR.csv"),FER,delimiter=',')
         
         #%% Calc Displacement
         FDisp = ((FPeak.transpose() - np.nanmean(FPeak,axis=1)).transpose())
+        FELRes = ((FEL.transpose() - np.nanmean(FPeak,axis=1)).transpose())
+        FERRes = ((FER.transpose() - np.nanmean(FPeak,axis=1)).transpose())
         FPWidthDisp = ((FPWidth.transpose() - np.nanmean(FPWidth,axis=1)).transpose())
         
         #%% Do thermal drift correction
@@ -400,13 +501,25 @@ if __name__ == '__main__':
             plt.close(TDF)
         #%% now correct the data for drift
         FDispCorrect = (FDisp - TDPlot)
+        FELCorrect = (FELRes - TDPlot)
+        FERCorrect = (FERRes - TDPlot)
+        
+        #%% put edges together
+        
+        FECorrect = np.zeros((FER.shape[0]*2,FER.shape[1]))
+        FECorrect[0::2,:] = FELCorrect
+        FECorrect[1::2,:] = FERCorrect
+        
+        FECorrect = np.abs(FECorrect) # not sure we need the pos negative info?
+        
         #%% move on
         
         
         
         PanDisp = pd.DataFrame(data=FDispCorrect.transpose())
         PanWidth = pd.DataFrame(data=FPWidth.transpose())
-        
+        PanE = pd.DataFrame(data=FECorrect.transpose())
+
         
         
         #StackDisp 
@@ -414,68 +527,132 @@ if __name__ == '__main__':
         #%% Cross Corref 
         StackDisp = FDispCorrect.transpose()[:,0:Opt.DomPerTrench]
         StackWidth = FPWidth.transpose()[:,0:Opt.DomPerTrench]
+        StackEdge = FECorrect.transpose()[:,0:Opt.DomPerTrench*2]
         for xx in np.arange(1,CPatSep.size-1):
             StackDisp=np.concatenate( (StackDisp,FDispCorrect.transpose()[:,xx*Opt.DomPerTrench:(xx+1)*Opt.DomPerTrench]) )
             StackWidth=np.concatenate((StackWidth,FPWidth.transpose()[:,xx*Opt.DomPerTrench:(xx+1)*Opt.DomPerTrench]))
+            StackEdge=np.concatenate((StackEdge,FECorrect.transpose()[:,2*xx*Opt.DomPerTrench:2*(xx+1)*Opt.DomPerTrench]))
             
 
         PDStackD = pd.DataFrame(data=StackDisp)
         PDStackW = pd.DataFrame(data=StackWidth)
+        PDStackE = pd.DataFrame(data=StackEdge)
+
         
         StackD1O = np.zeros((0,2)) # 1 over correlation
         StackW1O = np.zeros((0,2)) # ditto for width
+        StackE1O = np.zeros((0,2)) # ditto for width
         StackD2O = np.zeros((0,2)) # 2 over correlation
         StackW2O = np.zeros((0,2)) # ditto for width
+        StackE2O = np.zeros((0,2)) # ditto for width
         StackD3O = np.zeros((0,2)) # 3 over correlation
         StackW3O = np.zeros((0,2)) # ditto for width
+        StackE3O = np.zeros((0,2)) # ditto for width
+        StackE4O = np.zeros((0,2)) # ditto for width
+        StackE5O = np.zeros((0,2)) # ditto for width
 
         
         
         for nn in range(Opt.DomPerTrench-1):
             StackD1O = np.append( StackD1O, np.array((PDStackD.values[:,nn],PDStackD.values[:,nn+1])).transpose(),axis = 0 )
             StackW1O = np.append( StackW1O, np.array((PDStackW.values[:,nn],PDStackW.values[:,nn+1])).transpose(),axis = 0 )
+            StackE1O = np.append( StackE1O, np.array((PDStackE.values[:,nn],PDStackE.values[:,nn+1])).transpose(),axis = 0 )
+            StackE1O = np.append( StackE1O, np.array((PDStackE.values[:,2*nn],PDStackE.values[:,2*nn+1])).transpose(),axis = 0 )
             if nn < Opt.DomPerTrench-2:
                 StackD2O = np.append( StackD2O, np.array((PDStackD.values[:,nn],PDStackD.values[:,nn+2])).transpose(),axis = 0 )
                 StackW2O = np.append( StackW2O, np.array((PDStackW.values[:,nn],PDStackW.values[:,nn+2])).transpose(),axis = 0 )
+                StackE2O = np.append( StackE2O, np.array((PDStackE.values[:,nn],PDStackE.values[:,nn+2])).transpose(),axis = 0 )
+                StackE2O = np.append( StackE2O, np.array((PDStackE.values[:,2*nn],PDStackE.values[:,2*nn+2])).transpose(),axis = 0 )
             if nn < Opt.DomPerTrench-3:
                 StackD3O = np.append( StackD3O, np.array((PDStackD.values[:,nn],PDStackD.values[:,nn+3])).transpose(),axis = 0 )
                 StackW3O = np.append( StackW3O, np.array((PDStackW.values[:,nn],PDStackW.values[:,nn+3])).transpose(),axis = 0 )
-        
-        
+                StackE3O = np.append( StackE3O, np.array((PDStackE.values[:,nn],PDStackE.values[:,nn+3])).transpose(),axis = 0 )
+                StackE3O = np.append( StackE3O, np.array((PDStackE.values[:,2*nn],PDStackE.values[:,2*nn+3])).transpose(),axis = 0 )
+            if nn < Opt.DomPerTrench-4:
+                StackE4O = np.append( StackE4O, np.array((PDStackE.values[:,nn],PDStackE.values[:,nn+4])).transpose(),axis = 0 )
+                StackE4O = np.append( StackE4O, np.array((PDStackE.values[:,2*nn],PDStackE.values[:,2*nn+4])).transpose(),axis = 0 )
+            if nn< Opt.DomPerTrench-5:
+                StackE5O = np.append( StackE5O, np.array((PDStackE.values[:,nn],PDStackE.values[:,nn+5])).transpose(),axis = 0 )
+                StackE5O = np.append( StackE5O, np.array((PDStackE.values[:,2*nn],PDStackE.values[:,2*nn+5])).transpose(),axis = 0 )
+
         
         CCDisp = PDStackD.corr() # calcualte cross correlations
         CCWidth = PDStackW.corr() # calcualte cross correlations
+        CCEL = PDStackE.corr()
+        
 
-        #%% Plot Pek Cross Corr
+        #%% Plot LPR Cross Corr
         CCF , CCAx = plt.subplots()
-        CCF.suptitle('Peak displacement correlations (Pearson)')
+        CCF.suptitle('LPR (Pearson)')
         CCIm = CCAx.imshow(CCDisp, cmap="seismic_r", vmin=-1, vmax=1)
         CCF.colorbar(CCIm)
-        CCF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "DisplacementCC.png"), dpi=300)
+        CCF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "LPR_CC.png"), dpi=300)
         CCF.clf()
         plt.close(CCF)
-        #%%
+        #%% LWR
         CCWidthF , CCWidthAx = plt.subplots()
-        CCWidthF.suptitle('FWHM correlations (Pearson)')
+        CCWidthF.suptitle('LWR correlations (Pearson)')
         CCWidthIm = CCWidthAx.imshow(CCWidth, cmap="seismic_r", vmin=-1, vmax=1)
         CCWidthF.colorbar(CCWidthIm)
-        CCWidthF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "WidthCC.png"), dpi=300)
+        CCWidthF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "LWR_CC.png"), dpi=300)
         CCWidthF.clf()
         plt.close(CCWidthF)
         #%%
-        CrossCorF , CrossCorAx = plt.subplots(1,3, figsize=(12,4))
-        CrossCorF.suptitle('1st Order Correlations, 2nd Order Correlations, Third Order Correlations')
-        CrossCorAx[0].hexbin(StackD1O[:,0],StackD1O[:,1],gridsize=20,extent=(-10, 10, -10, 10))
-        CrossCorAx[0].set_aspect('equal')
-        CrossCorAx[1].hexbin(StackD2O[:,0],StackD2O[:,1],gridsize=20,extent=(-10, 10, -10, 10))
-        CrossCorAx[1].set_aspect('equal')
-        CrossCorAx[2].hexbin(StackD3O[:,0],StackD3O[:,1],gridsize=20,extent=(-10, 10, -10, 10))
-        CrossCorAx[2].set_aspect('equal')
-        
-        CrossCorF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "CrossCor.png"), dpi=600)
+        CCELF , CCELAx = plt.subplots()
+        CCELF.suptitle('Edge correlations (Pearson)')
+        CCELIm = CCELAx.imshow(CCEL, cmap="seismic_r", vmin=-1, vmax=1)
+        CCELF.colorbar(CCELIm)
+        CCELF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "LER_CC.png"), dpi=300)
+        CCELF.clf()
+        plt.close(CCELF)
         #%%
-        CrossCorF.clf()
-        plt.close(CrossCorF)
+        LPRCRossF , LPRCRossAx = plt.subplots(1,3, figsize=(12,4))
+        LPRCRossF.suptitle('Positional Correlations')
+        LPRCRossAx[0].hexbin(StackD1O[:,0],StackD1O[:,1],gridsize=20,extent=(-10, 10, -10, 10))
+        LPRCRossAx[0].set_aspect('equal')
+        LPRCRossAx[1].hexbin(StackD2O[:,0],StackD2O[:,1],gridsize=20,extent=(-10, 10, -10, 10))
+        LPRCRossAx[1].set_aspect('equal')
+        LPRCRossAx[2].hexbin(StackD3O[:,0],StackD3O[:,1],gridsize=20,extent=(-10, 10, -10, 10))
+        LPRCRossAx[2].set_aspect('equal')
+        
+        LPRCRossF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "LPR_Cross.png"), dpi=600)
+        #%%
+        LPRCRossF.clf()
+        plt.close(LPRCRossF)
+
+        #%%
+        LWRCRossF , LWRCRossAx = plt.subplots(1,3, figsize=(12,4))
+        LWRCRossF.suptitle('Width Correlations')
+        LWRCRossAx[0].hexbin(StackW1O[:,0],StackW1O[:,1],gridsize=20,extent=(10, 35, 10, 35))
+        LWRCRossAx[0].set_aspect('equal')
+        LWRCRossAx[1].hexbin(StackW2O[:,0],StackW2O[:,1],gridsize=20,extent=(10, 35, 10, 35))
+        LWRCRossAx[1].set_aspect('equal')
+        LWRCRossAx[2].hexbin(StackW3O[:,0],StackW3O[:,1],gridsize=20,extent=(10, 35, 10, 35))
+        LWRCRossAx[2].set_aspect('equal')
+        
+        LWRCRossF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "LWR_Cross.png"), dpi=600)
+        #%%
+        LWRCRossF.clf()
+        plt.close(LWRCRossF)
+        
+                #%%
+        LERCRossF , LERCRossAx = plt.subplots(1,5, figsize=(12,4))
+        LERCRossF.suptitle('Edge Correlations')
+        LERCRossAx[0].hexbin(StackE1O[:,0],StackE1O[:,1],gridsize=20,extent=(0, 20, 0, 20))
+        LERCRossAx[0].set_aspect('equal')
+        LERCRossAx[1].hexbin(StackE2O[:,0],StackE2O[:,1],gridsize=20,extent=(0, 20, 0, 20))
+        LERCRossAx[1].set_aspect('equal')
+        LERCRossAx[2].hexbin(StackE3O[:,0],StackE3O[:,1],gridsize=20,extent=(0, 20, 0, 20))
+        LERCRossAx[2].set_aspect('equal')
+        LERCRossAx[3].hexbin(StackE4O[:,0],StackE4O[:,1],gridsize=20,extent=(0, 20, 0, 20))
+        LERCRossAx[3].set_aspect('equal')
+        LERCRossAx[4].hexbin(StackE5O[:,0],StackE5O[:,1],gridsize=20,extent=(0, 20, 0, 20))
+        LERCRossAx[4].set_aspect('equal')
+        LERCRossF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "LER_Cross.png"), dpi=600)
+        #%%
+        LERCRossF.clf()
+        plt.close(LERCRossF)
+
         
         #%% Autocorrelation Opt.AcSize
         ACPeak = pd.DataFrame()
@@ -495,16 +672,26 @@ if __name__ == '__main__':
         #%% Power Spectral Density
         
         PSDPeak = np.abs(np.fft.rfft(FDispCorrect))**2
-         
         PSDWidth = np.abs(np.fft.rfft(FPWidthDisp))**2
+        PSDEdge = np.abs(np.fft.rfft(FECorrect))**2
         PSDFreq = np.fft.rfftfreq(FPeak.shape[1],0.05) # Sampling rate is 20 hz so sample time = .05?
         PSDCk = (4*PSDPeak-PSDWidth)/(4*PSDPeak+PSDWidth)
-        PSDF , PSDAx = plt.subplots(nrows=3, sharex = True)
-        PSDF.suptitle('Power Spectral Density (Position, Width and CK)')
-        PSDAx[0].loglog(PSDFreq[1:], np.nanmean(PSDPeak, axis=0)[1:])
-        PSDAx[1].loglog(PSDFreq[1:], np.nanmean(PSDWidth, axis = 0)[1:])
-        PSDAx[2].semilogx(PSDFreq, np.nanmean(PSDCk, axis = 0))
+        PSDF , PSDAx = plt.subplots(nrows=4, sharex = True, figsize=(6,6))
+        PSDF.suptitle('Power Spectral Density')
+        PSDAx[0].loglog(PSDFreq[1:], np.nanmean(PSDPeak, axis=0)[1:],'k.')
+        PSDAx[0].set_title('LPR')
+        PSDAx[1].loglog(PSDFreq[1:], np.nanmean(PSDWidth, axis = 0)[1:],'k.')
+        PSDAx[1].set_title('LWR')
+        PSDAx[2].loglog(PSDFreq[1:], np.nanmean(PSDEdge, axis = 0)[1:],'k.')
+        PSDAx[2].set_title('LER')
+        PSDAx[3].semilogx(PSDFreq, np.nanmean(PSDCk, axis = 0))
+        PSDAx[3].set_title('CK')
+        PSDAx[3].set_xlabel('Frequency (hz)')
+        PSDF.tight_layout(rect=(0,0,1,0.95))
         PSDF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "PSD.png"), dpi=300)
+        #%%
+        PSDF.clf()
+        plt.close(PSDF)
         
         #%% Autocorrelation
         ACDispF , ACDispAx = plt.subplots(nrows=2,figsize=(15,3))
@@ -606,7 +793,7 @@ if __name__ == '__main__':
         EAF.clf()
         plt.close(EAF)
         if ImNum == 0:
-            VarEAOut = VarEA
+            VarEAOut = np.copy(VarEA)
         else:
             VarEAOut = np.concatenate((VarEAOut, VarEA))
         #%% Delta G plot
@@ -631,11 +818,41 @@ if __name__ == '__main__':
         DeltaGF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "HooksLaw"), dpi=300)
         DeltaGF.clf()
         plt.close(DeltaGF)
+        
+        #%% Sigma Stuff
+        SigmaE = np.zeros((1,(Opt.DomPerTrench+1)))
+        SigmaW = np.zeros((1,(Opt.DomPerTrench+1)))
+        
+        SigmaE[0,0] = 3*np.nanvar(FECorrect)
+        SigmaW[0,0] = 3*np.nanvar(FPWidth)
+        for dd in range(Opt.DomPerTrench):
+            SigmaE[0,dd+1] = 3*np.nanvar(StackEdge[:,dd*2:dd*2+2])
+            SigmaW[0,dd+1] = 3*np.nanvar(StackWidth[:,dd])
+        SigmaRat = SigmaW/SigmaE
+        SigmaAll = np.concatenate((SigmaE,SigmaW,SigmaRat),axis=1)
+        
+        if ImNum == 0:
+            SigmaOut = np.copy(SigmaAll)
+        else:
+            SigmaOut = np.concatenate((SigmaOut, SigmaAll))
+        #%% plot sigma
+        SigmaF, SigmaAx = plt.subplots(nrows=2, sharex=True)
+        SigmaLab = ('Overall','1','2','3','4','5','6','7')
+        SigmaPos = np.arange(len(SigmaLab))
+        SigmaAx[0].plot(SigmaPos,SigmaW[0,:],'k.',label='3 sigma W')
+        SigmaAx[0].plot(SigmaPos,SigmaE[0,:],'b.',label='3 sigma E')
+        SigmaAx[1].plot(SigmaPos,SigmaRat[0,:],'r.',label='W/E')
+        SigmaF.legend()
+        SigmaAx.set_xticks(SigmaPos)
+        SigmaAx.set_xticklabels(SigmaLab)
+        #%%
+        SigmaF.clf()
+        plt.close(SigmaF)
         #%%
         
     #outside of imnum loop
     np.savetxt(os.path.join(Opt.FPath,"output","SummedEA.csv"),EAOut,delimiter=',')
     np.savetxt(os.path.join(Opt.FPath,"output","VarEA.csv"),VarEAOut,delimiter=',')
-    
+    np.savetxt(os.path.join(Opt.FPath,"output","3Sigma.csv"),SigmaOut,delimiter=',')
     print('All Done')
 
