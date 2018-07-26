@@ -226,8 +226,9 @@ if __name__ == '__main__':
     # EG AngMP = 5 then 1 2 3 4 5, 3 will be calc off angle 1 - 5
     Opt.Machine = "Unknown"
     
-    
-    #%% Open
+    #%% Plot Options
+    Opt.TDriftP = 0;
+    #%% Select Files
     FOpen=tk.Tk()
     
     currdir = os.getcwd()
@@ -249,7 +250,9 @@ if __name__ == '__main__':
     RawComb = np.zeros((Shap0,Shap1*len(FNFull)))
     XPeak = np.array([])
     Block = 1
-    Opt.TempC = float(input('Temperature in Celsius :'))
+    #%%
+    print(FNFull[0])
+    Opt.TempC = float(input('Temperature in Celsius : '))
     Opt.Temp = Opt.TempC+273.15
     
     #%% Import data ( can't be parallelized as it breaks the importer )
@@ -381,19 +384,20 @@ if __name__ == '__main__':
         
         #%% Calc Displacement
         FDisp = ((FPeak.transpose() - np.nanmean(FPeak,axis=1)).transpose())
+        FPWidthDisp = ((FPWidth.transpose() - np.nanmean(FPWidth,axis=1)).transpose())
         
         #%% Do thermal drift correction
         XTD = np.arange(FDisp.shape[1])
         YTD = np.nanmean(FDisp,axis=0)
         TDFit = np.polyfit(XTD,YTD,1)
         TDPlot = np.polyval(TDFit,XTD)
-        
-        TDF, TDAx = plt.subplots()
-        TDF.suptitle('Thermal Drift y=%f*x+%f' % (TDFit[0],TDFit[1]))
-        TDAx.plot(XTD,YTD,XTD,TDPlot)
-        TDF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "ThermalDrift.png"), dpi=600)
-        TDF.clf()
-        plt.close(TDF)
+        if Opt.TDriftP == 1:
+            TDF, TDAx = plt.subplots()
+            TDF.suptitle('Thermal Drift y=%f*x+%f' % (TDFit[0],TDFit[1]))
+            TDAx.plot(XTD,YTD,XTD,TDPlot)
+            TDF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "ThermalDrift.png"), dpi=600)
+            TDF.clf()
+            plt.close(TDF)
         #%% now correct the data for drift
         FDispCorrect = (FDisp - TDPlot)
         #%% move on
@@ -488,7 +492,20 @@ if __name__ == '__main__':
             ACMSD = ACMSD.append(((PanDisp.shift(periods=lag)-PanDisp)**2).mean().rename('lag%i' %lag))
             ACWidth = ACWidth.append( PanWidth.corrwith(PanWidth.shift(periods=lag)).rename('lag%i' %lag))
             CCWidth = CCWidth.append( PanWidth.corrwith(PanWidth.shift(periods=lag).shift(1,axis=1)).rename('lag%i' %lag))
-            
+        #%% Power Spectral Density
+        
+        PSDPeak = np.abs(np.fft.rfft(FDispCorrect))**2
+         
+        PSDWidth = np.abs(np.fft.rfft(FPWidthDisp))**2
+        PSDFreq = np.fft.rfftfreq(FPeak.shape[1],0.05) # Sampling rate is 20 hz so sample time = .05?
+        PSDCk = (4*PSDPeak-PSDWidth)/(4*PSDPeak+PSDWidth)
+        PSDF , PSDAx = plt.subplots(nrows=3, sharex = True)
+        PSDF.suptitle('Power Spectral Density (Position, Width and CK)')
+        PSDAx[0].loglog(PSDFreq[1:], np.nanmean(PSDPeak, axis=0)[1:])
+        PSDAx[1].loglog(PSDFreq[1:], np.nanmean(PSDWidth, axis = 0)[1:])
+        PSDAx[2].semilogx(PSDFreq, np.nanmean(PSDCk, axis = 0))
+        PSDF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "PSD.png"), dpi=300)
+        
         #%% Autocorrelation
         ACDispF , ACDispAx = plt.subplots(nrows=2,figsize=(15,3))
         ACDispF.suptitle('Peak displacement Autocorrelation')
@@ -548,7 +565,7 @@ if __name__ == '__main__':
             EAOut = PSeudoEA
         else:
             EAOut = np.concatenate((EAOut, PSeudoEA))
-#%% what about from the variance? Change if changing domain counts
+            #%% what about from the variance? Change if changing domain counts
         VarEA = np.zeros((1,Opt.DomPerTrench+1))
 
         EAF , EAAx = plt.subplots(2,4, figsize=(16,16))
