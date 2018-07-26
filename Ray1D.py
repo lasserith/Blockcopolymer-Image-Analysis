@@ -671,11 +671,12 @@ if __name__ == '__main__':
             CCWidth = CCWidth.append( PanWidth.corrwith(PanWidth.shift(periods=lag).shift(1,axis=1)).rename('lag%i' %lag))
         #%% Power Spectral Density
         
-        PSDPeak = np.abs(np.fft.rfft(FDispCorrect))**2
-        PSDWidth = np.abs(np.fft.rfft(FPWidthDisp))**2
-        PSDEdge = np.abs(np.fft.rfft(FECorrect))**2
+        PSDPeak = np.abs(np.fft.rfft(PanDisp.interpolate(limit_direction='both').values.transpose()))**2
+        PSDWidth = np.abs(np.fft.rfft(PanWidth.interpolate(limit_direction='both').values.transpose()))**2
+        PSDEdge = np.abs(np.fft.rfft(PanE.interpolate(limit_direction='both').values.transpose()))**2
         PSDFreq = np.fft.rfftfreq(FPeak.shape[1],0.05) # Sampling rate is 20 hz so sample time = .05?
         PSDCk = (4*PSDPeak-PSDWidth)/(4*PSDPeak+PSDWidth)
+        #%%
         PSDF , PSDAx = plt.subplots(nrows=4, sharex = True, figsize=(6,6))
         PSDF.suptitle('Power Spectral Density')
         PSDAx[0].loglog(PSDFreq[1:], np.nanmean(PSDPeak, axis=0)[1:],'k.')
