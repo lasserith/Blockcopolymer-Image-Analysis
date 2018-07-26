@@ -843,8 +843,9 @@ if __name__ == '__main__':
         SigmaAx[0].plot(SigmaPos,SigmaE[0,:],'b.',label='3 sigma E')
         SigmaAx[1].plot(SigmaPos,SigmaRat[0,:],'r.',label='W/E')
         SigmaF.legend()
-        SigmaAx.set_xticks(SigmaPos)
-        SigmaAx.set_xticklabels(SigmaLab)
+        SigmaAx[1].set_xticks(SigmaPos)
+        SigmaAx[1].set_xticklabels(SigmaLab)
+        SigmaF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Sigma"), dpi=300)
         #%%
         SigmaF.clf()
         plt.close(SigmaF)
