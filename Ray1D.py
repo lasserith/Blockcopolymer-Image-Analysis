@@ -172,13 +172,13 @@ def LERPara(LineIn, NmPP, CValley,LEdgeInd, REdgeInd,  SetFWidth):
     for pp in range(len(CValley)): #loop through peak positions (guesstimates)
         PCur = int(CValley[pp]) # this is our current *peak* guesstimate
         # first goal : Refine the peak guesstimate for this line
-        FitWidth = SetFWidth # look at local area only
+        FitWidth = 2 # look at local area only
         
         PLow = int(np.maximum((PCur-FitWidth),0)) #PLow is a fixed distance
         PHigh = int(np.min((PCur+FitWidth+1,Length-1))) #PHigh is fixed +1 still here to fix indexing
         try:PCur = int(np.arange(PLow,PHigh)[np.argmin(LineIn[PLow:PHigh])])
         except:pass
-
+        FitWidth = SetFWidth
 
         # set peak as the minimum (max 2nd div) 
         # the +1 is to fix the derivative offset from data
@@ -282,6 +282,9 @@ def LERPara(LineIn, NmPP, CValley,LEdgeInd, REdgeInd,  SetFWidth):
         else: # calc as usual
             FPWidth[pp]= FEdgeR[pp] - FEdgeL[pp]
             FPeak[pp] = 0.5*(FEdgeL[pp]+FEdgeR[pp])
+        
+        
+    FPWidth[FPWidth < 0] = np.nan # if we have bad data lets throw it out
             
     return( FPeak, FPWidth, FEdgeL, FEdgeR)
             
@@ -503,7 +506,7 @@ if __name__ == '__main__':
         print('\n Image '+Opt.FName+'\n')
         __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
 
-        POut = Parallel(n_jobs=8,verbose=5)(delayed(LERPara)(RawIn[:,tt,ImNum], Opt.NmPP, CValley, LEdgeInd, REdgeInd, FitWidth) # backend='threading' removed
+        POut = Parallel(n_jobs=14,verbose=5)(delayed(LERPara)(RawIn[:,tt,ImNum], Opt.NmPP, CValley, LEdgeInd, REdgeInd, FitWidth) # backend='threading' removed
             for tt in range(RawIn.shape[1]))
         #%%
         FPTuple, FPWTuple, FELTup, FERTup = zip(*POut)
@@ -565,7 +568,7 @@ if __name__ == '__main__':
         FDisp = ((FPeak.transpose() - np.nanmean(FPeak,axis=1)).transpose())
         FELRes = ((FEL.transpose() - np.nanmean(FEL,axis=1)).transpose())
         FERRes = ((FER.transpose() - np.nanmean(FER,axis=1)).transpose())
-        FPWidthDisp = ((FPWidth.transpose() - np.nanmean(FPWidth,axis=1)).transpose())
+        FPWidthRes = ((FPWidth.transpose() - np.nanmean(FPWidth,axis=1)).transpose())
         
         #%% Do thermal drift correction
         XTD = np.arange(FDisp.shape[1])
@@ -590,14 +593,12 @@ if __name__ == '__main__':
         FECorrect[0::2,:] = FELCorrect
         FECorrect[1::2,:] = FERCorrect
         
-        FECorrect = np.abs(FECorrect) # not sure we need the pos negative info?
-        
         #%% move on
         
         
         
         PanDisp = pd.DataFrame(data=FDispCorrect.transpose())
-        PanWidth = pd.DataFrame(data=FPWidth.transpose())
+        PanWidth = pd.DataFrame(data=FPWidthRes.transpose())
         PanE = pd.DataFrame(data=FECorrect.transpose())
 
         
@@ -606,11 +607,11 @@ if __name__ == '__main__':
         #StackWidth
         #%% Cross Corref 
         StackDisp = FDispCorrect.transpose()[:,0:Opt.DomPerTrench]
-        StackWidth = FPWidth.transpose()[:,0:Opt.DomPerTrench]
+        StackWidth = FPWidthRes.transpose()[:,0:Opt.DomPerTrench]
         StackEdge = FECorrect.transpose()[:,0:Opt.DomPerTrench*2]
         for xx in np.arange(1,CPatSep.size-1):
             StackDisp=np.concatenate( (StackDisp,FDispCorrect.transpose()[:,xx*Opt.DomPerTrench:(xx+1)*Opt.DomPerTrench]) )
-            StackWidth=np.concatenate((StackWidth,FPWidth.transpose()[:,xx*Opt.DomPerTrench:(xx+1)*Opt.DomPerTrench]))
+            StackWidth=np.concatenate((StackWidth,FPWidthRes.transpose()[:,xx*Opt.DomPerTrench:(xx+1)*Opt.DomPerTrench]))
             StackEdge=np.concatenate((StackEdge,FECorrect.transpose()[:,2*xx*Opt.DomPerTrench:2*(xx+1)*Opt.DomPerTrench]))
             
 
@@ -687,7 +688,7 @@ if __name__ == '__main__':
         CCELF.clf()
         plt.close(CCELF)
         #%%
-        LPRCRossF , LPRCRossAx = plt.subplots(3,1, figsize=(12,4))
+        LPRCRossF , LPRCRossAx = plt.subplots(3,1, figsize=(4,12))
         LPRCRossF.suptitle('Positional Correlations')
         LPRCRossAx[0].hexbin(StackD1O[:,0],StackD1O[:,1],gridsize=20,extent=(-10, 10, -10, 10))
         LPRCRossAx[0].set_aspect('equal')
@@ -702,13 +703,14 @@ if __name__ == '__main__':
         plt.close(LPRCRossF)
 
         #%%
-        LWRCRossF , LWRCRossAx = plt.subplots(3,1, figsize=(12,4))
+        extent = (-5, 5,-5,5)
+        LWRCRossF , LWRCRossAx = plt.subplots(3,1, figsize=(4,12))
         LWRCRossF.suptitle('Width Correlations')
-        LWRCRossAx[0].hexbin(StackW1O[:,0],StackW1O[:,1],gridsize=20,extent=(10, 35, 10, 35))
+        LWRCRossAx[0].hexbin(StackW1O[:,0],StackW1O[:,1],gridsize=20,extent=extent)
         LWRCRossAx[0].set_aspect('equal')
-        LWRCRossAx[1].hexbin(StackW2O[:,0],StackW2O[:,1],gridsize=20,extent=(10, 35, 10, 35))
+        LWRCRossAx[1].hexbin(StackW2O[:,0],StackW2O[:,1],gridsize=20,extent=extent)
         LWRCRossAx[1].set_aspect('equal')
-        LWRCRossAx[2].hexbin(StackW3O[:,0],StackW3O[:,1],gridsize=20,extent=(10, 35, 10, 35))
+        LWRCRossAx[2].hexbin(StackW3O[:,0],StackW3O[:,1],gridsize=20,extent=extent)
         LWRCRossAx[2].set_aspect('equal')
         
         LWRCRossF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "LWR_Cross.png"), dpi=600)
@@ -717,17 +719,18 @@ if __name__ == '__main__':
         plt.close(LWRCRossF)
         
                 #%%
-        LERCRossF , LERCRossAx = plt.subplots(5,1, figsize=(12,4))
+        extent = (-5, 5,-5,5)
+        LERCRossF , LERCRossAx = plt.subplots(5,1, figsize=(4,12))
         LERCRossF.suptitle('Edge Correlations')
-        LERCRossAx[0].hexbin(StackE1O[:,0],StackE1O[:,1],gridsize=20,extent=(0, 20, 0, 20))
+        LERCRossAx[0].hexbin(StackE1O[:,0],StackE1O[:,1],gridsize=20,extent=extent)
         LERCRossAx[0].set_aspect('equal')
-        LERCRossAx[1].hexbin(StackE2O[:,0],StackE2O[:,1],gridsize=20,extent=(0, 20, 0, 20))
+        LERCRossAx[1].hexbin(StackE2O[:,0],StackE2O[:,1],gridsize=20,extent=extent)
         LERCRossAx[1].set_aspect('equal')
-        LERCRossAx[2].hexbin(StackE3O[:,0],StackE3O[:,1],gridsize=20,extent=(0, 20, 0, 20))
+        LERCRossAx[2].hexbin(StackE3O[:,0],StackE3O[:,1],gridsize=20,extent=extent)
         LERCRossAx[2].set_aspect('equal')
-        LERCRossAx[3].hexbin(StackE4O[:,0],StackE4O[:,1],gridsize=20,extent=(0, 20, 0, 20))
+        LERCRossAx[3].hexbin(StackE4O[:,0],StackE4O[:,1],gridsize=20,extent=extent)
         LERCRossAx[3].set_aspect('equal')
-        LERCRossAx[4].hexbin(StackE5O[:,0],StackE5O[:,1],gridsize=20,extent=(0, 20, 0, 20))
+        LERCRossAx[4].hexbin(StackE5O[:,0],StackE5O[:,1],gridsize=20,extent=extent)
         LERCRossAx[4].set_aspect('equal')
         LERCRossF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "LER_Cross.png"), dpi=600)
         #%%
@@ -906,12 +909,13 @@ if __name__ == '__main__':
         SigmaW = np.zeros((1,(Opt.DomPerTrench+1)))
         
         SigmaE[0,0] = 3*np.nanvar(FECorrect)
-        SigmaW[0,0] = 3*np.nanvar(FPWidth)
+        SigmaW[0,0] = 3*np.nanvar(FPWidthRes)
         for dd in range(Opt.DomPerTrench):
             SigmaE[0,dd+1] = 3*np.nanvar(StackEdge[:,dd*2:dd*2+2])
             SigmaW[0,dd+1] = 3*np.nanvar(StackWidth[:,dd])
         SigmaRat = SigmaW/SigmaE
-        SigmaAll = np.concatenate((SigmaE,SigmaW,SigmaRat),axis=1)
+        SigmaC = 1 - SigmaW**2/(2 * SigmaE**2)
+        SigmaAll = np.concatenate((SigmaE,SigmaW,SigmaRat, SigmaC),axis=1)
         
         if ImNum == 0:
             SigmaOut = np.copy(SigmaAll)
@@ -924,6 +928,8 @@ if __name__ == '__main__':
         SigmaAx[0].plot(SigmaPos,SigmaW[0,:],'k.',label='3 sigma W')
         SigmaAx[0].plot(SigmaPos,SigmaE[0,:],'b.',label='3 sigma E')
         SigmaAx[1].plot(SigmaPos,SigmaRat[0,:],'r.',label='W/E')
+        SigmaAx[1].plot(SigmaPos,SigmaC[0,:],'k*',label='C')
+        SigmaAx[1].axis([-0.5,7.5,0,5])
         SigmaF.legend()
         SigmaAx[1].set_xticks(SigmaPos)
         SigmaAx[1].set_xticklabels(SigmaLab)
