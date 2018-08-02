@@ -156,7 +156,8 @@ def PeakPara(LineIn, NmPP, CValley, SetFWidth):
             FPeak[pp] = np.nan
     return( FPeak, FPWidth)
     
-def LERPara(LineIn, NmPP, CValley, SetFWidth):
+def LERPara(LineIn, NmPP, CValley,LEdgeInd, REdgeInd,  SetFWidth):
+    
     Length = LineIn.size
     gmodel = lmfit.Model(gaussian)
     Inits = gmodel.make_params()
@@ -172,67 +173,115 @@ def LERPara(LineIn, NmPP, CValley, SetFWidth):
         PCur = int(CValley[pp]) # this is our current *peak* guesstimate
         # first goal : Refine the peak guesstimate for this line
         FitWidth = SetFWidth # look at local area only
-        PLow = int(np.maximum((PCur-FitWidth),0))
-        PHigh = int(np.min((PCur+FitWidth+1,Length-1)))
-
-        try:PCur = int(np.arange(PLow,PHigh)[np.argmax(GradCurve[PLow:PHigh])+1])
+        
+        PLow = int(np.maximum((PCur-FitWidth),0)) #PLow is a fixed distance
+        PHigh = int(np.min((PCur+FitWidth+1,Length-1))) #PHigh is fixed +1 still here to fix indexing
+        try:PCur = int(np.arange(PLow,PHigh)[np.argmin(LineIn[PLow:PHigh])])
         except:pass
+
+
         # set peak as the minimum (max 2nd div) 
         # the +1 is to fix the derivative offset from data
-        #now expand our range to the next domains
-        FitWidth = SetFWidth * 2
-        PLow = int(np.maximum((PCur-FitWidth),0))
-        PHigh = int(np.min((PCur+FitWidth+1,Length-1)))
-        
-        # now fix the point to the Right of the valley
-        # Remember we are looking for mim of second derivative +1 is to fix diff offset
-        PHigh = int(PCur +  np.argmin(GradCurve[PCur:PHigh]) +1) 
-        # now fix the point to the left of the valley. 
-        #Do the flip so the first point we find is closest to peak
-        # do -1 cus we're moving otherway
-        PLow = int(PCur - np.argmin(np.flip(GradCurve[PLow:PCur],0)) -1)
-        # PLow is now the max peak to the left of the current valley 
-        # PHigh is now the max peak to the right of the current valley
+
         
         #%% Fit Left Edge
-        
-        # now we want to fit edges. so max or mins of derivative. 
-        #flip
-        LocalCurve = abs((FirstDer[PLow:PCur]-max(FirstDer[PLow:PCur])))
-        
-        # this just flips the curve to be right side up with a minimum of 0
-        # so we can map it onto the typical gaussian        
-        Inits['amp']=lmfit.Parameter(name='amp', value= max(LocalCurve))
-        Inits['wid']=lmfit.Parameter(name='wid', value= FitWidth/2)
-        Inits['cen']=lmfit.Parameter(name='cen', value= (PLow+PCur)/2, min=PLow, max=PCur)
-    
-        try:
-            Res = gmodel.fit(LocalCurve, Inits, x=np.arange(PLow,PCur))
-            FEdgeL[pp] = Res.best_values['cen']*NmPP
-            if (abs(Res.best_values['cen'] <= PLow)) or (abs(Res.best_values['cen'] >= PCur)):
-                FEdgeL[pp] = np.nan
-        except:
+        if (pp == LEdgeInd).max() :  # are we on the edge of a trench? if so must fit carefully
+            
+            PLow = int(np.maximum((PCur-FitWidth),0)) #PLow is a fixed distance
+            PHigh = int(np.min((PCur+FitWidth+1+2,Length-1))) # +1 to account for index. +2 for wiggle room
+            PHigh = int(PCur +  np.argmax(LineIn[PCur:PHigh]))  # find max in that wiggle room
+            LocalCurve = abs((LineIn[PLow:PHigh]-max(LineIn[PLow:PHigh]))) 
+            # Set our initial guesses
+            
+            Inits['amp']=lmfit.Parameter(name='amp', value= max(LocalCurve))
+            Inits['wid']=lmfit.Parameter(name='wid', value= LocalCurve.size)
+            Inits['cen']=lmfit.Parameter(name='cen', value= PCur, min=PLow, max=PHigh)
+            try:
+                Res = gmodel.fit(LocalCurve, Inits, x=np.arange(PLow,PHigh))
+                FPeak[pp] = Res.best_values['cen']*NmPP
+                if (abs(Res.best_values['cen'] <= PLow)) or (abs(Res.best_values['cen'] >= PHigh)):
+                    FPeak[pp] = np.nan
+            except:
+                FPeak[pp] = np.nan
             FEdgeL[pp] = np.nan
+        else:
+
+            #now expand our range to the next domains
+            FitWidth = SetFWidth * 2
+            PLow = int(np.maximum((PCur-FitWidth),0))
+            # now fix the point to the left of the valley. 
+            #Do the flip so the first point we find is closest to peak
+            # do -1 cus we're moving otherway
+            PLow = int(PCur - np.argmin(np.flip(GradCurve[PLow:PCur],0)) -1)
+            # PLow is now the max peak to the left of the current valley 
+            
+            
+            # now we want to fit edges. so max or mins of derivative. 
+            #flip
+            LocalCurve = abs((FirstDer[PLow:PCur]-max(FirstDer[PLow:PCur])))
+            
+            # this just flips the curve to be right side up with a minimum of 0
+            # so we can map it onto the typical gaussian        
+            Inits['amp']=lmfit.Parameter(name='amp', value= max(LocalCurve))
+            Inits['wid']=lmfit.Parameter(name='wid', value= LocalCurve.size)
+            Inits['cen']=lmfit.Parameter(name='cen', value= (PLow+PCur)/2, min=PLow, max=PCur)
+        
+            try:
+                Res = gmodel.fit(LocalCurve, Inits, x=np.arange(PLow,PCur))
+                FEdgeL[pp] = Res.best_values['cen']*NmPP
+                if (abs(Res.best_values['cen'] <= PLow)) or (abs(Res.best_values['cen'] >= PCur)):
+                    FEdgeL[pp] = np.nan
+            except:
+                FEdgeL[pp] = np.nan
             
         #%% Fit Right Edge
-
-        LocalCurve = abs((FirstDer[PCur:PHigh]-min(FirstDer[PCur:PHigh])))
-        
-        # dont flip       
-        Inits['amp']=lmfit.Parameter(name='amp', value= max(LocalCurve))
-        Inits['wid']=lmfit.Parameter(name='wid', value= FitWidth/2)
-        Inits['cen']=lmfit.Parameter(name='cen', value= (PCur+PHigh)/2, min=PCur, max=PHigh)
-    
-        try:
-            Res = gmodel.fit(LocalCurve, Inits, x=np.arange(PCur,PHigh))
-            FEdgeR[pp] = Res.best_values['cen']*NmPP
-            if (abs(Res.best_values['cen'] <= PCur)) or (abs(Res.best_values['cen'] >= PHigh)):
-                FEdgeR[pp] = np.nan
-        except:
+        if (pp == REdgeInd).max(): # are we on the edge of a trench? if so must fit carefully
+            PHigh = int(np.min((PCur+FitWidth+1,Length-1))) #PHigh is fixed +1 still here to fix indexing
+            PLow = int(np.maximum((PCur-FitWidth-2),0)) #PLow now needs to be tweaked, minus two for wiggle
+            PLow = int(PCur -  np.argmax(np.flip(LineIn[PLow:PCur],0)) -1)  # find max in that wiggle room
+            LocalCurve = abs((LineIn[PLow:PHigh]-max(LineIn[PLow:PHigh]))) 
+            # Set our initial guesses
+            
+            Inits['amp']=lmfit.Parameter(name='amp', value= max(LocalCurve))
+            Inits['wid']=lmfit.Parameter(name='wid', value= LocalCurve.size)
+            Inits['cen']=lmfit.Parameter(name='cen', value= PCur, min=PLow, max=PHigh)
+            try:
+                Res = gmodel.fit(LocalCurve, Inits, x=np.arange(PLow,PHigh))
+                FPeak[pp] = Res.best_values['cen']*NmPP
+                if (abs(Res.best_values['cen'] <= PLow)) or (abs(Res.best_values['cen'] >= PHigh)):
+                    FPeak[pp] = np.nan
+            except:
+                FPeak[pp] = np.nan
             FEdgeR[pp] = np.nan
-    
-    FPWidth= FEdgeR - FEdgeL
-    FPeak = 0.5*(FEdgeL+FEdgeR)
+        else:
+            #now expand our range to the next domains
+            FitWidth = SetFWidth * 2
+            PHigh = int(np.min((PCur+FitWidth+1,Length-1)))  
+            # now fix the point to the Right of the valley
+            # Remember we are looking for mim of second derivative +1 is to fix diff offset
+            PHigh = int(PCur +  np.argmin(GradCurve[PCur:PHigh]) +1) 
+            LocalCurve = abs((FirstDer[PCur:PHigh]-min(FirstDer[PCur:PHigh])))
+            
+            # dont flip       
+            Inits['amp']=lmfit.Parameter(name='amp', value= max(LocalCurve))
+            Inits['wid']=lmfit.Parameter(name='wid', value= LocalCurve.size)
+            Inits['cen']=lmfit.Parameter(name='cen', value= (PCur+PHigh)/2, min=PCur, max=PHigh)
+        
+            try:
+                Res = gmodel.fit(LocalCurve, Inits, x=np.arange(PCur,PHigh))
+                FEdgeR[pp] = Res.best_values['cen']*NmPP
+                if (abs(Res.best_values['cen'] <= PCur)) or (abs(Res.best_values['cen'] >= PHigh)):
+                    FEdgeR[pp] = np.nan
+            except:
+                FEdgeR[pp] = np.nan
+        #%% Calc Width and Peak
+        if (pp == LEdgeInd).max(): # if we're on left edge
+            FPWidth[pp] = (FEdgeR[pp] - FPeak[pp])*2
+        elif (pp == REdgeInd).max(): # if we're on right edge
+            FPWidth[pp] = (FPeak[pp] - FEdgeL[pp])*2
+        else: # calc as usual
+            FPWidth[pp]= FEdgeR[pp] - FEdgeL[pp]
+            FPeak[pp] = 0.5*(FEdgeL[pp]+FEdgeR[pp])
             
     return( FPeak, FPWidth, FEdgeL, FEdgeR)
             
@@ -434,22 +483,27 @@ if __name__ == '__main__':
         CPatSep -= 5 #scoot our separators off the peak
         CPatSep = np.append(CPatSep, len(SavFil)-1)
         
+        #%% Make some indices for later use
         CBins = np.digitize(CValley,CPatSep)
         BinCount = np.histogram(CValley,CPatSep)[0]
         MidInd = np.zeros(CPatSep.size-1,dtype='uint')
+        LEdgeInd = np.zeros((CPatSep.size-1),dtype='uint')
+        REdgeInd = np.zeros((CPatSep.size-1),dtype='uint')
         EdgeInd = np.zeros((CPatSep.size-1)*2,dtype='uint')
         for bb in range(CPatSep.size-1):
             MidInd[bb] = bb*Opt.DomPerTrench+((Opt.DomPerTrench-1)/2)
             EdgeInd[bb*2] = bb*Opt.DomPerTrench
+            LEdgeInd[bb] = bb*Opt.DomPerTrench
             EdgeInd[bb*2+1] = (bb+1)*Opt.DomPerTrench-1
+            REdgeInd[bb] = (bb+1)*Opt.DomPerTrench-1
         #%%
         FitWidth = int(Opt.l0/Opt.NmPP*.5)
-        #FitWidth = int(4)
+
         #% Parallel cus gotta go fast
         print('\n Image '+Opt.FName+'\n')
         __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
 
-        POut = Parallel(n_jobs=-1,verbose=5)(delayed(LERPara)(RawIn[:,tt,ImNum], Opt.NmPP, CValley, FitWidth) # backend='threading' removed
+        POut = Parallel(n_jobs=8,verbose=5)(delayed(LERPara)(RawIn[:,tt,ImNum], Opt.NmPP, CValley, LEdgeInd, REdgeInd, FitWidth) # backend='threading' removed
             for tt in range(RawIn.shape[1]))
         #%%
         FPTuple, FPWTuple, FELTup, FERTup = zip(*POut)
@@ -460,20 +514,46 @@ if __name__ == '__main__':
         print('Done')
         #Everything past here is already in Nanometers. PEAK FITTING OUTPUTS IT
         #%% Show Odd EVEN
+
         OddEveF,OddEveAx = plt.subplots()
         
         OddEveAx.plot(Xplot[0::2],FEL[4,0::2],'b.',label='Left Even')
-        OddEveAx.plot(Xplot[0::2],FPeak[4,0::2],'b',label='Peak Even')
+        OddEveAx.plot(Xplot[0::2],FPeak[4,0::2],'k.',label='Peak Even')
         OddEveAx.plot(Xplot[0::2],FER[4,0::2],'b.',label='Right Even')
-        OddEveAx.plot(Xplot[1::2],FEL[4,1::2],'r.',label='Left Even')
-        OddEveAx.plot(Xplot[1::2],FPeak[4,1::2],'r',label='Peak Even')
-        OddEveAx.plot(Xplot[1::2],FER[4,1::2],'r.',label='Right Even')
-        OddEveF.legend()
+        OddEveAx.plot(Xplot[1::2],FEL[4,1::2],'b.',label='Left Even')
+        OddEveAx.plot(Xplot[1::2],FPeak[4,1::2],'k.',label='Peak Even')
+        OddEveAx.plot(Xplot[1::2],FER[4,1::2],'b.',label='Right Even')
+        #OddEveF.legend()
+        OddEveAx.set_axis_off()
         OddEveF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "OddEven.png"), dpi=600)
         
-        #%%
+            #%%
         OddEveF.clf()
         plt.close(OddEveF)
+            
+        #%%
+
+        FitXLow = FPeak[0,256]-20
+        FitXHigh = FPeak[6,256]+20
+        FitXPlot = np.linspace(FitXLow,FitXHigh,200)
+        FitF,FitAx = plt.subplots(nrows=3, sharex = True)
+        FitAx[0].plot(np.arange(512)*Opt.NmPP,RawIn[:,256,0],'k')
+        FitAx[0].set_xlim(FitXLow,FitXHigh)
+        FitAx[1].plot(Xplot*Opt.NmPP,np.gradient(RawIn[:,256,0]),'k')
+        for ii in np.arange(3):
+            for dd in np.arange(Opt.DomPerTrench):
+                FitAx[ii].axvline(x=FPeak[dd,256],linestyle = '--') # plot center
+                if dd != 0: FitAx[ii].axvline(x=FEL[dd,256],color = 'b')
+                if dd != Opt.DomPerTrench-1: FitAx[ii].axvline(x=FER[dd,256],color = 'b')
+            FitAx[ii].set_axis_off()
+        for dd in np.arange(Opt.DomPerTrench):        
+            if dd != 0: FitAx[2].plot(FitXPlot,gaussian(FitXPlot,-1,FEL[dd,256], FPWidth[dd,256]/4),'k')
+            if dd != Opt.DomPerTrench-1: FitAx[2].plot(FitXPlot,gaussian(FitXPlot,1,FER[dd,256], FPWidth[dd,256]/4),'k')
+        FitF.tight_layout()
+        FitF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "ExampleFit.png"), dpi=600)
+        #%%
+        FitF.clf()
+        plt.close(FitF)
 
         #%% Save filtered data
         np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "FitPeak.csv"),FPeak,delimiter=',')
@@ -483,8 +563,8 @@ if __name__ == '__main__':
         
         #%% Calc Displacement
         FDisp = ((FPeak.transpose() - np.nanmean(FPeak,axis=1)).transpose())
-        FELRes = ((FEL.transpose() - np.nanmean(FPeak,axis=1)).transpose())
-        FERRes = ((FER.transpose() - np.nanmean(FPeak,axis=1)).transpose())
+        FELRes = ((FEL.transpose() - np.nanmean(FEL,axis=1)).transpose())
+        FERRes = ((FER.transpose() - np.nanmean(FER,axis=1)).transpose())
         FPWidthDisp = ((FPWidth.transpose() - np.nanmean(FPWidth,axis=1)).transpose())
         
         #%% Do thermal drift correction
@@ -600,13 +680,14 @@ if __name__ == '__main__':
         #%%
         CCELF , CCELAx = plt.subplots()
         CCELF.suptitle('Edge correlations (Pearson)')
-        CCELIm = CCELAx.imshow(CCEL, cmap="seismic_r", vmin=-1, vmax=1)
+        CCELIm = CCELAx.imshow(CCEL.values[1:13,1:13], cmap="seismic_r", extent = (0.5,12.5, 0.5 ,12.5),vmin=-1, vmax=1)
         CCELF.colorbar(CCELIm)
         CCELF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "LER_CC.png"), dpi=300)
+        #%%
         CCELF.clf()
         plt.close(CCELF)
         #%%
-        LPRCRossF , LPRCRossAx = plt.subplots(1,3, figsize=(12,4))
+        LPRCRossF , LPRCRossAx = plt.subplots(3,1, figsize=(12,4))
         LPRCRossF.suptitle('Positional Correlations')
         LPRCRossAx[0].hexbin(StackD1O[:,0],StackD1O[:,1],gridsize=20,extent=(-10, 10, -10, 10))
         LPRCRossAx[0].set_aspect('equal')
@@ -621,7 +702,7 @@ if __name__ == '__main__':
         plt.close(LPRCRossF)
 
         #%%
-        LWRCRossF , LWRCRossAx = plt.subplots(1,3, figsize=(12,4))
+        LWRCRossF , LWRCRossAx = plt.subplots(3,1, figsize=(12,4))
         LWRCRossF.suptitle('Width Correlations')
         LWRCRossAx[0].hexbin(StackW1O[:,0],StackW1O[:,1],gridsize=20,extent=(10, 35, 10, 35))
         LWRCRossAx[0].set_aspect('equal')
@@ -636,7 +717,7 @@ if __name__ == '__main__':
         plt.close(LWRCRossF)
         
                 #%%
-        LERCRossF , LERCRossAx = plt.subplots(1,5, figsize=(12,4))
+        LERCRossF , LERCRossAx = plt.subplots(5,1, figsize=(12,4))
         LERCRossF.suptitle('Edge Correlations')
         LERCRossAx[0].hexbin(StackE1O[:,0],StackE1O[:,1],gridsize=20,extent=(0, 20, 0, 20))
         LERCRossAx[0].set_aspect('equal')
