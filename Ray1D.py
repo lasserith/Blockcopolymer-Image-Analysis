@@ -178,7 +178,7 @@ def LERPara(LineIn, NmPP, CValley,LEdgeInd, REdgeInd,  SetFWidth):
         PHigh = int(np.min((PCur+FitWidth+1,Length-1))) #PHigh is fixed +1 still here to fix indexing
         try:PCur = int(np.arange(PLow,PHigh)[np.argmin(LineIn[PLow:PHigh])])
         except:pass
-        FitWidth = SetFWidth
+        
 
         # set peak as the minimum (max 2nd div) 
         # the +1 is to fix the derivative offset from data
@@ -186,7 +186,7 @@ def LERPara(LineIn, NmPP, CValley,LEdgeInd, REdgeInd,  SetFWidth):
         
         #%% Fit Left Edge
         if (pp == LEdgeInd).max() :  # are we on the edge of a trench? if so must fit carefully
-            
+            FitWidth = SetFWidth
             PLow = int(np.maximum((PCur-FitWidth),0)) #PLow is a fixed distance
             PHigh = int(np.min((PCur+FitWidth+1+2,Length-1))) # +1 to account for index. +2 for wiggle room
             PHigh = int(PCur +  np.argmax(LineIn[PCur:PHigh]))  # find max in that wiggle room
@@ -236,6 +236,7 @@ def LERPara(LineIn, NmPP, CValley,LEdgeInd, REdgeInd,  SetFWidth):
             
         #%% Fit Right Edge
         if (pp == REdgeInd).max(): # are we on the edge of a trench? if so must fit carefully
+            FitWidth = SetFWidth
             PHigh = int(np.min((PCur+FitWidth+1,Length-1))) #PHigh is fixed +1 still here to fix indexing
             PLow = int(np.maximum((PCur-FitWidth-2),0)) #PLow now needs to be tweaked, minus two for wiggle
             PLow = int(PCur -  np.argmax(np.flip(LineIn[PLow:PCur],0)) -1)  # find max in that wiggle room
@@ -506,7 +507,7 @@ if __name__ == '__main__':
         print('\n Image '+Opt.FName+'\n')
         __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
 
-        POut = Parallel(n_jobs=14,verbose=5)(delayed(LERPara)(RawIn[:,tt,ImNum], Opt.NmPP, CValley, LEdgeInd, REdgeInd, FitWidth) # backend='threading' removed
+        POut = Parallel(n_jobs=-2,verbose=5)(delayed(LERPara)(RawIn[:,tt,ImNum], Opt.NmPP, CValley, LEdgeInd, REdgeInd, FitWidth) # backend='threading' removed
             for tt in range(RawIn.shape[1]))
         #%%
         FPTuple, FPWTuple, FELTup, FERTup = zip(*POut)
@@ -534,29 +535,8 @@ if __name__ == '__main__':
         OddEveF.clf()
         plt.close(OddEveF)
             
-        #%%
 
-        FitXLow = FPeak[0,256]-20
-        FitXHigh = FPeak[6,256]+20
-        FitXPlot = np.linspace(FitXLow,FitXHigh,200)
-        FitF,FitAx = plt.subplots(nrows=3, sharex = True)
-        FitAx[0].plot(np.arange(512)*Opt.NmPP,RawIn[:,256,0],'k')
-        FitAx[0].set_xlim(FitXLow,FitXHigh)
-        FitAx[1].plot(Xplot*Opt.NmPP,np.gradient(RawIn[:,256,0]),'k')
-        for ii in np.arange(3):
-            for dd in np.arange(Opt.DomPerTrench):
-                FitAx[ii].axvline(x=FPeak[dd,256],linestyle = '--') # plot center
-                if dd != 0: FitAx[ii].axvline(x=FEL[dd,256],color = 'b')
-                if dd != Opt.DomPerTrench-1: FitAx[ii].axvline(x=FER[dd,256],color = 'b')
-            FitAx[ii].set_axis_off()
-        for dd in np.arange(Opt.DomPerTrench):        
-            if dd != 0: FitAx[2].plot(FitXPlot,gaussian(FitXPlot,-1,FEL[dd,256], FPWidth[dd,256]/4),'k')
-            if dd != Opt.DomPerTrench-1: FitAx[2].plot(FitXPlot,gaussian(FitXPlot,1,FER[dd,256], FPWidth[dd,256]/4),'k')
-        FitF.tight_layout()
-        FitF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "ExampleFit.png"), dpi=600)
-        #%%
-        FitF.clf()
-        plt.close(FitF)
+
 
         #%% Save filtered data
         np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "FitPeak.csv"),FPeak,delimiter=',')
@@ -601,8 +581,61 @@ if __name__ == '__main__':
         PanWidth = pd.DataFrame(data=FPWidthRes.transpose())
         PanE = pd.DataFrame(data=FECorrect.transpose())
 
-        
-        
+        #%% make demo figs
+        if ImNum == 0:
+            #%% show an example fit
+            FitXLow = FPeak[0,256]-40
+            FitXHigh = FPeak[6,256]+40
+            FitXPlot = np.linspace(FitXLow,FitXHigh,200)
+            FitF,FitAx = plt.subplots()
+            FitAx.plot(np.arange(512)*Opt.NmPP,RawIn[:,256,0],'k')
+            OffSet1 = min(RawIn[:,256,0])*1.5
+            FitAx.set_xlim(FitXLow,FitXHigh)
+            FitAx.plot(Xplot*Opt.NmPP,np.gradient(RawIn[:,256,0])+OffSet1,'k')
+            OffSet2 = min(np.gradient(RawIn[:,256,0])+OffSet1)*1.5
+            for dd in np.arange(Opt.DomPerTrench):
+                FitAx.axvline(x=FPeak[dd,256],linestyle = '--') # plot center
+                if dd != 0: 
+                    FitAx.axvspan(FEL[dd,256],FPeak[dd,256],color='b',alpha=0.2)
+                if dd != Opt.DomPerTrench-1:
+                    FitAx.axvspan(FPeak[dd,256],FER[dd,256],color='b',alpha=0.2)
+    
+            FitAx.get_yaxis().set_visible(False)
+            for dd in np.arange(Opt.DomPerTrench):        
+                if dd != 0: 
+                    FitAx.plot(FitXPlot,gaussian(FitXPlot,-10,FEL[dd,256], FPWidth[dd,256]/4)+OffSet2,'k')
+                if dd != Opt.DomPerTrench-1: 
+                    FitAx.plot(FitXPlot,gaussian(FitXPlot,10,FER[dd,256], FPWidth[dd,256]/4)+OffSet2,'k')
+            FitF.tight_layout()
+            FitF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "ExampleFit.png"), dpi=600)
+            #%%
+            FitF.clf()
+            plt.close(FitF)
+            #%% show an example LER
+            FitF,FitAx = plt.subplots()
+            gmodel = lmfit.Model(gaussian) # then the model
+            Count , Bin = np.histogram(np.concatenate((FELCorrect[MidInd[0],:],FERCorrect[MidInd[0],:])),bins=200,range=(-10,10),density=True)
+            BinX = BinX = Bin[:-1]+(Bin[1]-Bin[0])*0.5 # what is the center of each bin?
+            Var = np.sqrt(np.nanvar(np.concatenate((FELCorrect[MidInd[0],:],FERCorrect[MidInd[0],:]))))  # calculate variance exactly
+            Inits = gmodel.make_params( amp=Count.max(), cen=0, wid=Var) # make some initial guess
+            Inits['wid'] = lmfit.Parameter(name='wid', value=Var, vary=False) # force it to use varianc
+            Res = gmodel.fit(Count, Inits, x=BinX) # and fit
+            FitAx.plot(BinX, Count, 'bo', alpha = 0.1)
+            FitAx.plot(BinX, Res.best_fit, 'blue',label='Edge Fit')
+            Count , Bin = np.histogram(FPWidthRes,bins=200,range=(-10,10),density=True)
+            BinX = BinX = Bin[:-1]+(Bin[1]-Bin[0])*0.5 # what is the center of each bin?
+            VarRt = np.sqrt(np.nanvar(FPWidthRes))  # calculate variance exactly
+            Inits = gmodel.make_params( amp=Count.max(), cen=0, wid=Var) # make some initial guess
+            Inits['wid'] = lmfit.Parameter(name='wid', value=Var, vary=False) # force it to use varianc
+            Res = gmodel.fit(Count, Inits, x=BinX) # and fit
+            FitAx.plot(BinX, Count, 'o',color = 'gold', alpha = 0.1)
+            FitAx.plot(BinX, Res.best_fit, 'gold',label='Width Fit')
+            FitAx.legend()
+            #%%
+            FitF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "ExampleLERFit.png"), dpi=600)
+            FitF.clf()
+            plt.close(FitF)
+            
         #StackDisp 
         #StackWidth
         #%% Cross Corref 
@@ -760,24 +793,95 @@ if __name__ == '__main__':
         PSDEdge = np.abs(np.fft.rfft(PanE.interpolate(limit_direction='both').values.transpose()))**2
         PSDFreq = np.fft.rfftfreq(FPeak.shape[1],0.05) # Sampling rate is 20 hz so sample time = .05?
         PSDCk = (4*PSDPeak-PSDWidth)/(4*PSDPeak+PSDWidth)
+
         #%%
-        PSDF , PSDAx = plt.subplots(nrows=4, sharex = True, figsize=(6,6))
+        PSDF , PSDAx = plt.subplots(ncols=3,nrows=3, sharex = True,sharey=True, figsize=(9,9))
         PSDF.suptitle('Power Spectral Density')
-        PSDAx[0].loglog(PSDFreq[1:], np.nanmean(PSDPeak, axis=0)[1:],'k.')
-        PSDAx[0].set_title('LPR')
-        PSDAx[1].loglog(PSDFreq[1:], np.nanmean(PSDWidth, axis = 0)[1:],'k.')
-        PSDAx[1].set_title('LWR')
-        PSDAx[2].loglog(PSDFreq[1:], np.nanmean(PSDEdge, axis = 0)[1:],'k.')
-        PSDAx[2].set_title('LER')
-        PSDAx[3].semilogx(PSDFreq, np.nanmean(PSDCk, axis = 0))
-        PSDAx[3].set_title('CK')
-        PSDAx[3].set_xlabel('Frequency (hz)')
+        RollAv = int(5)
+        PSDMean = np.nanmean(PSDPeak, axis=0)[1:]
+        PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
+        PSDAx[0,0].semilogy(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[0,0].semilogy(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+        PSDAx[0,0].set_title('LPR')
+        
+        PSDMean = np.nanmean(PSDPeak[MidInd,:], axis=0)[1:]
+        PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
+        PSDAx[0,1].semilogy(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[0,1].semilogy(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+        PSDAx[0,1].set_title('Mid')
+        
+        PSDMean = np.nanmean(PSDPeak[EdgeInd,:], axis=0)[1:]
+        PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
+        PSDAx[0,2].semilogy(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[0,2].semilogy(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+        PSDAx[0,2].set_title('Edge')
+        
+        PSDMean = np.nanmean(PSDWidth, axis=0)[1:]
+        PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
+        PSDAx[1,0].semilogy(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[1,0].semilogy(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+        
+        PSDMean = np.nanmean(PSDWidth[MidInd,:], axis=0)[1:]
+        PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
+        PSDAx[1,1].semilogy(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[1,1].semilogy(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+
+        
+        PSDMean = np.nanmean(PSDWidth[EdgeInd,:], axis=0)[1:]
+        PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
+        PSDAx[1,2].semilogy(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[1,2].semilogy(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+        PSDAx[1,0].set_title('LWR')
+
+        PSDMean = np.nanmean(PSDEdge, axis=0)[1:]
+        PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
+        PSDAx[2,0].semilogy(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[2,0].semilogy(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+        
+        PSDMean = np.nanmean(PSDEdge[np.sort(np.append(MidInd*2, MidInd*2+1)),:], axis=0)[1:]
+        PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
+        PSDAx[2,1].semilogy(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[2,1].semilogy(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+
+        
+        PSDMean = np.nanmean(PSDEdge[np.sort(np.append(EdgeInd*2, EdgeInd*2+1)),:], axis=0)[1:]
+        PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
+        PSDAx[2,2].semilogy(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[2,2].semilogy(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+        PSDAx[2,0].set_title('LER')
+
         PSDF.tight_layout(rect=(0,0,1,0.95))
         PSDF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "PSD.png"), dpi=300)
         #%%
         PSDF.clf()
         plt.close(PSDF)
-        
+        #%%
+        RollAv = int(5)
+        PSDCkF, PSDCkAx = plt.subplots(ncols = 3,sharey = True)
+        PSDMean = np.nanmean(PSDCk, axis=0)[1:]
+        PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
+        PSDCkAx[0].plot(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDCkAx[0].plot(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+        #mid
+        PSDMean = np.nanmean(PSDCk[MidInd,:], axis=0)[1:]
+        PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
+        PSDCkAx[1].plot(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDCkAx[1].plot(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+        #Edge
+        PSDMean = np.nanmean(PSDCk[EdgeInd,:], axis=0)[1:]
+        PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
+        PSDCkAx[2].plot(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDCkAx[2].plot(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+
+        PSDCkAx[0].set_title('CK')
+        PSDCkAx[1].set_title('Mid')
+        PSDCkAx[2].set_title('Edge')
+        PSDCkAx[1].set_xlabel('Frequency (hz)')
+        PSDCkAx[0].set_ylim([0, 1])
+        #%%
+        PSDCkF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "PSDCk.png"), dpi=300)
+        PSDCkF.clf()
+        plt.close(PSDCkF)
         #%% Autocorrelation
         ACDispF , ACDispAx = plt.subplots(nrows=2,figsize=(15,3))
         ACDispF.suptitle('Peak displacement Autocorrelation')
