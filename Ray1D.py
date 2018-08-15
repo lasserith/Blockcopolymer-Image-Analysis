@@ -695,80 +695,78 @@ if __name__ == '__main__':
         CCEL = PDStackE.corr()
         
 
-        #%% Plot LPR Cross Corr
-        CCF , CCAx = plt.subplots()
-        CCF.suptitle('LPR (Pearson)')
-        CCIm = CCAx.imshow(CCDisp, cmap="seismic_r", vmin=-1, vmax=1)
-        CCF.colorbar(CCIm)
-        CCF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "LPR_CC.png"), dpi=300)
-        CCF.clf()
-        plt.close(CCF)
-        #%% LWR
-        CCWidthF , CCWidthAx = plt.subplots()
-        CCWidthF.suptitle('LWR correlations (Pearson)')
-        CCWidthIm = CCWidthAx.imshow(CCWidth, cmap="seismic_r", vmin=-1, vmax=1)
-        CCWidthF.colorbar(CCWidthIm)
-        CCWidthF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "LWR_CC.png"), dpi=300)
-        CCWidthF.clf()
-        plt.close(CCWidthF)
+
+
+
         #%%
-        CCELF , CCELAx = plt.subplots()
-        CCELF.suptitle('Edge correlations (Pearson)')
-        CCELIm = CCELAx.imshow(CCEL.values[1:13,1:13], cmap="seismic_r", extent = (0.5,12.5, 0.5 ,12.5),vmin=-1, vmax=1)
-        CCELF.colorbar(CCELIm)
-        CCELF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "LER_CC.png"), dpi=300)
-        #%%
-        CCELF.clf()
-        plt.close(CCELF)
-        #%%
-        LPRCRossF , LPRCRossAx = plt.subplots(3,1, figsize=(4,12))
-        LPRCRossF.suptitle('Positional Correlations')
-        LPRCRossAx[0].hexbin(StackD1O[:,0],StackD1O[:,1],gridsize=20,extent=(-10, 10, -10, 10))
-        LPRCRossAx[0].set_aspect('equal')
-        LPRCRossAx[1].hexbin(StackD2O[:,0],StackD2O[:,1],gridsize=20,extent=(-10, 10, -10, 10))
-        LPRCRossAx[1].set_aspect('equal')
-        LPRCRossAx[2].hexbin(StackD3O[:,0],StackD3O[:,1],gridsize=20,extent=(-10, 10, -10, 10))
-        LPRCRossAx[2].set_aspect('equal')
+        LPRCrossF , LPRCrossAx = plt.subplots(4,1, figsize=(4,12))
+        LPRCrossF.suptitle('Positional Correlations')
+        LPRCrossAx[0].imshow(CCDisp, cmap="seismic_r", vmin=-1, vmax=1)
+        LPRCrossAx[1].hexbin(StackD1O[:,0],StackD1O[:,1],gridsize=20,extent=(-10, 10, -10, 10))
+        LPRCrossAx[1].set_aspect('equal')
+        LPRCrossAx[2].hexbin(StackD2O[:,0],StackD2O[:,1],gridsize=20,extent=(-10, 10, -10, 10))
+        LPRCrossAx[2].set_aspect('equal')
+        LPRCrossAx[3].hexbin(StackD3O[:,0],StackD3O[:,1],gridsize=20,extent=(-10, 10, -10, 10))
+        LPRCrossAx[3].set_aspect('equal')
         
-        LPRCRossF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "LPR_Cross.png"), dpi=600)
+        LPRCrossF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "LPR_Cross.png"), dpi=600)
         #%%
-        LPRCRossF.clf()
-        plt.close(LPRCRossF)
+        LPRCrossF.clf()
+        plt.close(LPRCrossF)
 
         #%%
         extent = (-5, 5,-5,5)
-        LWRCRossF , LWRCRossAx = plt.subplots(3,1, figsize=(4,12))
-        LWRCRossF.suptitle('Width Correlations')
-        LWRCRossAx[0].hexbin(StackW1O[:,0],StackW1O[:,1],gridsize=20,extent=extent)
-        LWRCRossAx[0].set_aspect('equal')
-        LWRCRossAx[1].hexbin(StackW2O[:,0],StackW2O[:,1],gridsize=20,extent=extent)
-        LWRCRossAx[1].set_aspect('equal')
-        LWRCRossAx[2].hexbin(StackW3O[:,0],StackW3O[:,1],gridsize=20,extent=extent)
-        LWRCRossAx[2].set_aspect('equal')
+        LWRCrossF , LWRCrossAx = plt.subplots(4,1, figsize=(4,12))
+        LWRCrossF.suptitle('Width Correlations')
+        LWRCrossAx[0].imshow(CCWidth, cmap="seismic_r", vmin=-1, vmax=1)
+        LWRCrossAx[1].hexbin(StackW1O[:,0],StackW1O[:,1],gridsize=20,extent=extent)
+        LWRCrossAx[1].set_aspect('equal')
+        LWRCrossAx[2].hexbin(StackW2O[:,0],StackW2O[:,1],gridsize=20,extent=extent)
+        LWRCrossAx[2].set_aspect('equal')
+        LWRCrossAx[3].hexbin(StackW3O[:,0],StackW3O[:,1],gridsize=20,extent=extent)
+        LWRCrossAx[3].set_aspect('equal')
         
-        LWRCRossF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "LWR_Cross.png"), dpi=600)
+        LWRCrossF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "LWR_Cross.png"), dpi=600)
         #%%
-        LWRCRossF.clf()
-        plt.close(LWRCRossF)
+        LWRCrossF.clf()
+        plt.close(LWRCrossF)
         
                 #%%
         extent = (-5, 5,-5,5)
-        LERCRossF , LERCRossAx = plt.subplots(5,1, figsize=(4,12))
-        LERCRossF.suptitle('Edge Correlations')
-        LERCRossAx[0].hexbin(StackE1O[:,0],StackE1O[:,1],gridsize=20,extent=extent)
-        LERCRossAx[0].set_aspect('equal')
-        LERCRossAx[1].hexbin(StackE2O[:,0],StackE2O[:,1],gridsize=20,extent=extent)
-        LERCRossAx[1].set_aspect('equal')
-        LERCRossAx[2].hexbin(StackE3O[:,0],StackE3O[:,1],gridsize=20,extent=extent)
-        LERCRossAx[2].set_aspect('equal')
-        LERCRossAx[3].hexbin(StackE4O[:,0],StackE4O[:,1],gridsize=20,extent=extent)
-        LERCRossAx[3].set_aspect('equal')
-        LERCRossAx[4].hexbin(StackE5O[:,0],StackE5O[:,1],gridsize=20,extent=extent)
-        LERCRossAx[4].set_aspect('equal')
-        LERCRossF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "LER_Cross.png"), dpi=600)
+        LERCrossF , LERCrossAx = plt.subplots(6,1, figsize=(4,12))
+        LERCrossAx[0].imshow(CCEL.values[0:14,0:14], cmap="seismic_r",extent=(0,14,0,14),vmin=-1, vmax=1)
+        LERCrossAx[0].set_title('Edge')
+        LERCrossAx[0].set_xticks([])
+        LERCrossAx[0].set_xticks(2*np.arange(0,7)+0.5)
+        LERCrossAx[0].set_xticklabels(('e1','e2','e3','e4','e5','e6','e7'))
+        LERCrossAx[0].set_yticks([])
+        LERCrossAx[0].set_yticks(2*np.arange(0,7)+0.5)
+        LERCrossAx[0].set_yticklabels(('e1','e2','e3','e4','e5','e6','e7'))
+        # now plot lines to guide eyes
+        LERCrossAx[0].plot(np.arange(0,14),13-np.arange(0,14),color='#00FF00',linewidth = 2)
+        LERCrossAx[0].plot(np.arange(0,14),12-np.arange(0,14),color='#FF00FF',linewidth = 2)
+        LERCrossAx[0].plot(np.arange(0,14),11-np.arange(0,14),color='k',linewidth = 2)
+        LERCrossAx[0].set_ylim(0,14)
+        LERCrossAx[0].set_xlim(0,14),
+        LERCrossAx[1].hexbin(StackE1O[:,0],StackE1O[:,1],gridsize=20,extent=extent)
+        LERCrossAx[1].set_aspect('equal')
+        LERCrossAx[2].hexbin(StackE2O[:,0],StackE2O[:,1],gridsize=20,extent=extent)
+        LERCrossAx[2].set_aspect('equal')
+        LERCrossAx[3].hexbin(StackE3O[:,0],StackE3O[:,1],gridsize=20,extent=extent)
+        LERCrossAx[3].set_aspect('equal')
+        LERCrossAx[4].hexbin(StackE4O[:,0],StackE4O[:,1],gridsize=20,extent=extent)
+        LERCrossAx[4].set_aspect('equal')
+        LERCrossAx[5].hexbin(StackE5O[:,0],StackE5O[:,1],gridsize=20,extent=extent)
+        LERCrossAx[5].set_aspect('equal')
+        for ax, color in zip([LERCrossAx[1], LERCrossAx[2],LERCrossAx[3]], ['#00FF00', '#FF00FF', 'k']):
+            plt.setp(ax.spines.values(), color=color)
+            plt.setp(ax.spines.values(), linewidth=3)
+            plt.setp([ax.get_xticklines(), ax.get_yticklines()], color=color)
+        plt.tight_layout(h_pad=1.0)
+        LERCrossF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "LER_Cross.png"), dpi=600)
         #%%
-        LERCRossF.clf()
-        plt.close(LERCRossF)
+        LERCrossF.clf()
+        plt.close(LERCrossF)
 
         
         #%% Autocorrelation Opt.AcSize
@@ -800,54 +798,54 @@ if __name__ == '__main__':
         RollAv = int(5)
         PSDMean = np.nanmean(PSDPeak, axis=0)[1:]
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDAx[0,0].semilogy(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
-        PSDAx[0,0].semilogy(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+        PSDAx[0,0].loglog(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[0,0].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
         PSDAx[0,0].set_title('LPR')
         
         PSDMean = np.nanmean(PSDPeak[MidInd,:], axis=0)[1:]
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDAx[0,1].semilogy(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
-        PSDAx[0,1].semilogy(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+        PSDAx[0,1].loglog(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[0,1].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
         PSDAx[0,1].set_title('Mid')
         
         PSDMean = np.nanmean(PSDPeak[EdgeInd,:], axis=0)[1:]
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDAx[0,2].semilogy(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
-        PSDAx[0,2].semilogy(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+        PSDAx[0,2].loglog(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[0,2].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
         PSDAx[0,2].set_title('Edge')
         
         PSDMean = np.nanmean(PSDWidth, axis=0)[1:]
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDAx[1,0].semilogy(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
-        PSDAx[1,0].semilogy(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+        PSDAx[1,0].loglog(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[1,0].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
         
         PSDMean = np.nanmean(PSDWidth[MidInd,:], axis=0)[1:]
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDAx[1,1].semilogy(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
-        PSDAx[1,1].semilogy(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+        PSDAx[1,1].loglog(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[1,1].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
 
         
         PSDMean = np.nanmean(PSDWidth[EdgeInd,:], axis=0)[1:]
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDAx[1,2].semilogy(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
-        PSDAx[1,2].semilogy(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+        PSDAx[1,2].loglog(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[1,2].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
         PSDAx[1,0].set_title('LWR')
 
         PSDMean = np.nanmean(PSDEdge, axis=0)[1:]
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDAx[2,0].semilogy(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
-        PSDAx[2,0].semilogy(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+        PSDAx[2,0].loglog(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[2,0].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
         
         PSDMean = np.nanmean(PSDEdge[np.sort(np.append(MidInd*2, MidInd*2+1)),:], axis=0)[1:]
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDAx[2,1].semilogy(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
-        PSDAx[2,1].semilogy(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+        PSDAx[2,1].loglog(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[2,1].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
 
         
         PSDMean = np.nanmean(PSDEdge[np.sort(np.append(EdgeInd*2, EdgeInd*2+1)),:], axis=0)[1:]
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDAx[2,2].semilogy(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
-        PSDAx[2,2].semilogy(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+        PSDAx[2,2].loglog(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[2,2].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
         PSDAx[2,0].set_title('LER')
 
         PSDF.tight_layout(rect=(0,0,1,0.95))
@@ -1012,11 +1010,11 @@ if __name__ == '__main__':
         SigmaE = np.zeros((1,(Opt.DomPerTrench+1)))
         SigmaW = np.zeros((1,(Opt.DomPerTrench+1)))
         
-        SigmaE[0,0] = 3*np.nanvar(FECorrect)
-        SigmaW[0,0] = 3*np.nanvar(FPWidthRes)
+        SigmaE[0,0] = np.abs(3*np.nanvar(FECorrect))
+        SigmaW[0,0] = np.abs(3*np.nanvar(FPWidthRes))
         for dd in range(Opt.DomPerTrench):
-            SigmaE[0,dd+1] = 3*np.nanvar(StackEdge[:,dd*2:dd*2+2])
-            SigmaW[0,dd+1] = 3*np.nanvar(StackWidth[:,dd])
+            SigmaE[0,dd+1] = np.abs(3*np.nanvar(StackEdge[:,dd*2:dd*2+2]))
+            SigmaW[0,dd+1] = np.abs(3*np.nanvar(StackWidth[:,dd]))
         SigmaRat = SigmaW/SigmaE
         SigmaC = 1 - SigmaW**2/(2 * SigmaE**2)
         SigmaAll = np.concatenate((SigmaE,SigmaW,SigmaRat, SigmaC),axis=1)
