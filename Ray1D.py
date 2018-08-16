@@ -15,10 +15,8 @@ from joblib import Parallel, delayed
 import numpy as np
 import pandas as pd
 import scipy
-from skimage import restoration, morphology, filters, feature
+from scipy import signal
 import matplotlib.pyplot as plt
-plt.rcParams['animation.ffmpeg_path'] = r'C:\ffmpeg\bin\ffmpeg.exe'
-import matplotlib.animation as manimation
 try:
     from igor.binarywave import load as loadibw
 except: print('You will be unable to open Asylum data without igor')
@@ -88,9 +86,9 @@ def AutoDetect( FileName , Opt ):
         MetaF=exifread.process_file(SkimFile)
         SkimFile.close()
         try:
-            Opt.FInfo=str(MetaF['Image Tag 0x8546'].values);
-            Opt.NmPP=float(Opt.FInfo[17:30])*10**9;
-            Opt.Machine="Merlin";
+            Opt.FInfo=str(MetaF['Image Tag 0x8546'].values)
+            Opt.NmPP=float(Opt.FInfo[17:30])*10**9
+            Opt.Machine="Merlin"
         except:
             pass
 
@@ -99,7 +97,7 @@ def AutoDetect( FileName , Opt ):
 #        print("Instrument was autodetected as %s, NmPP is %f \n" % (Opt.Machine ,Opt.NmPP) )
 #    else:
 #        print("Instrument was not detected, and NmPP was not set. Please set NmPP and rerun")
-    return(imarray);
+    return(imarray)
 
 def PeakPara(LineIn, NmPP, CValley, SetFWidth):
     Length = LineIn.size
@@ -360,7 +358,11 @@ if __name__ == '__main__':
     Opt.Machine = "Unknown"
     
     #%% Plot Options
-    Opt.TDriftP = 0;
+    Opt.TDriftP = 0
+    Opt.OptPlots = 0 # this stops all the non paper plots from being made
+    Opt.PColor = "#FFD966"
+    Opt.EColor = "#203864"
+    Opt.WColor = "#C5E0B4"
     #%% Select Files
     FOpen=tk.Tk()
     
@@ -518,38 +520,35 @@ if __name__ == '__main__':
         print('Done')
         #Everything past here is already in Nanometers. PEAK FITTING OUTPUTS IT
         #%% Show Odd EVEN
-
-        OddEveF,OddEveAx = plt.subplots()
-        
-        OddEveAx.plot(Xplot[0::2],FEL[4,0::2],'b.',label='Left Even')
-        OddEveAx.plot(Xplot[0::2],FPeak[4,0::2],'k.',label='Peak Even')
-        OddEveAx.plot(Xplot[0::2],FER[4,0::2],'b.',label='Right Even')
-        OddEveAx.plot(Xplot[1::2],FEL[4,1::2],'b.',label='Left Even')
-        OddEveAx.plot(Xplot[1::2],FPeak[4,1::2],'k.',label='Peak Even')
-        OddEveAx.plot(Xplot[1::2],FER[4,1::2],'b.',label='Right Even')
-        #OddEveF.legend()
-        OddEveAx.set_axis_off()
-        OddEveF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "OddEven.png"), dpi=600)
-        
-            #%%
-        OddEveF.clf()
-        plt.close(OddEveF)
+#       Already verified no odd even effects so skip this
+#        OddEveF,OddEveAx = plt.subplots()
+#        
+#        OddEveAx.plot(Xplot[0::2],FEL[4,0::2],'b.',label='Left Even')
+#        OddEveAx.plot(Xplot[0::2],FPeak[4,0::2],'k.',label='Peak Even')
+#        OddEveAx.plot(Xplot[0::2],FER[4,0::2],'b.',label='Right Even')
+#        OddEveAx.plot(Xplot[1::2],FEL[4,1::2],'b.',label='Left Even')
+#        OddEveAx.plot(Xplot[1::2],FPeak[4,1::2],'k.',label='Peak Even')
+#        OddEveAx.plot(Xplot[1::2],FER[4,1::2],'b.',label='Right Even')
+#        #OddEveF.legend()
+#        OddEveAx.set_axis_off()
+#        OddEveF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "OddEven.png"), dpi=600)
+#        
+#            #%%
+#        OddEveF.clf()
+#        plt.close(OddEveF)
             
 
 
 
         #%% Save filtered data
         np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "FitPeak.csv"),FPeak,delimiter=',')
-        np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "FitFWHM.csv"),FPWidth,delimiter=',')  
+        np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "FitWidth.csv"),FPWidth,delimiter=',')  
         np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "FitEdgeL.csv"),FEL,delimiter=',')
         np.savetxt(os.path.join(Opt.FPath,"output",Opt.FName + "FitEdgeR.csv"),FER,delimiter=',')
         
-        #%% Calc Displacement
+        #%% Calc Displacement for peaks to do drift correct
         FDisp = ((FPeak.transpose() - np.nanmean(FPeak,axis=1)).transpose())
-        FELRes = ((FEL.transpose() - np.nanmean(FEL,axis=1)).transpose())
-        FERRes = ((FER.transpose() - np.nanmean(FER,axis=1)).transpose())
-        FPWidthRes = ((FPWidth.transpose() - np.nanmean(FPWidth,axis=1)).transpose())
-        
+
         #%% Do thermal drift correction
         XTD = np.arange(FDisp.shape[1])
         YTD = np.nanmean(FDisp,axis=0)
@@ -564,8 +563,14 @@ if __name__ == '__main__':
             plt.close(TDF)
         #%% now correct the data for drift
         FDispCorrect = (FDisp - TDPlot)
-        FELCorrect = (FELRes - TDPlot)
-        FERCorrect = (FERRes - TDPlot)
+        FELDrift = (FEL - TDPlot)
+        FERDrift = (FER - TDPlot)
+        
+        #%% Calc Displacement for edges/width
+
+        FELCorrect = ((FEL.transpose() - np.nanmean(FEL,axis=1)).transpose())
+        FERCorrect = ((FER.transpose() - np.nanmean(FER,axis=1)).transpose())
+        FPWidthRes = ((FPWidth.transpose() - np.nanmean(FPWidth,axis=1)).transpose())
         
         #%% put edges together
         
@@ -594,12 +599,13 @@ if __name__ == '__main__':
             FitAx.plot(Xplot*Opt.NmPP,np.gradient(RawIn[:,256,0])+OffSet1,'k')
             OffSet2 = min(np.gradient(RawIn[:,256,0])+OffSet1)*1.5
             for dd in np.arange(Opt.DomPerTrench):
-                FitAx.axvline(x=FPeak[dd,256],linestyle = '--') # plot center
+                FitAx.axvline(x=FPeak[dd,256],linestyle = '--',color=Opt.PColor) # plot center
                 if dd != 0: 
-                    FitAx.axvspan(FEL[dd,256],FPeak[dd,256],color='b',alpha=0.2)
+                    FitAx.axvspan(FEL[dd,256],FPeak[dd,256],color=Opt.WColor ,alpha=0.2)
+                    FitAx.axvline(x=FEL[dd,256],linestyle = '--',color= Opt.EColor) # plot Left Edge 
                 if dd != Opt.DomPerTrench-1:
-                    FitAx.axvspan(FPeak[dd,256],FER[dd,256],color='b',alpha=0.2)
-    
+                    FitAx.axvspan(FPeak[dd,256],FER[dd,256],color=Opt.WColor ,alpha=0.2)
+                    FitAx.axvline(x=FER[dd,256],linestyle = '--',color=Opt.EColor) # plot Right Edge 
             FitAx.get_yaxis().set_visible(False)
             for dd in np.arange(Opt.DomPerTrench):        
                 if dd != 0: 
@@ -612,27 +618,39 @@ if __name__ == '__main__':
             FitF.clf()
             plt.close(FitF)
             #%% show an example LER
-            FitF,FitAx = plt.subplots()
+            FitF,FitAx = plt.subplots(nrows=3,figsize=(3,6))
             gmodel = lmfit.Model(gaussian) # then the model
-            Count , Bin = np.histogram(np.concatenate((FELCorrect[MidInd[0],:],FERCorrect[MidInd[0],:])),bins=200,range=(-10,10),density=True)
+            Count , Bin = np.histogram(np.concatenate((FELCorrect[MidInd[0],:],FERCorrect[MidInd[0],:])),bins=200,range=(-5,5),density=True)
             BinX = BinX = Bin[:-1]+(Bin[1]-Bin[0])*0.5 # what is the center of each bin?
             Var = np.sqrt(np.nanvar(np.concatenate((FELCorrect[MidInd[0],:],FERCorrect[MidInd[0],:]))))  # calculate variance exactly
             Inits = gmodel.make_params( amp=Count.max(), cen=0, wid=Var) # make some initial guess
             Inits['wid'] = lmfit.Parameter(name='wid', value=Var, vary=False) # force it to use varianc
             Res = gmodel.fit(Count, Inits, x=BinX) # and fit
-            FitAx.plot(BinX, Count, 'bo', alpha = 0.1)
-            FitAx.plot(BinX, Res.best_fit, 'blue',label='Edge Fit')
-            Count , Bin = np.histogram(FPWidthRes,bins=200,range=(-10,10),density=True)
+            
+            FitAx[0].plot(BinX, Count, 'o', color = Opt.EColor, alpha = 0.5)
+            FitAx[0].plot(BinX, Res.best_fit, 'black',label='Edge Fit')
+            # Show example width
+            Count , Bin = np.histogram(FPWidthRes,bins=200,range=(-5,5),density=True)
             BinX = BinX = Bin[:-1]+(Bin[1]-Bin[0])*0.5 # what is the center of each bin?
-            VarRt = np.sqrt(np.nanvar(FPWidthRes))  # calculate variance exactly
+            Var = np.sqrt(np.nanvar(FPWidthRes))  # calculate variance exactly
             Inits = gmodel.make_params( amp=Count.max(), cen=0, wid=Var) # make some initial guess
             Inits['wid'] = lmfit.Parameter(name='wid', value=Var, vary=False) # force it to use varianc
             Res = gmodel.fit(Count, Inits, x=BinX) # and fit
-            FitAx.plot(BinX, Count, 'o',color = 'gold', alpha = 0.1)
-            FitAx.plot(BinX, Res.best_fit, 'gold',label='Width Fit')
-            FitAx.legend()
+            FitAx[1].plot(BinX, Count, 'o',color = Opt.WColor, alpha = 0.5)
+            FitAx[1].plot(BinX, Res.best_fit, 'black',label='Width Fit')
+            # Show example position
+            Count , Bin = np.histogram(FDispCorrect,bins=200,range=(-5,5),density=True)
+            BinX = BinX = Bin[:-1]+(Bin[1]-Bin[0])*0.5 # what is the center of each bin?
+            Var = np.sqrt(np.nanvar(FDispCorrect))  # calculate variance exactly
+            Inits = gmodel.make_params( amp=Count.max(), cen=0, wid=Var) # make some initial guess
+            Inits['wid'] = lmfit.Parameter(name='wid', value=Var, vary=False) # force it to use varianc
+            Res = gmodel.fit(Count, Inits, x=BinX) # and fit
+            FitAx[2].plot(BinX, Count, 'o',color = Opt.PColor, alpha = 0.5)
+            FitAx[2].plot(BinX, Res.best_fit, 'black',label='Position Fit')
+            
+            FitF.tight_layout()
+            FitF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "ExampleGauss.png"), dpi=600)
             #%%
-            FitF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "ExampleLERFit.png"), dpi=600)
             FitF.clf()
             plt.close(FitF)
             
@@ -702,6 +720,12 @@ if __name__ == '__main__':
         LPRCrossF , LPRCrossAx = plt.subplots(4,1, figsize=(4,12))
         LPRCrossF.suptitle('Positional Correlations')
         LPRCrossAx[0].imshow(CCDisp, cmap="seismic_r", vmin=-1, vmax=1)
+        LPRCrossAx[0].set_xticks([])
+        LPRCrossAx[0].set_xticks(np.arange(0,7))
+        LPRCrossAx[0].set_xticklabels(('e1','e2','e3','e4','e5','e6','e7'))
+        LPRCrossAx[0].set_yticks([])
+        LPRCrossAx[0].set_yticks(np.arange(0,7))
+        LPRCrossAx[0].set_yticklabels(('e7','e6','e5','e4','e3','e2','e1'))
         LPRCrossAx[1].hexbin(StackD1O[:,0],StackD1O[:,1],gridsize=20,extent=(-10, 10, -10, 10))
         LPRCrossAx[1].set_aspect('equal')
         LPRCrossAx[2].hexbin(StackD2O[:,0],StackD2O[:,1],gridsize=20,extent=(-10, 10, -10, 10))
@@ -719,6 +743,12 @@ if __name__ == '__main__':
         LWRCrossF , LWRCrossAx = plt.subplots(4,1, figsize=(4,12))
         LWRCrossF.suptitle('Width Correlations')
         LWRCrossAx[0].imshow(CCWidth, cmap="seismic_r", vmin=-1, vmax=1)
+        LWRCrossAx[0].set_xticks([])
+        LWRCrossAx[0].set_xticks(np.arange(0,7))
+        LWRCrossAx[0].set_xticklabels(('e1','e2','e3','e4','e5','e6','e7'))
+        LWRCrossAx[0].set_yticks([])
+        LWRCrossAx[0].set_yticks(np.arange(0,7))
+        LWRCrossAx[0].set_yticklabels(('e7','e6','e5','e4','e3','e2','e1'))
         LWRCrossAx[1].hexbin(StackW1O[:,0],StackW1O[:,1],gridsize=20,extent=extent)
         LWRCrossAx[1].set_aspect('equal')
         LWRCrossAx[2].hexbin(StackW2O[:,0],StackW2O[:,1],gridsize=20,extent=extent)
@@ -737,17 +767,17 @@ if __name__ == '__main__':
         LERCrossAx[0].imshow(CCEL.values[0:14,0:14], cmap="seismic_r",extent=(0,14,0,14),vmin=-1, vmax=1)
         LERCrossAx[0].set_title('Edge')
         LERCrossAx[0].set_xticks([])
-        LERCrossAx[0].set_xticks(2*np.arange(0,7)+0.5)
+        LERCrossAx[0].set_xticks(2*np.arange(0,7)+1)
         LERCrossAx[0].set_xticklabels(('e1','e2','e3','e4','e5','e6','e7'))
         LERCrossAx[0].set_yticks([])
-        LERCrossAx[0].set_yticks(2*np.arange(0,7)+0.5)
-        LERCrossAx[0].set_yticklabels(('e1','e2','e3','e4','e5','e6','e7'))
+        LERCrossAx[0].set_yticks(2*np.arange(0,7)+1)
+        LERCrossAx[0].set_yticklabels(('e7','e6','e5','e4','e3','e2','e1'))
         # now plot lines to guide eyes
         LERCrossAx[0].plot(np.arange(0,14),13-np.arange(0,14),color='#00FF00',linewidth = 2)
         LERCrossAx[0].plot(np.arange(0,14),12-np.arange(0,14),color='#FF00FF',linewidth = 2)
         LERCrossAx[0].plot(np.arange(0,14),11-np.arange(0,14),color='k',linewidth = 2)
         LERCrossAx[0].set_ylim(0,14)
-        LERCrossAx[0].set_xlim(0,14),
+        LERCrossAx[0].set_xlim(0,14)
         LERCrossAx[1].hexbin(StackE1O[:,0],StackE1O[:,1],gridsize=20,extent=extent)
         LERCrossAx[1].set_aspect('equal')
         LERCrossAx[2].hexbin(StackE2O[:,0],StackE2O[:,1],gridsize=20,extent=extent)
@@ -769,21 +799,7 @@ if __name__ == '__main__':
         plt.close(LERCrossF)
 
         
-        #%% Autocorrelation Opt.AcSize
-        ACPeak = pd.DataFrame()
-        CCPeak = pd.DataFrame()
-        
-        ACMSD = pd.DataFrame()
-        CCMSD = pd.DataFrame()
-        ACWidth = pd.DataFrame() 
-        CCWidth = pd.DataFrame()
-        
-        for lag in range(Opt.ACSize):
-            ACPeak = ACPeak.append( PanDisp.corrwith(PanDisp.shift(periods=lag)).rename('lag%i' %lag))
-            CCPeak = CCPeak.append( PanDisp.corrwith(PanDisp.shift(periods=lag).shift(1,axis=1)).rename('lag%i' %lag))
-            ACMSD = ACMSD.append(((PanDisp.shift(periods=lag)-PanDisp)**2).mean().rename('lag%i' %lag))
-            ACWidth = ACWidth.append( PanWidth.corrwith(PanWidth.shift(periods=lag)).rename('lag%i' %lag))
-            CCWidth = CCWidth.append( PanWidth.corrwith(PanWidth.shift(periods=lag).shift(1,axis=1)).rename('lag%i' %lag))
+
         #%% Power Spectral Density
         
         PSDPeak = np.abs(np.fft.rfft(PanDisp.interpolate(limit_direction='both').values.transpose()))**2
@@ -798,53 +814,53 @@ if __name__ == '__main__':
         RollAv = int(5)
         PSDMean = np.nanmean(PSDPeak, axis=0)[1:]
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDAx[0,0].loglog(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[0,0].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.PColor,alpha=0.5)
         PSDAx[0,0].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
         PSDAx[0,0].set_title('LPR')
         
         PSDMean = np.nanmean(PSDPeak[MidInd,:], axis=0)[1:]
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDAx[0,1].loglog(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[0,1].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.PColor,alpha=0.5)
         PSDAx[0,1].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
         PSDAx[0,1].set_title('Mid')
         
         PSDMean = np.nanmean(PSDPeak[EdgeInd,:], axis=0)[1:]
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDAx[0,2].loglog(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[0,2].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.PColor,alpha=0.5)
         PSDAx[0,2].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
         PSDAx[0,2].set_title('Edge')
         
         PSDMean = np.nanmean(PSDWidth, axis=0)[1:]
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDAx[1,0].loglog(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[1,0].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.WColor,alpha=0.5)
         PSDAx[1,0].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
         
         PSDMean = np.nanmean(PSDWidth[MidInd,:], axis=0)[1:]
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDAx[1,1].loglog(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[1,1].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.WColor,alpha=0.5)
         PSDAx[1,1].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
 
         
         PSDMean = np.nanmean(PSDWidth[EdgeInd,:], axis=0)[1:]
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDAx[1,2].loglog(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[1,2].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.WColor,alpha=0.5)
         PSDAx[1,2].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
         PSDAx[1,0].set_title('LWR')
 
         PSDMean = np.nanmean(PSDEdge, axis=0)[1:]
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDAx[2,0].loglog(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[2,0].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.EColor,alpha=0.5)
         PSDAx[2,0].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
         
         PSDMean = np.nanmean(PSDEdge[np.sort(np.append(MidInd*2, MidInd*2+1)),:], axis=0)[1:]
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDAx[2,1].loglog(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[2,1].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.EColor,alpha=0.5)
         PSDAx[2,1].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
 
         
         PSDMean = np.nanmean(PSDEdge[np.sort(np.append(EdgeInd*2, EdgeInd*2+1)),:], axis=0)[1:]
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDAx[2,2].loglog(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+        PSDAx[2,2].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.EColor,alpha=0.5)
         PSDAx[2,2].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
         PSDAx[2,0].set_title('LER')
 
@@ -854,170 +870,189 @@ if __name__ == '__main__':
         PSDF.clf()
         plt.close(PSDF)
         #%%
-        RollAv = int(5)
-        PSDCkF, PSDCkAx = plt.subplots(ncols = 3,sharey = True)
-        PSDMean = np.nanmean(PSDCk, axis=0)[1:]
-        PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDCkAx[0].plot(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
-        PSDCkAx[0].plot(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
-        #mid
-        PSDMean = np.nanmean(PSDCk[MidInd,:], axis=0)[1:]
-        PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDCkAx[1].plot(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
-        PSDCkAx[1].plot(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
-        #Edge
-        PSDMean = np.nanmean(PSDCk[EdgeInd,:], axis=0)[1:]
-        PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDCkAx[2].plot(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
-        PSDCkAx[2].plot(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
-
-        PSDCkAx[0].set_title('CK')
-        PSDCkAx[1].set_title('Mid')
-        PSDCkAx[2].set_title('Edge')
-        PSDCkAx[1].set_xlabel('Frequency (hz)')
-        PSDCkAx[0].set_ylim([0, 1])
-        #%%
-        PSDCkF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "PSDCk.png"), dpi=300)
-        PSDCkF.clf()
-        plt.close(PSDCkF)
-        #%% Autocorrelation
-        ACDispF , ACDispAx = plt.subplots(nrows=2,figsize=(15,3))
-        ACDispF.suptitle('Peak displacement Autocorrelation')
-        ACDispIm = ACDispAx[0].imshow(ACPeak.transpose(), cmap="seismic_r", vmin=-1, vmax=1)   
-        ACDispF.colorbar(ACDispIm)
-        ACDispAx[1].plot(ACPeak.values.mean(axis=1),label='Overall')
-        ACDispAx[1].plot(ACPeak.values[:,EdgeInd].mean(axis=1),label='Edge')
-        ACDispAx[1].plot(ACPeak.values[:,MidInd].mean(axis=1),label='Center')
-        ACDispAx[1].legend()
-        ACDispF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "DisplacementAC.png"), dpi=300)
-        #%%
-        ACDispF.clf()
-        plt.close(ACDispF)        
-        #%% MSD AC
-        ACMSDF , ACMSDAx = plt.subplots(nrows=2,figsize=(15,3))
-        ACMSDF.suptitle('MSD Autocorrelation')
-        ACMSDIm = ACMSDAx[0].imshow(ACMSD.transpose(), cmap="plasma", vmin=0, vmax=15)
-        ACMSDF.colorbar(ACMSDIm)
-        ACMSDAx[1].plot(ACMSD.values.mean(axis=1),label='Overall')
-        ACMSDAx[1].plot(ACMSD.values[:,EdgeInd].mean(axis=1),label='Edge')
-        ACMSDAx[1].plot(ACMSD.values[:,MidInd].mean(axis=1),label='Center')
-        ACMSDAx[1].legend()
-        ACMSDF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "MSDAC.png"), dpi=300)
-        #%%
-        ACMSDF.clf()
-        plt.close(ACMSDF)        
+        if Opt.OptPlots == 1:
+            RollAv = int(5)
+            PSDCkF, PSDCkAx = plt.subplots(ncols = 3,sharey = True)
+            PSDMean = np.nanmean(PSDCk, axis=0)[1:]
+            PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
+            PSDCkAx[0].plot(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+            PSDCkAx[0].plot(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+            #mid
+            PSDMean = np.nanmean(PSDCk[MidInd,:], axis=0)[1:]
+            PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
+            PSDCkAx[1].plot(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+            PSDCkAx[1].plot(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+            #Edge
+            PSDMean = np.nanmean(PSDCk[EdgeInd,:], axis=0)[1:]
+            PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
+            PSDCkAx[2].plot(PSDFreq[1:], PSDMean,'k.',alpha=0.2)
+            PSDCkAx[2].plot(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+    
+            PSDCkAx[0].set_title('CK')
+            PSDCkAx[1].set_title('Mid')
+            PSDCkAx[2].set_title('Edge')
+            PSDCkAx[1].set_xlabel('Frequency (hz)')
+            PSDCkAx[0].set_ylim([0, 1])
+            #%%
+            PSDCkF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "PSDCk.png"), dpi=300)
+            PSDCkF.clf()
+            plt.close(PSDCkF)
+            #%% Autocorrelation
+                    #%% Autocorrelation Opt.AcSize
+            ACPeak = pd.DataFrame()
+            CCPeak = pd.DataFrame()
+            
+            ACMSD = pd.DataFrame()
+            CCMSD = pd.DataFrame()
+            ACWidth = pd.DataFrame() 
+            CCWidth = pd.DataFrame()
+            
+            for lag in range(Opt.ACSize):
+                ACPeak = ACPeak.append( PanDisp.corrwith(PanDisp.shift(periods=lag)).rename('lag%i' %lag))
+                CCPeak = CCPeak.append( PanDisp.corrwith(PanDisp.shift(periods=lag).shift(1,axis=1)).rename('lag%i' %lag))
+                ACMSD = ACMSD.append(((PanDisp.shift(periods=lag)-PanDisp)**2).mean().rename('lag%i' %lag))
+                ACWidth = ACWidth.append( PanWidth.corrwith(PanWidth.shift(periods=lag)).rename('lag%i' %lag))
+                CCWidth = CCWidth.append( PanWidth.corrwith(PanWidth.shift(periods=lag).shift(1,axis=1)).rename('lag%i' %lag))
+            
+            ACDispF , ACDispAx = plt.subplots(nrows=2,figsize=(15,3))
+            ACDispF.suptitle('Peak displacement Autocorrelation')
+            ACDispIm = ACDispAx[0].imshow(ACPeak.transpose(), cmap="seismic_r", vmin=-1, vmax=1)   
+            ACDispF.colorbar(ACDispIm)
+            ACDispAx[1].plot(ACPeak.values.mean(axis=1),label='Overall')
+            ACDispAx[1].plot(ACPeak.values[:,EdgeInd].mean(axis=1),label='Edge')
+            ACDispAx[1].plot(ACPeak.values[:,MidInd].mean(axis=1),label='Center')
+            ACDispAx[1].legend()
+            ACDispF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "DisplacementAC.png"), dpi=300)
+            #%%
+            ACDispF.clf()
+            plt.close(ACDispF)        
+            #%% MSD AC
+            ACMSDF , ACMSDAx = plt.subplots(nrows=2,figsize=(15,3))
+            ACMSDF.suptitle('MSD Autocorrelation')
+            ACMSDIm = ACMSDAx[0].imshow(ACMSD.transpose(), cmap="plasma", vmin=0, vmax=15)
+            ACMSDF.colorbar(ACMSDIm)
+            ACMSDAx[1].plot(ACMSD.values.mean(axis=1),label='Overall')
+            ACMSDAx[1].plot(ACMSD.values[:,EdgeInd].mean(axis=1),label='Edge')
+            ACMSDAx[1].plot(ACMSD.values[:,MidInd].mean(axis=1),label='Center')
+            ACMSDAx[1].legend()
+            ACMSDF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "MSDAC.png"), dpi=300)
+            #%%
+            ACMSDF.clf()
+            plt.close(ACMSDF)        
+            
+            #%%width
+            ACWidthF , ACWidthAx = plt.subplots(nrows=2, figsize=(15,3))
+            ACWidthF.suptitle('Peak FWHM Autocorrelation')
+            ACWidthIm = ACWidthAx[0].imshow(ACWidth.transpose(), cmap="seismic_r", vmin=-1, vmax=1)
+            ACWidthF.colorbar(ACWidthIm)
+            ACWidthAx[1].plot(ACWidth.values.mean(axis=1),label='Overall')
+            ACWidthAx[1].plot(ACWidth.values[:,EdgeInd].mean(axis=1),label='Edge')
+            ACWidthAx[1].plot(ACWidth.values[:,MidInd].mean(axis=1),label='Center')
+            ACWidthAx[1].legend()
+            ACWidthF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "WidthAC.png"), dpi=300)
+            #%%
+            ACWidthF.clf()
+            plt.close(ACWidthF)
+            #%% MSD per line
+            MSDF , MSDAx = plt.subplots(CBins.max(),BinCount.max(), figsize=(16,16))
+            MSDF.suptitle('Mean Squared Displacement per line')
+            for nn in range(CBins.max()):
+                for ll in range(BinCount.max()):
+                    ACMSD[nn*CBins.max()+ll].plot(ax=MSDAx[nn,ll])
+                    MSDAx[nn,ll].set_ylim([0, 10])
+                    MSDAx[nn,ll].set_xlim([0, 500])
+            MSDF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "MSD.png"), dpi=300)
+            MSDF.clf()
+            plt.close(MSDF)
         
-        #%%width
-        ACWidthF , ACWidthAx = plt.subplots(nrows=2, figsize=(15,3))
-        ACWidthF.suptitle('Peak FWHM Autocorrelation')
-        ACWidthIm = ACWidthAx[0].imshow(ACWidth.transpose(), cmap="seismic_r", vmin=-1, vmax=1)
-        ACWidthF.colorbar(ACWidthIm)
-        ACWidthAx[1].plot(ACWidth.values.mean(axis=1),label='Overall')
-        ACWidthAx[1].plot(ACWidth.values[:,EdgeInd].mean(axis=1),label='Edge')
-        ACWidthAx[1].plot(ACWidth.values[:,MidInd].mean(axis=1),label='Center')
-        ACWidthAx[1].legend()
-        ACWidthF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "WidthAC.png"), dpi=300)
-        #%%
-        ACWidthF.clf()
-        plt.close(ACWidthF)
-        #%% MSD per line
-        MSDF , MSDAx = plt.subplots(CBins.max(),BinCount.max(), figsize=(16,16))
-        MSDF.suptitle('Mean Squared Displacement per line')
-        for nn in range(CBins.max()):
-            for ll in range(BinCount.max()):
-                ACMSD[nn*CBins.max()+ll].plot(ax=MSDAx[nn,ll])
-                MSDAx[nn,ll].set_ylim([0, 10])
-                MSDAx[nn,ll].set_xlim([0, 500])
-        MSDF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "MSD.png"), dpi=300)
-        MSDF.clf()
-        plt.close(MSDF)
-        
-        #%% save the kappa/KT calculated from disp squared
-        PSeudoEA = np.nanmean(( FDispCorrect**-2),axis=1)
-        PSeudoEA = PSeudoEA.reshape((CPatSep.size-1,Opt.DomPerTrench))*Opt.Boltz*Opt.Temp
-        if ImNum == 0:
-            EAOut = PSeudoEA
-        else:
-            EAOut = np.concatenate((EAOut, PSeudoEA))
-            #%% what about from the variance? Change if changing domain counts
-        VarEA = np.zeros((1,Opt.DomPerTrench+1))
-
-        EAF , EAAx = plt.subplots(2,4, figsize=(16,16))
-        # set up the fig first  
-        gmodel = lmfit.Model(gaussian) # then the model
-        # ok now histogram remember StackDisp comes from FDispCorrect so is already NM
-        Count , Bin = np.histogram(StackDisp[np.isfinite(StackDisp)],bins=200,range=(-20,20))
-        BinX = BinX = Bin[:-1]+(Bin[1]-Bin[0])*0.5 # what is the center of each bin?
-        VarRt = np.sqrt(np.nanvar(StackDisp))  # calculate variance exactly
-        Inits = gmodel.make_params( amp=Count.max(), cen=0, wid=VarRt) # make some initial guess
-        Inits['wid'] = lmfit.Parameter(name='wid', value=VarRt, vary=False) # force it to use variance
-        
-        Res = gmodel.fit(Count, Inits, x=BinX) # and fit
-        VarEA[0,0] = (Res.best_values['wid'])**-2 * Opt.Boltz*Opt.Temp
-
-        EAAx[0,0].plot(BinX, Count, 'bo')
-        EAAx[0,0].plot(BinX, Res.best_fit, 'r-')
-        EAAx[0,0].set_title('Overall fit Kappa = %f eV/nm^2'%(VarEA[0,0]))
-        EAAx[0,0].set_xlim([-10, 10])
-        for dd in range(Opt.DomPerTrench):
-            Count , Bin = np.histogram(StackDisp[:,dd][np.isfinite(StackDisp[:,dd])],bins=200,range=(-20,20))
+            #%% save the kappa/KT calculated from disp squared
+            PSeudoEA = np.nanmean(( FDispCorrect**-2),axis=1)
+            PSeudoEA = PSeudoEA.reshape((CPatSep.size-1,Opt.DomPerTrench))*Opt.Boltz*Opt.Temp
+            if ImNum == 0:
+                EAOut = PSeudoEA
+            else:
+                EAOut = np.concatenate((EAOut, PSeudoEA))
+                #%% what about from the variance? Change if changing domain counts
+            VarEA = np.zeros((1,Opt.DomPerTrench+1))
+    
+            EAF , EAAx = plt.subplots(2,4, figsize=(16,16))
+            # set up the fig first  
+            gmodel = lmfit.Model(gaussian) # then the model
+            # ok now histogram remember StackDisp comes from FDispCorrect so is already NM
+            Count , Bin = np.histogram(StackDisp[np.isfinite(StackDisp)],bins=200,range=(-20,20))
             BinX = BinX = Bin[:-1]+(Bin[1]-Bin[0])*0.5 # what is the center of each bin?
-            VarRt = np.sqrt(np.nanvar(StackDisp[:,dd]))  # calculate variance exactly
+            VarRt = np.sqrt(np.nanvar(StackDisp))  # calculate variance exactly
             Inits = gmodel.make_params( amp=Count.max(), cen=0, wid=VarRt) # make some initial guess
             Inits['wid'] = lmfit.Parameter(name='wid', value=VarRt, vary=False) # force it to use variance
-
+            
             Res = gmodel.fit(Count, Inits, x=BinX) # and fit
-            VarEA[0,dd+1] = (Res.best_values['wid'])**-2 * Opt.Boltz * Opt.Temp
-            # add to the plot
-            rc = int((dd+1)/4) # the plot goes on the 0th row if dd <3
-            cc = int((dd+1)%4) # plot goes on column related to modulo 4
-            EAAx[rc,cc].plot(BinX, Count, 'bo')
-            EAAx[rc,cc].plot(BinX, Res.best_fit, 'r-')
-            EAAx[rc,cc].set_title('Domain %i fit Kappa = %f eV/nm^2'%(dd+1, VarEA[0,(dd+1)]))
-            EAAx[rc,cc].set_xlim([-10, 10])
-         #% plot  
-        EAF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "VarianceFitting.png"), dpi=300)
-        EAF.clf()
-        plt.close(EAF)
-        if ImNum == 0:
-            VarEAOut = np.copy(VarEA)
-        else:
-            VarEAOut = np.concatenate((VarEAOut, VarEA))
-        #%% Delta G plot
-        DeltaGF,DeltaGAx = plt.subplots(1,1)
-        DeltaGAx.set_ylabel('DeltaG (eV)')
-        DeltaGAx.set_xlabel('Displacement (nm)')
-        Count , Bin = np.histogram(StackDisp[np.isfinite(StackDisp)],bins=200,range=(-20,20))
-        BinX = BinX = Bin[:-1]+(Bin[1]-Bin[0])*0.5 # what is the center of each bin?
-        GCount = np.log(Count/Count.sum())*(-Opt.Boltz*Opt.Temp)
-        
-        Filter = np.isfinite(GCount)
-        
-        hmodel = lmfit.Model(Hooks)
-        Inits = hmodel.make_params(K=0, Offset = 0.1)
-        Inits['K'] = lmfit.Parameter(name='K', value=VarEA[0,0], vary=False) # force it to use EA calculated earlier
-        Res = hmodel.fit(GCount[Filter], Inits, x=BinX[Filter]) # and fit
-        
-        GOff = Res.best_values['Offset']
-        GTheory = VarEA[0,0]*0.5*BinX**2
-        GTheory += GOff
-        DeltaGAx.plot(BinX[Filter],GCount[Filter],'k.',BinX[Filter],GTheory[Filter],'r')
-        DeltaGF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "HooksLaw"), dpi=300)
-        DeltaGF.clf()
-        plt.close(DeltaGF)
+            VarEA[0,0] = (Res.best_values['wid'])**-2 * Opt.Boltz*Opt.Temp
+    
+            EAAx[0,0].plot(BinX, Count, 'bo')
+            EAAx[0,0].plot(BinX, Res.best_fit, 'r-')
+            EAAx[0,0].set_title('Overall fit Kappa = %f eV/nm^2'%(VarEA[0,0]))
+            EAAx[0,0].set_xlim([-10, 10])
+            for dd in range(Opt.DomPerTrench):
+                Count , Bin = np.histogram(StackDisp[:,dd][np.isfinite(StackDisp[:,dd])],bins=200,range=(-20,20))
+                BinX = BinX = Bin[:-1]+(Bin[1]-Bin[0])*0.5 # what is the center of each bin?
+                VarRt = np.sqrt(np.nanvar(StackDisp[:,dd]))  # calculate variance exactly
+                Inits = gmodel.make_params( amp=Count.max(), cen=0, wid=VarRt) # make some initial guess
+                Inits['wid'] = lmfit.Parameter(name='wid', value=VarRt, vary=False) # force it to use variance
+    
+                Res = gmodel.fit(Count, Inits, x=BinX) # and fit
+                VarEA[0,dd+1] = (Res.best_values['wid'])**-2 * Opt.Boltz * Opt.Temp
+                # add to the plot
+                rc = int((dd+1)/4) # the plot goes on the 0th row if dd <3
+                cc = int((dd+1)%4) # plot goes on column related to modulo 4
+                EAAx[rc,cc].plot(BinX, Count, 'bo')
+                EAAx[rc,cc].plot(BinX, Res.best_fit, 'r-')
+                EAAx[rc,cc].set_title('Domain %i fit Kappa = %f eV/nm^2'%(dd+1, VarEA[0,(dd+1)]))
+                EAAx[rc,cc].set_xlim([-10, 10])
+             #% plot  
+            EAF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "VarianceFitting.png"), dpi=300)
+            EAF.clf()
+            plt.close(EAF)
+            if ImNum == 0:
+                VarEAOut = np.copy(VarEA)
+            else:
+                VarEAOut = np.concatenate((VarEAOut, VarEA))
+            #%% Delta G plot
+            DeltaGF,DeltaGAx = plt.subplots(1,1)
+            DeltaGAx.set_ylabel('DeltaG (eV)')
+            DeltaGAx.set_xlabel('Displacement (nm)')
+            Count , Bin = np.histogram(StackDisp[np.isfinite(StackDisp)],bins=200,range=(-20,20))
+            BinX = BinX = Bin[:-1]+(Bin[1]-Bin[0])*0.5 # what is the center of each bin?
+            GCount = np.log(Count/Count.sum())*(-Opt.Boltz*Opt.Temp)
+            
+            Filter = np.isfinite(GCount)
+            
+            hmodel = lmfit.Model(Hooks)
+            Inits = hmodel.make_params(K=0, Offset = 0.1)
+            Inits['K'] = lmfit.Parameter(name='K', value=VarEA[0,0], vary=False) # force it to use EA calculated earlier
+            Res = hmodel.fit(GCount[Filter], Inits, x=BinX[Filter]) # and fit
+            
+            GOff = Res.best_values['Offset']
+            GTheory = VarEA[0,0]*0.5*BinX**2
+            GTheory += GOff
+            DeltaGAx.plot(BinX[Filter],GCount[Filter],'k.',BinX[Filter],GTheory[Filter],'r')
+            DeltaGF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "HooksLaw"), dpi=300)
+            DeltaGF.clf()
+            plt.close(DeltaGF)
         
         #%% Sigma Stuff
         SigmaE = np.zeros((1,(Opt.DomPerTrench+1)))
         SigmaW = np.zeros((1,(Opt.DomPerTrench+1)))
+        SigmaP = np.zeros((1,(Opt.DomPerTrench+1)))
         
         SigmaE[0,0] = np.abs(3*np.nanvar(FECorrect))
         SigmaW[0,0] = np.abs(3*np.nanvar(FPWidthRes))
+        SigmaP[0,0] = np.abs(3*np.nanvar(FDispCorrect))
         for dd in range(Opt.DomPerTrench):
             SigmaE[0,dd+1] = np.abs(3*np.nanvar(StackEdge[:,dd*2:dd*2+2]))
             SigmaW[0,dd+1] = np.abs(3*np.nanvar(StackWidth[:,dd]))
-        SigmaRat = SigmaW/SigmaE
+            SigmaP[0,dd+1] = np.abs(3*np.nanvar(StackDisp[:,dd]))
         SigmaC = 1 - SigmaW**2/(2 * SigmaE**2)
-        SigmaAll = np.concatenate((SigmaE,SigmaW,SigmaRat, SigmaC),axis=1)
+        SigmaAll = np.concatenate((SigmaE,SigmaW,SigmaP, SigmaC),axis=1)
         
         if ImNum == 0:
             SigmaOut = np.copy(SigmaAll)
@@ -1029,7 +1064,7 @@ if __name__ == '__main__':
         SigmaPos = np.arange(len(SigmaLab))
         SigmaAx[0].plot(SigmaPos,SigmaW[0,:],'k.',label='3 sigma W')
         SigmaAx[0].plot(SigmaPos,SigmaE[0,:],'b.',label='3 sigma E')
-        SigmaAx[1].plot(SigmaPos,SigmaRat[0,:],'r.',label='W/E')
+        SigmaAx[1].plot(SigmaPos,SigmaP[0,:],'r.',label='3 sigma P')
         SigmaAx[1].plot(SigmaPos,SigmaC[0,:],'k*',label='C')
         SigmaAx[1].axis([-0.5,7.5,0,5])
         SigmaF.legend()
@@ -1042,8 +1077,11 @@ if __name__ == '__main__':
         #%%
         
     #outside of imnum loop
-    np.savetxt(os.path.join(Opt.FPath,"output","SummedEA.csv"),EAOut,delimiter=',')
-    np.savetxt(os.path.join(Opt.FPath,"output","VarEA.csv"),VarEAOut,delimiter=',')
-    np.savetxt(os.path.join(Opt.FPath,"output","3Sigma.csv"),SigmaOut,delimiter=',')
+    try:np.savetxt(os.path.join(Opt.FPath,"output","SummedEA.csv"),EAOut,delimiter=',')
+    except: pass
+    try:np.savetxt(os.path.join(Opt.FPath,"output","VarEA.csv"),VarEAOut,delimiter=',')
+    except: pass
+    try:np.savetxt(os.path.join(Opt.FPath,"output","3Sigma.csv"),SigmaOut,delimiter=',')
+    except: pass
     print('All Done')
 
