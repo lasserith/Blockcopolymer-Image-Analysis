@@ -509,7 +509,7 @@ if __name__ == '__main__':
         print('\n Image '+Opt.FName+'\n')
         __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
 
-        POut = Parallel(n_jobs=-2,verbose=5)(delayed(LERPara)(RawIn[:,tt,ImNum], Opt.NmPP, CValley, LEdgeInd, REdgeInd, FitWidth) # backend='threading' removed
+        POut = Parallel(n_jobs=-4,verbose=5)(delayed(LERPara)(RawIn[:,tt,ImNum], Opt.NmPP, CValley, LEdgeInd, REdgeInd, FitWidth) # backend='threading' removed
             for tt in range(RawIn.shape[1]))
         #%%
         FPTuple, FPWTuple, FELTup, FERTup = zip(*POut)
@@ -813,6 +813,12 @@ if __name__ == '__main__':
         PSDF.suptitle('Power Spectral Density')
         RollAv = int(5)
         PSDMean = np.nanmean(PSDPeak, axis=0)[1:]
+        
+        if ImNum == 0:
+            PSDLPROut = np.vstack( (PSDFreq[1:], PSDMean))
+        else:
+            PSDLPROut = np.vstack((PSDLPROut, PSDMean))
+            
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
         PSDAx[0,0].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.PColor,alpha=0.5)
         PSDAx[0,0].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
@@ -831,6 +837,12 @@ if __name__ == '__main__':
         PSDAx[0,2].set_title('Edge')
         
         PSDMean = np.nanmean(PSDWidth, axis=0)[1:]
+        
+        if ImNum == 0:
+            PSDLWROut = np.vstack( (PSDFreq[1:], PSDMean))
+        else:
+            PSDLWROut = np.vstack((PSDLWROut, PSDMean))
+        
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
         PSDAx[1,0].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.WColor,alpha=0.5)
         PSDAx[1,0].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
@@ -849,6 +861,12 @@ if __name__ == '__main__':
 
         PSDMean = np.nanmean(PSDEdge, axis=0)[1:]
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
+        
+        if ImNum == 0:
+            PSDLEROut = np.vstack( (PSDFreq[1:], PSDMean))
+        else:
+            PSDLEROut = np.vstack((PSDLEROut, PSDMean))
+        
         PSDAx[2,0].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.EColor,alpha=0.5)
         PSDAx[2,0].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
         
@@ -1083,5 +1101,12 @@ if __name__ == '__main__':
     except: pass
     try:np.savetxt(os.path.join(Opt.FPath,"output","3Sigma.csv"),SigmaOut,delimiter=',')
     except: pass
+    try:np.savetxt(os.path.join(Opt.FPath,"output","LPR.csv"),PSDLPROut,delimiter=',')
+    except: pass
+    try:np.savetxt(os.path.join(Opt.FPath,"output","LWR.csv"),PSDLWROut,delimiter=',')
+    except: pass
+    try:np.savetxt(os.path.join(Opt.FPath,"output","LER.csv"),PSDLEROut,delimiter=',')
+    except: pass
+    
     print('All Done')
 
