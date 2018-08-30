@@ -133,7 +133,13 @@ def AutoDetect( FileName , Opt ):
         SkimFile.close()
         try:
             Opt.FInfo=str(MetaF['Image Tag 0x8546'].values);
-            Opt.NmPP=float(Opt.FInfo[17:30])*10**9;
+            StrInt = Opt.FInfo.find('\\n') # find first field
+            StrInt = Opt.FInfo.find('\\n', StrInt + 1) #find second
+            StrInt = Opt.FInfo.find('\\n', StrInt + 1) #find third (we want NEXT one!)
+            StrStart = StrInt + 2
+            StrInt = Opt.FInfo.find('\\n', StrInt + 1) # find end of one we want
+            StrEnd = StrInt - 2
+            Opt.NmPP=float(Opt.FInfo[StrStart:StrEnd])*10**9;
             Opt.Machine="Merlin";
         except:
             pass
@@ -300,7 +306,7 @@ def YKDetect(image, Opt):
     return(Ide)
 
 #%% Azimuthal Averaging
-def azimuthalAverage(image, center=None):
+def azimuthalAverage(image, center=None, angle=None):
     """
     Calculate the azimuthally averaged radial profile.
 
@@ -313,28 +319,21 @@ def azimuthalAverage(image, center=None):
     """
     # Calculate the indices from the image
     y, x = np.indices(image.shape)
-
+    
     if not center:
         center = np.array([(x.max()-x.min())/2.0, (y.max()-y.min())/2.0])
 
     r = np.hypot(x - center[0], y - center[1])
-
-    # Get sorted radii
-    ind = np.argsort(r.flat)
-    r_sorted = r.flat[ind]
-    i_sorted = image.flat[ind]
-
-    # Get the integer part of the radii (bin size = 1)
-    r_int = r_sorted.astype(int)
-
-    # Find all pixels that fall within each radial bin.
-    deltar = r_int[1:] - r_int[:-1]  # Assumes all radii represented
-    rind = np.where(deltar)[0]       # location of changed radius
-    nr = rind[1:] - rind[:-1]        # number of radius bin
+    r = r.astype(np.int)
     
-    # Cumulative sum to figure out sums for each radius bin
-    csim = np.cumsum(i_sorted, dtype=float)
-    tbin = csim[rind[1:]] - csim[rind[:-1]]
+    if not angle:
+        Weight = image.ravel()
+    else:
+        AngMask = np.abs(np.arctan( ( y - center[1] )/(x - center[0] ))) * 180/np.pi
+        Weight = (image*(AngMask < angle)).ravel()
+    
+    tbin = np.bincount(r.ravel(), Weight)
+    nr = np.bincount(r.ravel())
 
     radial_prof = tbin / nr
 
@@ -351,10 +350,11 @@ def FFT( im, Opt):
     
     FSize=np.min( im.shape )
     #FSize=500;
-    FourierArray=np.fft.rfft2( im, s=(FSize,FSize) );
-    FreqA=np.fft.rfftfreq(FSize, d=Opt.NmPP);
+    FourierArray=np.fft.fft2( im, s=(FSize,FSize) );
+    FreqA=np.fft.fftfreq(FSize, d=Opt.NmPP);
     #
-    F2Array=np.fft.fftshift(FourierArray);    SpaceA=1/FreqA;
+    F2Array=np.fft.fftshift(FourierArray);    
+    SpaceA=1/FreqA;
     PowerSpec2d= np.abs( F2Array )**2;
     
     PowerSpec1d= azimuthalAverage(PowerSpec2d);
@@ -399,6 +399,37 @@ def FFT( im, Opt):
             Fig.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "PowerSpecFreqLabel.png"))
             PS2DImage.save(os.path.join(Opt.FPath,"output",Opt.FName + "PowerSpec2d.tif"))
     return(PSMax);
+#%%
+def FFTAlignment( im, Opt):
+    FSize=np.min( im.shape )
+    #FSize=500;
+    FourierArray=np.fft.fft2( im, s=(FSize,FSize) );
+    FreqA=np.fft.fftfreq(FSize, d=Opt.NmPP);
+    #
+    F2Array=np.fft.fftshift(FourierArray);    
+    SpaceA=1/FreqA;
+    PowerSpec2d= np.abs( F2Array )**2;
+    
+    Spec1d = azimuthalAverage(PowerSpec2d)
+    SpecAlign1d = azimuthalAverage(PowerSpec2d,angle=Opt.AlignAng)
+    PowerSpecAlign = SpecAlign1d/ Spec1d;
+    LowCut = (1 - Opt.AlignSize)*Opt.L0
+    HighCut = (1 + Opt.AlignSize)*Opt.L0
+    Mask = ((SpaceA < HighCut) & (SpaceA > LowCut))[:Spec1d.size]
+    PercentAlign = SpecAlign1d[Mask].sum()/Spec1d[Mask].sum()
+    PercentZero = SpecAlign1d[Mask].sum()/Spec1d[0]
+    if Opt.FFTSh==1 or Opt.FFTSa==1:
+        Fig, Ax = plt.subplots(nrows=2)
+        Ax[0].semilogy(FreqA[:int(np.floor(FSize/2))],azimuthalAverage(PowerSpec2d)[:int(np.floor(FSize/2))],FreqA[:int(np.floor(FSize/2))],azimuthalAverage(PowerSpec2d,angle=Opt.AlignAng)[:int(np.floor(FSize/2))])
+        Ax[0].axvspan(1/HighCut,1/LowCut,alpha=0.2)
+        Ax[1].plot(FreqA[:int(np.floor(FSize/2))],PowerSpecAlign[:int(np.floor(FSize/2))])
+        Ax[1].axvspan(1/HighCut,1/LowCut,alpha=0.2)
+        if Opt.FFTSh == 1:
+            Fig.show()
+        if Opt.FFTSa==1:
+            Fig.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Alignment.png"))
+    
+    return(PercentAlign, PercentZero)
 #%%
 def Denoising(im, Opt, l0):
     """

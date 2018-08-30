@@ -1062,13 +1062,13 @@ if __name__ == '__main__':
         SigmaW = np.zeros((1,(Opt.DomPerTrench+1)))
         SigmaP = np.zeros((1,(Opt.DomPerTrench+1)))
         
-        SigmaE[0,0] = np.abs(3*np.nanvar(FECorrect))
-        SigmaW[0,0] = np.abs(3*np.nanvar(FPWidthRes))
-        SigmaP[0,0] = np.abs(3*np.nanvar(FDispCorrect))
+        SigmaE[0,0] = np.abs(3*np.nanstd(FECorrect))
+        SigmaW[0,0] = np.abs(3*np.nanstd(FPWidthRes))
+        SigmaP[0,0] = np.abs(3*np.nanstd(FDispCorrect))
         for dd in range(Opt.DomPerTrench):
-            SigmaE[0,dd+1] = np.abs(3*np.nanvar(StackEdge[:,dd*2:dd*2+2]))
-            SigmaW[0,dd+1] = np.abs(3*np.nanvar(StackWidth[:,dd]))
-            SigmaP[0,dd+1] = np.abs(3*np.nanvar(StackDisp[:,dd]))
+            SigmaE[0,dd+1] = np.abs(3*np.nanstd(StackEdge[:,dd*2:dd*2+2]))
+            SigmaW[0,dd+1] = np.abs(3*np.nanstd(StackWidth[:,dd]))
+            SigmaP[0,dd+1] = np.abs(3*np.nanstd(StackDisp[:,dd]))
         SigmaC = 1 - SigmaW**2/(2 * SigmaE**2)
         SigmaAll = np.concatenate((SigmaE,SigmaW,SigmaP, SigmaC),axis=1)
         
