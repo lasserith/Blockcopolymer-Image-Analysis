@@ -812,12 +812,18 @@ if __name__ == '__main__':
         PSDF , PSDAx = plt.subplots(ncols=3,nrows=3, sharex = True,sharey=True, figsize=(9,9))
         PSDF.suptitle('Power Spectral Density')
         RollAv = int(5)
+        
+        #% Peak
         PSDMean = np.nanmean(PSDPeak, axis=0)[1:]
         
         if ImNum == 0:
             PSDLPROut = np.vstack( (PSDFreq[1:], PSDMean))
+            PSDLPRMid = np.vstack( (PSDFreq[1:], np.nanmean(PSDPeak[MidInd,:], axis=0)[1:]))
+            PSDLPREdge = np.vstack( (PSDFreq[1:], np.nanmean(PSDPeak[EdgeInd,:], axis=0)[1:]))
         else:
             PSDLPROut = np.vstack((PSDLPROut, PSDMean))
+            PSDLPRMid = np.vstack((PSDLPROut, np.nanmean(PSDPeak[MidInd,:], axis=0)[1:]))
+            PSDLPREdge = np.vstack((PSDLPROut, np.nanmean(PSDPeak[EdgeInd,:], axis=0)[1:]))
             
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
         PSDAx[0,0].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.PColor,alpha=0.5)
@@ -836,12 +842,17 @@ if __name__ == '__main__':
         PSDAx[0,2].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
         PSDAx[0,2].set_title('Edge')
         
+        #% Width
         PSDMean = np.nanmean(PSDWidth, axis=0)[1:]
         
         if ImNum == 0:
             PSDLWROut = np.vstack( (PSDFreq[1:], PSDMean))
+            PSDLWRMid = np.vstack( (PSDFreq[1:], np.nanmean(PSDWidth[MidInd,:], axis=0)[1:]))
+            PSDLWREdge = np.vstack( (PSDFreq[1:], np.nanmean(PSDWidth[EdgeInd,:], axis=0)[1:]))
         else:
             PSDLWROut = np.vstack((PSDLWROut, PSDMean))
+            PSDLWRMid = np.vstack((PSDLWROut, np.nanmean(PSDWidth[MidInd,:], axis=0)[1:]))
+            PSDLWREdge = np.vstack((PSDLWROut, np.nanmean(PSDWidth[EdgeInd,:], axis=0)[1:]))
         
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
         PSDAx[1,0].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.WColor,alpha=0.5)
@@ -858,14 +869,19 @@ if __name__ == '__main__':
         PSDAx[1,2].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.WColor,alpha=0.5)
         PSDAx[1,2].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
         PSDAx[1,0].set_title('LWR')
-
+        
+        #% Edge
         PSDMean = np.nanmean(PSDEdge, axis=0)[1:]
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
         
         if ImNum == 0:
             PSDLEROut = np.vstack( (PSDFreq[1:], PSDMean))
+            PSDLERMid = np.vstack( (PSDFreq[1:], np.nanmean(PSDEdge[MidInd,:], axis=0)[1:]))
+            PSDLEREdge = np.vstack( (PSDFreq[1:], np.nanmean(PSDEdge[EdgeInd,:], axis=0)[1:]))
         else:
             PSDLEROut = np.vstack((PSDLEROut, PSDMean))
+            PSDLERMid = np.vstack((PSDLEROut, np.nanmean(PSDEdge[MidInd,:], axis=0)[1:]))
+            PSDLEREdge = np.vstack((PSDLEROut, np.nanmean(PSDEdge[EdgeInd,:], axis=0)[1:]))
         
         PSDAx[2,0].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.EColor,alpha=0.5)
         PSDAx[2,0].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
@@ -1106,6 +1122,20 @@ if __name__ == '__main__':
     try:np.savetxt(os.path.join(Opt.FPath,"output","LWR.csv"),PSDLWROut,delimiter=',')
     except: pass
     try:np.savetxt(os.path.join(Opt.FPath,"output","LER.csv"),PSDLEROut,delimiter=',')
+    except: pass
+
+    try:np.savetxt(os.path.join(Opt.FPath,"output","LPR-MID.csv"),PSDLPRMid,delimiter=',')
+    except: pass
+    try:np.savetxt(os.path.join(Opt.FPath,"output","LWR-MID.csv"),PSDLWRMid,delimiter=',')
+    except: pass
+    try:np.savetxt(os.path.join(Opt.FPath,"output","LER-MID.csv"),PSDLERMid,delimiter=',')
+    except: pass
+
+    try:np.savetxt(os.path.join(Opt.FPath,"output","LPR-Edge.csv"),PSDLPREdge,delimiter=',')
+    except: pass
+    try:np.savetxt(os.path.join(Opt.FPath,"output","LWR-Edge.csv"),PSDLWREdge,delimiter=',')
+    except: pass
+    try:np.savetxt(os.path.join(Opt.FPath,"output","LER-Edge.csv"),PSDLEREdge,delimiter=',')
     except: pass
     
     print('All Done')
