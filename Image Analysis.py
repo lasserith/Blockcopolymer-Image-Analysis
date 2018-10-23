@@ -164,7 +164,7 @@ class GUI:
         
         self.CropB = tk.Entry(self.f2)
         self.CropB.pack(side=tk.LEFT)
-        self.CropB.insert(0, "100")          
+        self.CropB.insert(0, "60")          
         
         self.ssampf=tk.ttk.Labelframe(Page1)
         self.ssampf.pack()
@@ -185,7 +185,7 @@ class GUI:
         self.fftl.pack(side=tk.LEFT) 
         self.L0 =tk.Entry(self.fftf)
         self.L0.pack(side=tk.LEFT)
-        self.L0.insert(0,"28")
+        self.L0.insert(0,"10.5")
         
         
         self.Denf= tk.ttk.Labelframe(Page1)
@@ -200,7 +200,7 @@ class GUI:
         self.l3.pack(side=tk.LEFT)
         self.e6 = tk.Entry(self.Denf)
         self.e6.pack(side=tk.LEFT)
-        self.e6.insert(0,"43")
+        self.e6.insert(0,"150")
 
         
         self.Threshf= tk.ttk.Labelframe(Page1)
@@ -529,25 +529,23 @@ for ImNum in range(0, len(FNFull) ):
         Output.DomSize=SkelArray.sum()/scipy.ndimage.measurements.label(SkelArray,structure=np.ones((3,3)))[1]
         #calculate domain size. This is here for now
     #%% Angle Detection
-    if Opt.AngDetToggle==3:
+    if Opt.AngDetToggle==3: # uses multiple points along skeleton to get average angle
         AngDetA = IAFun.AngMid( BinArray, Opt, SkelArray = SkelArray)
     if Opt.AngDetToggle==2:
-        AngDetA=IAFun.AngSobel( ArrayIn ) # old method
+        AngDetA=IAFun.AngSobel( ArrayIn ) # old method use sobel (eg derivatives)
     if Opt.AngDetToggle==1:
-        AngDetA=IAFun.AngEC( BinArray, Opt)          # new method
+        AngDetA=IAFun.AngEC( BinArray, Opt)          # Use edge to center Atan to get angle
             
     #%% What to do with angles? 
     if Opt.AngDetToggle!=0:
         (Output.Peak1,Output.Cnt1,Output.Peak2,Output.Cnt2,Output.CntT)=IAFun.AngHist(AngDetA, Opt, MaskArray=BinArray, WeightArray=ArrayIn)
     
     #%% ED
-    # Tamar recommended Canny edge so let's try it eh? 
-    # We don't use the guassian blur because the denoising/thresholding does this for us
-    # Currently requires skeletonization
+
     
     if Opt.EDToggle==1:
-        (Output.lwr, Output.ler, Output.lpr)=IAFun.EdgeDetect(BinArray,Opt,SkelArray)
-            
+        try:(Output.lwr, Output.ler, Output.lpr)=IAFun.EdgeDetect(BinArray,Opt,SkelArray)
+        except:(Output.lwr, Output.ler, Output.lpr)=IAFun.EdgeDetect(BinArray,Opt) # if we don't have skel oh well we can calc
 
     #%% Autocorrel. LETS GO, Currently Working
     if Opt.ACToggle==1:
