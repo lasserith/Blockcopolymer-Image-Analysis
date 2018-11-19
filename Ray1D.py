@@ -2,7 +2,7 @@
 """
 Created on Wed Apr 26 14:20:58 2017
 
-AFM test for Raybin
+AFM 1D Data creation script as used for paper DOI:XXX
 """
 #%% Imports
 import tkinter as tk
@@ -336,14 +336,14 @@ if __name__ == '__main__':
     #IndividualLog =1; # Write a log for each sample?
     CombLog = 1 # If One write a combined log, if two clean it out each time(don't append)
     #ShowImage = 0 # Show images?
-    plt.ioff()
+    plt.ioff()# Dont show plots as made, all plots are saved so just use that
     Opt.Boltz = 8.617e-5 # boltzmann, using eV/K here
     
     
     Opt.NmPP = 0 # Nanometers per pixel scaling (will autodetect)
     Opt.l0 = 50 # nanometer l0
     Opt.DomPerTrench = 7 # how many domains are there in a trench?
-    
+    Opt.Thread = -1 # how many thread to use. -1 = all possible minus 1, -2 = all possible -2 etc
     #%% AFM Settings
     Opt.AFMLayer = "Phase" #Matched Phase ZSensor
     Opt.AFMLevel = 3  # 0 = none 1 = Median 2= Median of Dif 3 = polyfit
@@ -509,7 +509,7 @@ if __name__ == '__main__':
         print('\n Image '+Opt.FName+'\n')
         __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
 
-        POut = Parallel(n_jobs=-4,verbose=5)(delayed(LERPara)(RawIn[:,tt,ImNum], Opt.NmPP, CValley, LEdgeInd, REdgeInd, FitWidth) # backend='threading' removed
+        POut = Parallel(n_jobs=Opt.Thread,verbose=5)(delayed(LERPara)(RawIn[:,tt,ImNum], Opt.NmPP, CValley, LEdgeInd, REdgeInd, FitWidth) # backend='threading' removed
             for tt in range(RawIn.shape[1]))
         #%%
         FPTuple, FPWTuple, FELTup, FERTup = zip(*POut)
