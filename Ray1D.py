@@ -360,9 +360,14 @@ if __name__ == '__main__':
     #%% Plot Options
     Opt.TDriftP = 0
     Opt.OptPlots = 0 # this stops all the non paper plots from being made
-    Opt.PColor = "#FFD966"
-    Opt.EColor = "#203864"
-    Opt.WColor = "#C5E0B4"
+#    Opt.PColor = "#FFD966"
+#    Opt.EColor = "#203864"
+#    Opt.WColor = "#C5E0B4"
+    
+    
+    Opt.PColor = "#3c8434"
+    Opt.EColor = "#c00000"
+    Opt.WColor = "#95a7f5"
     #%% Select Files
     FOpen=tk.Tk()
     
