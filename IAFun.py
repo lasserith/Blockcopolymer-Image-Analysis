@@ -47,7 +47,7 @@ def AutoDetect( FileName , Opt ):
     return;
 #%% Crop
     """
-    Self explanatory
+    Crops image
     V0.1
     """
 
@@ -65,6 +65,8 @@ def Crop( imarray , Opt ):
     """
     We need to pass this function an image array in which 0 is the area not yet filled
     We may need to arbitrarily offset the original data (EG instead of 0-90 we feed in 90-180 and then substract 90 after)
+    Might consider adding a mask function, but currently is not in use so it is not important
+    V=0.1
     """
 def FFill(imarray, size_=(3,3)):
     lcount = 0; # going to keep track of loop number. if it gets too high we need to stop
@@ -76,8 +78,13 @@ def FFill(imarray, size_=(3,3)):
         
     
         
-#%% YKMagic Crop to detect IDE
+#%% YKMDetect
 def YKDetect(image, Opt):
+    """
+    Tries to detect IDE areas by looking at sudden changes in derivatives 
+    it works ok currently but needs improvement prior to deployment
+    V:PreAlpha
+    """
     class Ide:
         pass
     
@@ -225,9 +232,10 @@ def FFT( im, Opt):
     """
     Calculate the FFT, and the PSD to find l0
     
-    Fixed the offset
+    TODO: make peak finding more robust, 
     v0.2
     """
+    
     FSize=np.min( im.shape )
     #FSize=500;
     FourierArray=np.fft.fft2( im, s=(FSize,FSize) );
@@ -262,7 +270,7 @@ def FFT( im, Opt):
         PSD1D.plot(FreqA[0:int(np.floor(FSize/2))], PowerSpec1d[0:int( np.floor(FSize/2))])
         PSD1D.set_yscale('log')
         PSD1D.set_title('1D Power Spectral Density')
-        PSD1D.set_xlabel('q (1/nm)')
+        PSD1D.set_xlabel('Frequency (1/nm)') # NOTE THIS IS NOT Q
         PSD1D.set_ylabel('Intensity')
         PSD1D.set_ylim([np.min(PowerSpec1d)*.5, np.max(PowerSpec1d)*10])          
         PS2DImage=Image.fromarray(255/np.max(np.log(PowerSpec2d))*np.log(PowerSpec2d))
@@ -373,7 +381,7 @@ def Label(im, Opt):
     ThroughMaskI=Image.fromarray(ThroughMask*255).convert(mode="L")    
     
     """
-    Part 3 makign images
+    Part 3 making images
     """
     (CIMH,CIMW)=im.shape
     
@@ -402,7 +410,7 @@ def Skeleton(im,Opt):
     (Diagonals count as connected)
     v0.1
     """
-    (CIMH,CIMW)=im.shape
+    
     SkelArray= skimage.morphology.skeletonize(im)
     LASkelI= Image.fromarray(100*SkelArray)
     LASkelI=LASkelI.convert(mode="RGB")
@@ -414,7 +422,7 @@ def Skeleton(im,Opt):
     
     AdCount=scipy.signal.convolve(SkelArray, np.ones((3,3)),mode='same')
     # Remove Opt.DefEdge pixels at edge to prevent edge effects. be sure to account for area difference
-    
+    (CIMH,CIMW)=im.shape
     AdCount[0:int(Opt.DefEdge-1),:]=0; AdCount[int(CIMH+1-Opt.DefEdge):int(CIMH),:]=0; 
     AdCount[:,0:int(Opt.DefEdge-1)]=0; AdCount[:,int(CIMW+1-Opt.DefEdge):int(CIMW)]=0; 
     DefArea=( CIMW-2*Opt.DefEdge)*( CIMH-2*Opt.DefEdge)*Opt.NmPP*Opt.NmPP; # Area in nm^2
@@ -453,7 +461,8 @@ def Skeleton(im,Opt):
 #%% Edge Detect
 def EdgeDetect(im, Opt, SkeleArray):
     """
-    Detects edges using a canny edge detector with no blur. Then calculates LER
+    Detects edges using morphological erosion. Then calculates LER.
+    This often requires super sampling! I may implement super sampling in this process
     v0.1
     """
     
@@ -506,18 +515,27 @@ def EdgeDetect(im, Opt, SkeleArray):
     EDFig.tight_layout()
     
 
-    if Opt.EDSh == 1: #REPLACE show
+
+
+    if Opt.EDSa==1: #save
+        EDFig.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "LWR.png"))
+        EDImage.save(os.path.join(Opt.FPath,"output",Opt.BName+"ED.tif"))
+    
+    if Opt.EDSh == 1: # show
         EDFig.show()
         EDImage.show()
-    if Opt.EDSa==1: #Replace save
-        EDFig.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "LER.png"))
-        EDImage.save(os.path.join(Opt.FPath,"output",Opt.BName+"ED.tif"))
+    else:
+        plt.close(EDFig)
+    
     return(LERMean,LER3Sig,LERMeanS,LER3SigS);
+
+
 #%% Angle Detection
-def OrientationDetect(im):
+def AngSobel(im):
     """
     Uses sobel derivatives to calculate the maximum gradient direction allowing for 
-    rough but noisy orientation detection, DEPRECATED use AngEC
+    rough but noisy orientation detection.
+    V0.1
     """
     
     class AngDet:
@@ -528,7 +546,6 @@ def OrientationDetect(im):
     AngDet.AngArray=np.float32(np.arctan2(AngDet.A1stDY,AngDet.A1stDX))    
     AngDet.AngArray*=180/np.pi
     
-    
     return(AngDet.AngArray)
 
 def AngEC(im, Opt, EDArray='none', SkelArray='none'):
@@ -536,6 +553,7 @@ def AngEC(im, Opt, EDArray='none', SkelArray='none'):
     Angle detection using the angle from edge of binary image to center of image
     this requires the skeleton to be passed but it will recalculate the edge
     TODO : Try to pass edge array to save time. Probably not worth any time but still.
+    V0.1
     """
     if EDArray=='none':
         EDArray=(im-skimage.morphology.binary_erosion(im, np.ones((3,3)))) 
@@ -551,82 +569,145 @@ def AngEC(im, Opt, EDArray='none', SkelArray='none'):
     YDist=(EDDistA2[0,:,:]-Yind)
     AngArray=np.arctan2(YDist,XDist)*180/np.pi
     
+    #AngArray is -180- - > +180 lets make it 0<x<=180
+    AngArray[AngArray<=0]+=180
+
     #masking
     EDArray=1.0*EDArray
-    EDArray[EDArray==0]=float('nan')
+    EDArray[EDArray==0]=float('nan') # we can mask with NAN if needed
     AngArray*=EDArray 
+    # And edge protection, just removes the 10 edge pixels by default to avoid edge effects
+    (CIMH,CIMW)=AngArray.shape
+    AngArray[0:int(Opt.DefEdge-1),:]=float('nan'); AngArray[int(CIMH+1-Opt.DefEdge):int(CIMH),:]=float('nan'); 
+    AngArray[:,0:int(Opt.DefEdge-1)]=float('nan'); AngArray[:,int(CIMW+1-Opt.DefEdge):int(CIMW)]=float('nan'); 
     
     # note that due to the algo the angle is not defined aside from the edges
     # this masking insures the array conveys this fact
+    AngPlot=plt.figure()
+    AngPlot1=AngPlot.add_subplot(111)
+    AngPlot1.imshow(AngArray)
+    if Opt.AECSh == 1: #REPLACE show
+
+        AngPlot.show() #
+    if Opt.AECSa==1: #Replace save
+        AngPlot.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "AngEC.png"), dpi=300)
+    plt.close(AngPlot)
+    return(AngArray)
     
-    return(AngArray)    
+
     
-#%% Angle Mapping
-def AngMap(angarray,Opt, maskarray=1, weightarray='none'):
-    class AngMap:
+#%% Angle Hist: Creates histograms of angles
+def AngHist(AngArray,Opt, MaskArray=1, WeightArray='none'):
+    """
+    Simply takes an array and computes the histograms with 1 degree bins from 0-180
+    Also weights pixels with weight array if given, and masks with mask array if given
+    Currently only dumps to text the unweighted un masked histogram
+    Outputs the number of pixels with angles at the highest peak and second highest as well as total pixels counted
+    Which can be used to track progress of alignment or percent alignment
+    """
+    class AngHist:
         pass
         
-    if weightarray=='none':
-        weightarray=np.ones_like(angarray)
+    if WeightArray=='none':
+        WeightArray=np.ones_like(AngArray)
         
     #angarray=np.absolute(np.pi/4-angarray) #Renormalize to between 0 and pi/4
 #    angmask=angarray[maskarray != 0]# Mask out the data note this way flattens
-    maskarray=1.0*maskarray
+    MaskArray=1.0*MaskArray
     try:
-        maskarray[maskarray==0]=float('nan')  # replaces 0 with nan in mask array, necessary for histograms to not be overfilled with 0
+        MaskArray[MaskArray==0]=float('nan')  # replaces 0 with nan in mask array, necessary for histograms to not be overfilled with 0
     except:
         pass
-    angmask=angarray*maskarray
+    AngMask=AngArray*MaskArray
 #    angmask1=scipy.ndimage.binary_erosion(maskarray,structure=np.ones((3,3)))
 #    angmask2=scipy.ndimage.binary_erosion(maskarray)  
 
 
-    AngMap.Plot=plt.figure();
-    AngMap.Plt1=AngMap.Plot.add_subplot(221) # , range=(0,90)
-    hist,bins = np.histogram(angarray, bins=91)
-    #going to dump this one here
+    AngHist.Plot=plt.figure();
+    AngHist.Plt1=AngHist.Plot.add_subplot(221) # , range=(0,90)
+    hist,bins = np.histogram(AngArray, bins=181, range=(0,180))
+    width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
+    AngHist.Plt1.bar(center,hist,align='center',width=width)
+    AngHist.Plt1.set_title('OD')
+    
+    #going to dump this one here TODO dump all as BINS COUNTSA COUNTSB with headers
     np.savetxt(os.path.join(Opt.FPath,"output",Opt.BName + "Hist.csv"),hist,delimiter=',')
+    # Also find the max and second highest orientation and dump those to output
     
+    CntT=np.sum(hist) # cumulative count
+    
+    Peak1=hist.argmax()
+    PLow=Peak1-10;PHigh=Peak1+10 # ten below, ten above are all combined
+    if PLow < 0: 
+        PLow+=181; # wrap around if under
+        Cnt1=np.sum(hist[:Peak1])+np.sum(hist[PLow:])
+        hist[:Peak1]=0;hist[PLow:]=0; # set to zero so we don't find again     
+    else:
+        Cnt1=np.sum(hist[PLow:Peak1])
+        hist[PLow:Peak1]=0;
+    if PHigh > 180:
+        PHigh-=181; # or over
+        Cnt1+=np.sum(hist[Peak1:])+np.sum(hist[:PHigh])
+        hist[Peak1:]=0;hist[:PHigh]=0;
+    else:
+        Cnt1+=np.sum(hist[Peak1:PHigh])
+        hist[Peak1:PHigh]=0
+    
+    Peak2=hist.argmax()
+    PLow=Peak2-10;PHigh=Peak2+10 # ten below, ten above are all combined
+    if PLow < 0: 
+        PLow+=181; # wrap around if under
+        Cnt2=np.sum(hist[:Peak2])+np.sum(hist[PLow:])
+        hist[:Peak1]=0;hist[PLow:]=0; # set to zero so we don't find again     
+    else:
+        Cnt2=np.sum(hist[PLow:Peak2])
+        hist[PLow:Peak2]=0;
+    if PHigh > 180:
+        PHigh-=181; # or over
+        Cnt2+=np.sum(hist[Peak2:])+np.sum(hist[:PHigh])
+        hist[Peak1:]=0;hist[:PHigh]=0;
+    else:
+        Cnt2+=np.sum(hist[Peak2:PHigh])
+        hist[Peak2:PHigh]=0
+
+
+    
+    
+    AngHist.Plt2=AngHist.Plot.add_subplot(222)
+    hist,bins = np.histogram(AngMask, bins=181, range=(0,180))
     width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
-    AngMap.Plt1.bar(center,hist,align='center',width=width)
-    AngMap.Plt1.set_title('OD')
+    AngHist.Plt2.bar(center,hist,align='center',width=width)
+    AngHist.Plt2.set_title('OD+Mask') 
     
-    AngMap.Plt2=AngMap.Plot.add_subplot(222)
-    hist,bins = np.histogram(angmask, bins=91)
+    
+    AngHist.Plt3=AngHist.Plot.add_subplot(223)
+    hist,bins = np.histogram(AngArray, bins=181, range=(0,180), weights=WeightArray)
     width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
-    AngMap.Plt2.bar(center,hist,align='center',width=width)
-    AngMap.Plt2.set_title('OD+Mask') 
+    AngHist.Plt3.bar(center,hist,align='center',width=width)
+    AngHist.Plt3.set_title('OD+Weight')
     
     
-    AngMap.Plt3=AngMap.Plot.add_subplot(223)
-    hist,bins = np.histogram(angarray, bins=91, weights=weightarray)
+    AngHist.Plt4=AngHist.Plot.add_subplot(224)
+    hist,bins = np.histogram(AngMask, bins=181, range=(0,180), weights=WeightArray)
     width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
-    AngMap.Plt3.bar(center,hist,align='center',width=width)
-    AngMap.Plt3.set_title('OD+Weight')
-    
-    
-    AngMap.Plt4=AngMap.Plot.add_subplot(224)
-    hist,bins = np.histogram(angmask, bins=91, weights=weightarray)
-    width=0.5*(bins[1]-bins[0]);center=(bins[:-1]+bins[1:])/2
-    AngMap.Plt4.bar(center,hist,align='center',width=width)
-    AngMap.Plt4.set_title('OD+Mask+Weight')    
+    AngHist.Plt4.bar(center,hist,align='center',width=width)
+    AngHist.Plt4.set_title('OD+Mask+Weight')    
     plt.tight_layout(pad=0.5, w_pad=0.5, h_pad=0.5)    
     
     if 1 == 1: #REPLACE show
-        AngMap.Plot.show()
+        AngHist.Plot.show()
     if 1==1: #Replace save
-        AngMap.Plot.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "AngMap.png"))
-
+        AngHist.Plot.savefig(os.path.join(Opt.FPath,"output",Opt.BName + "AngHist.png"))
+    plt.close()
     
-    return()
+    return(Peak1,Cnt1,Peak2,Cnt2,CntT)
 
 
-    
 #%% Autocorrelation T_T
 def AutoCorrelation(im,Opt, AngArray, SkelArray):
     """
     Autocorrelation is a WIP still
-    V0
+    VALPHA
     """
     class AutoCor:
         pass
