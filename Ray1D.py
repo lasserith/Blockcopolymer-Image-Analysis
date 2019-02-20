@@ -805,7 +805,7 @@ if __name__ == '__main__':
 
         
 
-        #%% Power Spectral Density
+        #%% Power Spectral Density this section calculates the PSD and then outputs it. I also graph each set of data though the figures in paper are composite generated using CrossTemp.py and 
         
         PSDPeak = np.abs(np.fft.rfft(PanDisp.interpolate(limit_direction='both').values.transpose()))**2
         PSDWidth = np.abs(np.fft.rfft(PanWidth.interpolate(limit_direction='both').values.transpose()))**2
