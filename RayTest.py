@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Jan 19 14:38:16 2016
+Created on Wed Apr 26 14:20:58 2017
 
-@author: Moshe Dolejsi MosheDolejsi@uchicago.edu
-
-Block Copolymer Analysis Package by Moshe Dolejsi
-Done in Spyder/VStudio2015 Community with Anaconda.
-Heavily Uses Numpy, Scipy, Mpltlib, and the rest of the usual
-
-TODO: Classify independent function blocks
-Allow the code to run  without inverse
+AFM test for Raybin
 """
 #%%
-Vers = "0.24"
+Vers = "AAA"
 
 #%% Imports
 
@@ -24,14 +17,14 @@ import csv
 import re
 import lmfit
 from PIL import Image
-
+from joblib import Parallel, delayed
 import numpy as np
 import scipy
 import skimage
 from skimage import restoration, morphology, filters, feature
 import matplotlib.pyplot as plt
-
-
+plt.rcParams['animation.ffmpeg_path'] = r'C:\ffmpeg\bin\ffmpeg.exe'
+import matplotlib.animation as manimation
 import IAFun
 # Will hold options
 class Opt:
@@ -46,9 +39,9 @@ Opt.AutoThresh = 1
 
 
 Opt.Inversion = 0
-Opt.ACToggle = 0 #autocorrelation 1 = orient 2 = contour v dist
-Opt.ACCutoff = 200
-Opt.ACSize = 100
+Opt.ACToggle = 0 #autocorrelation (currently broken)
+Opt.ACCutoff = 0
+Opt.ACSize = 50
 
 Opt.SchCO = 5 # Step in from 'Ide' in nm
 
@@ -60,13 +53,17 @@ ShowImage = 0 # Show images?
 
 ## TODO : ADD THE BELOW TO GUI
 Opt.IDEToggle = 0 # Mask out the electrodes for YK
-Opt.LabelToggle = 1 # label domains
-Opt.AFMLayer = "ZSensor" #Matched Phase ZSensor
+Opt.LabelToggle = 0 # label domains
+Opt.AFMLayer = "Phase" #Matched Phase ZSensor
 Opt.AFMLevel = 3  # 0 = none 1 = Median 2= Median of Dif 3 = polyfit
-Opt.AFMPDeg = 5 # degree of polynomial.
-Opt.AngMP = 5
+Opt.AFMPDeg = 5 # degree of polynomial.\
+Opt.BPToggle = 0 # bandpass filtering?
+
+Opt.AngMP = 5 # Do a midpoint average based on this many points
+# EG AngMP = 5 then 1 2 3 4 5, 3 will be calc off angle 1 - 5
 
 # Following is GUI supported
+Opt.NmPP = 0 # Nanometers per pixel scaling
 #Opt.EDToggle=0; #ED/LER
 #Opt.FFTToggle=1; #fft
 #Opt.DenToggle=1; #Denoising ON
@@ -164,7 +161,7 @@ class GUI:
         
         self.CropB = tk.Entry(self.f2)
         self.CropB.pack(side=tk.LEFT)
-        self.CropB.insert(0, "100")          
+        self.CropB.insert(0, "0")          
         
         self.ssampf=tk.ttk.Labelframe(Page1)
         self.ssampf.pack()
@@ -180,12 +177,12 @@ class GUI:
         self.fftf.pack()
         self.fftTog=tk.Checkbutton(self.fftf,text="Enable FFT",variable=Opt.FFTToggle)
         self.fftTog.pack(side=tk.LEFT)
-#        self.fftTog.select()
+        self.fftTog.select()
         self.fftl=tk.Label(self.fftf, text="Enter L0 (nm) if not using FFT")
         self.fftl.pack(side=tk.LEFT) 
         self.L0 =tk.Entry(self.fftf)
         self.L0.pack(side=tk.LEFT)
-        self.L0.insert(0,"28")
+        self.L0.insert(0,"50")
         
         
         self.Denf= tk.ttk.Labelframe(Page1)
@@ -200,7 +197,7 @@ class GUI:
         self.l3.pack(side=tk.LEFT)
         self.e6 = tk.Entry(self.Denf)
         self.e6.pack(side=tk.LEFT)
-        self.e6.insert(0,"43")
+        self.e6.insert(0,"20")
 
         
         self.Threshf= tk.ttk.Labelframe(Page1)
@@ -239,7 +236,7 @@ class GUI:
         self.AngTogEC=tk.Radiobutton(self.Angf,text="Edge/Center",variable=Opt.AngDetToggle, value=1).pack(side=tk.LEFT)
         self.AngTogS=tk.Radiobutton(self.Angf,text="Sobel", variable=Opt.AngDetToggle, value=2).pack(side=tk.LEFT)
         self.AngTogMP=tk.Radiobutton(self.Angf,text="MidPoint", variable=Opt.AngDetToggle, value=3).pack(side=tk.LEFT)
-        Opt.AngDetToggle.set(1) # pick EC as default
+        Opt.AngDetToggle.set(3) # pick EC as default
 
         self.Skelef= tk.ttk.Labelframe(Page1)
         self.Skelef.pack()
@@ -439,307 +436,389 @@ FOpen.withdraw()
 #if len(FNFull) > 0:
 #    print("You chose %s" % FNFull)
 
-for ImNum in range(0, len(FNFull) ):
-    Opt.Name=FNFull[ImNum] # this hold the full file name
-    Opt.FPath, Opt.BName= os.path.split(Opt.Name)  # File Path/ File Name
-    (Opt.FName, Opt.FExt) = os.path.splitext(Opt.BName) # File name/File Extension split
+#%% Do Once
+ImNum = 0
+Opt.Name = FNFull[ImNum] # this hold the full file name
+Opt.FPath, Opt.BName= os.path.split(Opt.Name)  # File Path/ File Name
+(Opt.FName, Opt.FExt) = os.path.splitext(Opt.BName) # File name/File Extension split
     
     
-    # Make output folder if needed
-    try:
-        os.stat(os.path.join(Opt.FPath,"output"))
-    except:
-        os.mkdir(os.path.join(Opt.FPath,"output"))
+# Make output folder if needed
+try:
+    os.stat(os.path.join(Opt.FPath,"output"))
+except:
+    os.mkdir(os.path.join(Opt.FPath,"output"))
 
-    
-    
-    
-    #%% Autodetect per pixel scaling for merlin/asylum AFM. Return pixel size and raw data
+firstim = IAFun.AutoDetect( FNFull[ImNum], Opt)
+Shap0 =firstim.shape[0]
+Shap1 = firstim.shape[1]
+RawIn = np.zeros((Shap0,Shap1,len(FNFull)))
+SkelOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
+FiltOut = np.zeros((Shap0,Shap1,len(FNFull)))
+AdOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
+EDOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
+AngOut = np.zeros((Shap0,Shap1,len(FNFull)))
+ThreshOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
+CropSkelOut = np.zeros((Shap0,Shap1,len(FNFull))).astype('i1')
+FiltCum = np.zeros((Shap0,Shap1))
+ThreshCum = np.zeros((Shap0,Shap1)).astype('i2')
+
+
+#%% Import data ( can't be parallelized as it breaks the importer )
+for ii in range(0, len(FNFull)):
     try:
-        Opt.NmPP=Opt.NmPPSet
+        if Opt.NmPPSet!=0:Opt.NmPP=Opt.NmPPSet # so if we set one then just set it
     except:
         pass
-    imarray=IAFun.AutoDetect( FNFull[ImNum], Opt) # autodetect the machine, nmpp and return the raw data array
-    
-    #%% Crop
-    (CropArray, Output.CIMH, Output.CIMW)=IAFun.Crop( imarray , Opt )
-    imarray=CropArray
+    RawIn[:,:,ii]=IAFun.AutoDetect( FNFull[ii], Opt) # autodetect the machine, nmpp and return the raw data array
+    print('Loading raw data %i/%i' %(ii,len(FNFull)))
 
-    #%% FFT for period ref 
-    # http://www.astrobetter.com/blog/2010/03/03/fourier-transforms-of-images-in-python/
-    
-    if Opt.FFTToggle==1:   
-        Output.Calcl0=IAFun.FFT( imarray, Opt)
-        Output.l0 = Output.Calcl0
-    #%% Data SuperSampling STUPIDLY INTENSIVE
-    
-    if Opt.SSToggle==1:
-        Output.CIMH *= Opt.SSFactor
-        Output.CIMW *= Opt.SSFactor
-        RSArray = skimage.transform.resize(imarray,(Output.CIMH,Output.CIMW))
-        imarray = RSArray
-        Opt.NmPP *= 1/Opt.SSFactor
-    else:
-        Opt.SSFactor = 1
-
-    #$$ Set ArrayIn
-    ArrayIn=imarray
-    
-
-        
-    
-    #%% Denoise
-    if Opt.DenToggle==1:
-        (DenArray, Output.Denoise)=IAFun.Denoising(ArrayIn, Opt, Output.l0)
-        ArrayIn=DenArray
-    #%% Masking
-        # Works ok at detecting features in large fields
-    if Opt.IDEToggle==1:
-        IDEArray=IAFun.YKDetect(DenArray, Opt)
-        ArrayIn=IDEArray*ArrayIn
-        
-    #%% Adaptive Local Thresholding over X pixels, gauss                
-    if Opt.ThreshToggle==1:
-        (ThreshArray,Output.Thresh)=IAFun.Thresholding(ArrayIn, Opt, Output.l0)
-        BinArray=ThreshArray
-    elif Opt.ThreshToggle==0:
-        BinArray=np.ones(ArrayIn.shape)
-        BinArray[ArrayIn>np.mean(ArrayIn)]=0
-        BinArray=BinArray.astype(bool)
-        print('No Thresholding, Assuming input image is binary')
-    #%% Remove Small Objects
-    
-    if Opt.RSOToggle==1:
-        RSOArray=IAFun.RSO(BinArray, Opt)
-        BinArray=RSOArray
-        
+#%% Processing
+if __name__ == '__main__':
+    __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
+    Parallel(n_jobs=12,verbose=50, backend = 'threading')(delayed(IAFun.AFMPara)(RawIn,Opt,FiltOut,ThreshOut,AdOut,SkelOut, EDOut, AngOut, ImNum) # backend='threading' removed
+        for ImNum in range(0, len(FNFull)))
+    print('Done')
+#    
 
 
-    #%% Feature Finding
-    
-    
-    if Opt.LabelToggle==1:
-        (Output.WFrac, Output.BFrac, Output.WDomI, Output.WDomFrac)=IAFun.Label(BinArray,Opt)
-        
-    
-    #%% Skeletonization / Defect could be split but that can be done later
-    
-    if Opt.SkeleToggle==1:
-        (SkelArray, SkelAC, Output.TCount, Output.TCA, Output.JCount, Output.JCA)=IAFun.Skeleton(BinArray,Opt)
-        Output.DomSize=SkelArray.sum()/scipy.ndimage.measurements.label(SkelArray,structure=np.ones((3,3)))[1]
-        #calculate domain size. This is here for now
-    #%% Angle Detection
-    if Opt.AngDetToggle==3:
-        AngDetA = IAFun.AngMid( BinArray, Opt, SkelArray = SkelArray)
-    if Opt.AngDetToggle==2:
-        AngDetA=IAFun.AngSobel( ArrayIn ) # old method
-    if Opt.AngDetToggle==1:
-        AngDetA=IAFun.AngEC( BinArray, Opt)          # new method
-            
-    #%% What to do with angles? 
-    if Opt.AngDetToggle!=0:
-        (Output.Peak1,Output.Cnt1,Output.Peak2,Output.Cnt2,Output.CntT)=IAFun.AngHist(AngDetA, Opt, MaskArray=BinArray, WeightArray=ArrayIn)
-    
-    #%% ED
-    # Tamar recommended Canny edge so let's try it eh? 
-    # We don't use the guassian blur because the denoising/thresholding does this for us
-    # Currently requires skeletonization
-    
-    if Opt.EDToggle==1:
-        (Output.lwr, Output.ler, Output.lpr)=IAFun.EdgeDetect(BinArray,Opt,SkelArray)
-            
+#%%
+ThreshCum = ThreshOut.sum(axis=2)
+FiltCum = FiltOut.sum(axis=2)    
+SkelCum = (SkelOut.sum(axis=2))
+SkelMove = np.abs(SkelCum-SkelCum.max()/2) # rescale so most stable is max
+SkelAcross = np.abs(SkelOut.sum(axis=0)-SkelCum.sum(axis=0).max()/2)
+SkelAlong = np.abs(SkelOut.sum(axis=1)-SkelCum.sum(axis=1).max()/2)
 
-    #%% Autocorrel. LETS GO, Currently Working
-    if Opt.ACToggle==1:
-        AutoCor=IAFun.AutoCorrelation(AngDetA, Opt)
-    elif Opt.ACToggle == 2: # do it from contour v end end dist
-        AutoCor = IAFun.PersistenceLength(SkelArray, Opt)
-    
-    
-    
-    #%% Find the inverse or 'Dark' Image repeat as above
-    if Opt.Inversion==1:
-        imarray=255-imarray
-        Opt.BName=Opt.BName+"Inv" #change base nameee
 
-    #%% Crop
-        (CropArray, Output.CIMH, Output.CIMW)=IAFun.Crop( imarray , Opt )
-        ArrayIn=CropArray
-    
-    #%% Data Supersampling
-    
-        if Opt.SSToggle==1:
-            Output.CIMH*=Opt.SSFactor;
-            Output.CIMW*=Opt.SSFactor;
-            RSArray=skimage.transform.resize(CropArray,(Output.CIMH,Output.CIMW))
-            Opt.NmPP*=1/Opt.SSFactor;
-            ArrayIn=RSArray
-        else:
-                Opt.SSFactor=1; 
-    
-    #%% Denoise
-        if Opt.DenToggle==1:
-            (DenArray, Output.Denoise)=IAFun.Denoising(ArrayIn, Opt, Output.l0)
-            ArrayIn=DenArray
+Term = AdOut == 2
 
-    #%% Adaptive Local Thresholding over X pixels, gauss                
-        if Opt.ThreshToggle==1:
-            (ThreshArray,Output.Thresh)=IAFun.Thresholding(ArrayIn, Opt, Output.l0)
-            ArrayIn=ThreshArray
+Junc = AdOut > 3
 
-    #%% Remove Small Objects
-    
-        if Opt.RSOToggle==1:
-            RSOArray=IAFun.RSO(ArrayIn, Opt)
-            ArrayIn=RSOArray
-    #%% Feature Finding
-    
-    
-        if Opt.LabelToggle==1:
-            (Output.InvWFrac, Output.InvBFrac, Output.InvWDomI, Output.InvWDomFrac)=IAFun.Label(ArrayIn,Opt)
-        
-    
-    #%% Skeletonization / Defect could be split but that can be done later
-    
-        if Opt.SkeleToggle==1:
-            (SkelArray, SkelAC, Output.InvTCount, Output.InvTCA, Output.InvJCount, Output.InvJCA)=IAFun.Skeleton(ArrayIn,Opt)
-   
-    #%% Logging
-    # Check if a log exists, if not, but we want to log: write titles.
-    # If we want to wipe the log each time, we also need to write titles
-    if (os.path.isfile(os.path.join(Opt.FPath, "output", "output.csv"))==False and CombLog == 1) or CombLog == 2:
-        with open(os.path.join(Opt.FPath, "output", "output.csv"), 'w') as Log:
-            LogW= csv.writer(Log, dialect='excel', lineterminator='\n')
-            LogW.writerow(['Filename',
-            'Primary Peak (nm)',
-            'Lighter Image',
-            'LPhase Area Fraction',
-            'DPhase Area Fraction',
-            'LDom Index',
-            'LDom Fraction',
-            'LTerminals',
-            'LTerminals/nm^2',
-            'LJunctions',
-            'Ljunctions/nm^2',
-            'Mean Domain Size',
-            'LWR Dist nm',
-            'LWR 3Sig nm',
-            'LWR Dist KDE nm',
-            'LWR 3Sig KDE nm',
-            'LER Dist nm',
-            'LER 3Sig nm',
-            'LER Dist KDE nm',
-            'LER 3Sig KDE nm',
-            'LPR Dist nm',
-            'LPR 3Sig nm',
-            'LPR Dist KDE nm',
-            'LPR 3Sig KDE nm',
-            'Denoise',
-            'Threshold',
-            'Denoise Used',
-            'Thresh Used',
-            'Peak 1 (Degrees)',
-            'Count 1',
-            'Peak 2 (Degrees)',
-            'Count 2',
-            'Cumulative Count',
-            'Inverse Phase Images',
-            'LPhase Area Fraction(FromINV)',
-            'LPhase Area Frac AVG',
-            'DPhase Area Fraction(FromINV)',
-            'DPhase Area Frac AVG',
-            'DDom Index',
-            'DDom Fraction',
-            'DTerminals',
-            'DTerminals/nm^2',
-            'DJunctions',
-            'DJunctions/nm^2'])
-    
-    if CombLog > 0:
-        with open(os.path.join(Opt.FPath, "output", "output.csv"), 'a') as Log:
-            LogW= csv.writer(Log, dialect='excel', lineterminator='')
-            try:
-                LogW.writerow([Opt.BName,
-                Output.l0,''])
-            except:
-                pass
-            try:
-                LogW.writerow([
-                '',
-                Output.WFrac,
-                Output.BFrac,
-                Output.WDomI,
-                Output.WDomFrac,''])
-            except:
-                LogW.writerow(['','','','','',''])
-                pass
-            try:
-                LogW.writerow([Output.TCount,
-                Output.TCA,
-                Output.JCount,
-                Output.JCA,
-                Output.DomSize,''])
-            except:
-                LogW.writerow(['','','','','',''])
-                pass
-            try:
-                LogW.writerow([Output.lwr[0],
-                Output.lwr[1],
-                Output.lwr[2],
-                Output.lwr[3],''])
-            except:
-                LogW.writerow(['','','','',''])
-                pass
-            try:
-                LogW.writerow([Output.ler[0],
-                Output.ler[1],
-                Output.ler[2],
-                Output.ler[3],''])
-            except:
-                LogW.writerow(['','','','',''])
-                pass
-            try:
-                LogW.writerow([Output.lpr[0],
-                Output.lpr[1],
-                Output.lpr[2],
-                Output.lpr[3],''])
-            except:
-                LogW.writerow(['','','','',''])
-                pass
-            try:
-                LogW.writerow([Opt.DenWeight,
-                Opt.ThreshWeight,
-                Output.Denoise,
-                Output.Thresh,''])
-            except:
-                pass
-            try:
-                LogW.writerow([Output.Peak1,
-                Output.Cnt1,
-                Output.Peak2,
-                Output.Cnt2,
-                Output.CntT,''])
-            except:
-                pass
-            try:
-                LogW.writerow(['(Names reference original!)',
-                Output.InvBFrac,
-                (Output.WFrac+Output.InvBFrac)/2,
-                Output.InvWFrac,
-                (Output.BFrac+Output.InvWFrac)/2,
-                Output.InvWDomI,
-                Output.InvWDomFrac,
-                Output.InvTCount,
-                Output.InvTCA,
-                Output.InvJCount,
-                Output.InvJCA,''])
-            except:
-                pass
-            with open(os.path.join(Opt.FPath, "output", "output.csv"), 'a') as Log:
-                LogW= csv.writer(Log, dialect='excel', lineterminator='\n')
-                LogW.writerow([''])
-        
-    
-    
-        
-        
+#%% Look at scan/rescan
+
+#TermSum = np.zeros((Shap0,Shap1))
+#JuncSum = np.zeros((Shap0,Shap1))
+#for n in range(1,len(FNFull),2):
+#    TermSum += Term[:,:,n]
+#    JuncSum += Junc[:,:,n]
+TermSum = Term.sum(axis=2)
+JuncSum = Junc.sum(axis=2)
+#%% Also let's look at interface will move into loop if useful DONE > EDOut
+InterOut = np.zeros((ThreshOut.shape)).astype('i1')
+for i in range(0,(len(FNFull))): # (len(FNFull))
+    InterOut[:,:,i] = ThreshOut[:,:,i]-skimage.morphology.binary_erosion(ThreshOut[:,:,i])
+InterCum=InterOut.sum(axis=2)
+
+##%% Masking
+#R, C = np.indices(firstim.shape)
+#Mask = np.ones_like(firstim)
+#
+#RYT=85;LYT=70; # right y top (85 70)
+#RYB=123;LYB=159; # right y bottom (127 157)
+## ((LYB-LYT)-(RYB-RYT))/512 calc slope in case
+#
+#SlTop = (RYT-LYT)/C.max() # Slope of top of wedge (Rside y - Lside y * dx) 85 70
+#SlBot = (RYB-LYB)/C.max() # slope of bottom of wedge 127 157
+#Mask[ R < C*SlTop+LYT] = float('nan') # Lside Y top 70
+#Mask[ R > C*SlBot+LYB ] = float('nan') # Lside Y bot 157
+#
+#
+#DefMask = np.ones_like(firstim)
+#DefMask[ R < C*SlTop+LYT] = 0 # Lside Y top 70
+#DefMask[ R > C*SlBot+LYB-10 ] = 0 # Lside Y bot 157
+#for i in range(0,5):DefMask = skimage.morphology.binary_erosion(DefMask) # how many pixels to remove for edge protect on the defects
+#    
+#
+#
+#TermSum = DefMask*TermSum
+#JuncSum = DefMask*JuncSum
+#
+#ThreshCum=Mask*ThreshCum
+#FiltCum=Mask*FiltCum
+#SkelCum=Mask*SkelCum
+#
+#SkelMove=Mask*SkelMove
+#
+#InterCum=Mask*InterCum
+#
+#SkelAlong[0:60,:] = float('nan')
+#SkelAlong[140:,:] = float('nan')
+#%% Synthetics
+
+SkelMean = np.ma.masked_invalid(SkelMove).mean(axis=0) # average across the channel
+SkelSTD = np.ma.masked_invalid(SkelMove).std(axis=0)
+
+InterMean = np.ma.masked_invalid(InterCum).sum(axis=0)/len(FNFull) # average across the channel divide by number of frames
+InterSTD = np.ma.masked_invalid(InterCum).std(axis=0)
+
+
+#%% Plotting
+MPlot = plt.figure()
+MPlot.suptitle('Stability of Domain Skeletons')
+MPlot1 = MPlot.add_subplot(311)
+MPlot1.axvline(x=42,color='k')
+MPlot1.axvline(x=121,color='k')
+MPlot1.axvline(x=206,color='k')
+MPlot1.axvline(x=283,color='k')
+MPlot1.axvline(x=334,color='k')
+MPlot1.axvline(x=422,color='k')
+MPlot1.axvline(x=478,color='k')
+CPlot = MPlot1.imshow(SkelMove, cmap='magma')
+#MPlot.colorbar(CPlot)
+MPlot1.set_ylim(60,160)
+
+MPlot2 = MPlot.add_subplot(312)
+MPlot2.plot( SkelMean)
+MPlot2.axvline(x=42,color='k')
+MPlot2.axvline(x=121,color='k')
+MPlot2.axvline(x=206,color='k')
+MPlot2.axvline(x=283,color='k')
+MPlot2.axvline(x=334,color='k')
+MPlot2.axvline(x=422,color='k')
+MPlot2.axvline(x=478,color='k')
+#MPlot2.set_xlim(0, 512)
+MPlot2.set_ylabel('Mean Stability')
+
+MPlot3 = MPlot.add_subplot(313)
+MPlot3.plot( SkelSTD )
+MPlot3.axvline(x=42,color='k')
+MPlot3.axvline(x=121,color='k')
+MPlot3.axvline(x=206,color='k')
+MPlot3.axvline(x=283,color='k')
+MPlot3.axvline(x=334,color='k')
+MPlot3.axvline(x=422,color='k')
+MPlot3.axvline(x=478,color='k')
+#MPlot3.set_xlim(0, 512)
+MPlot3.set_xlabel('Distance along channel (px)')
+MPlot3.set_ylabel('STD Stability')
+#%% Plotting
+IPlot = plt.figure()
+IPlot.suptitle('Interfacial Area (IE Thermodynamic penalty)')
+IPlot1 = IPlot.add_subplot(211)
+IPlot1.axvline(x=42,color='k')
+IPlot1.axvline(x=121,color='k')
+IPlot1.axvline(x=206,color='k')
+IPlot1.axvline(x=283,color='k')
+IPlot1.axvline(x=334,color='k')
+IPlot1.axvline(x=422,color='k')
+IPlot1.axvline(x=478,color='k')
+IPlot1.plot( InterMean )
+#IPlot1.set_xlim(1, 510)
+#IPlot1.set_ylim(70,90)
+IPlot1.set_ylabel('Mean Number of Interfaces')
+
+IPlot2 = IPlot.add_subplot(212)
+IPlot2.plot( InterSTD )
+IPlot2.axvline(x=42,color='k')
+IPlot2.axvline(x=121,color='k')
+IPlot2.axvline(x=206,color='k')
+IPlot2.axvline(x=283,color='k')
+IPlot2.axvline(x=334,color='k')
+IPlot2.axvline(x=422,color='k')
+IPlot2.axvline(x=478,color='k')
+#IPlot2.set_xlim(1, 510)
+IPlot2.set_xlabel('Distance along channel (px)')
+IPlot2.set_ylabel('STD Interface')
+
+IPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Interfacial.png"), dpi=300)
+
+#%% Fluctuations in space
+
+FluctPlot = plt.figure()
+FluctPlot.suptitle('Fluctuations averaged across the channel')
+FluctPlot1 = FluctPlot.add_subplot(121)
+FluctPlot1.imshow(SkelAcross)
+FluctPlot2 = FluctPlot.add_subplot(122)
+FluctPlot2.imshow(np.log10(np.abs( np.fft.fftshift(np.fft.fft2(np.nan_to_num(SkelAcross))))**2))
+FluctPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Fluct Across.png"), dpi=300)
+#%%
+FAlongPlot = plt.figure()
+FAlongPlot.suptitle('Fluctuations averaged along the channel')
+FAlongPlot1 = FAlongPlot.add_subplot(121)
+FAlongPlot1.imshow((SkelAlong))
+FAlongPlot2 = FAlongPlot.add_subplot(122)
+FAlongPlot2.imshow(np.log10(np.abs( np.fft.fftshift(np.fft.fft2(np.nan_to_num(SkelAlong))))**2))
+FAlongPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Fluct Along.png"), dpi=300)
+#%%
+FThroughPlot = plt.figure()
+FThroughPlot.suptitle('Fluctuations averaged through time')
+FThroughPlot1 = FThroughPlot.add_subplot(121)
+FThroughPlot1.imshow(SkelMove)
+FThroughPlot2 = FThroughPlot.add_subplot(122)
+FThroughPlot2.imshow(np.log10(np.abs( np.fft.fftshift(np.fft.fft2(np.nan_to_num(SkelMove))))**2))
+FThroughPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Fluct Through.png"), dpi=300)
+
+#%% Plotting
+INPlot = plt.figure()
+INPlot.suptitle('Time Averaged Width of Interfaces (Entropic Chain Penalty)')
+INPlot1 = INPlot.add_subplot(211)
+INPlot1.axvline(x=42,color='k')
+INPlot1.axvline(x=121,color='k')
+INPlot1.axvline(x=206,color='k')
+INPlot1.axvline(x=283,color='k')
+INPlot1.axvline(x=334,color='k')
+INPlot1.axvline(x=422,color='k')
+INPlot1.axvline(x=478,color='k')
+INPlot1.plot( np.divide(np.ma.masked_invalid(Mask).sum(axis=0)*Opt.NmPP,InterMean) )
+INPlot1.set_xlim(1, 510)
+INPlot1.set_ylim(24,30)
+INPlot1.set_ylabel('Mean Interfacial Width')
+
+INPlot2 = INPlot.add_subplot(212)
+INPlot2.plot( InterSTD )
+INPlot2.axvline(x=42,color='k')
+INPlot2.axvline(x=121,color='k')
+INPlot2.axvline(x=206,color='k')
+INPlot2.axvline(x=283,color='k')
+INPlot2.axvline(x=334,color='k')
+INPlot2.axvline(x=422,color='k')
+INPlot2.axvline(x=478,color='k')
+INPlot2.set_xlim(1, 510)
+INPlot2.set_xlabel('Distance along channel (px)')
+INPlot2.set_ylabel('STD Interfacial Width')
+
+INPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "InterNorm.png"), dpi=300)
+
+#%%
+TPlot = plt.figure()
+TPlot.suptitle('Movement of Terminal Defects')
+TPlot1 = TPlot.add_subplot(211)
+TPlot1.axvline(x=42,color='k')
+TPlot1.axvline(x=121,color='k')
+TPlot1.axvline(x=206,color='k')
+TPlot1.axvline(x=283,color='k')
+TPlot1.axvline(x=334,color='k')
+TPlot1.axvline(x=422,color='k')
+TPlot1.axvline(x=478,color='k')
+CPlot = TPlot1.imshow(TermSum, cmap='Blues')
+#TPlot.colorbar(CPlot)
+TPlot1.set_ylim(50,150) #50 150
+
+TPlot2 = TPlot.add_subplot(212)
+TPlot2.plot( (TermSum).sum(axis=0) )
+TPlot2.axvline(x=42,color='k')
+TPlot2.axvline(x=121,color='k')
+TPlot2.axvline(x=206,color='k')
+TPlot2.axvline(x=283,color='k')
+TPlot2.axvline(x=334,color='k')
+TPlot2.axvline(x=422,color='k')
+TPlot2.axvline(x=478,color='k')
+TPlot2.set_xlim(0, 512)
+TPlot2.set_ylim(0,30)
+TPlot2.set_xlabel('Distance along channel (px)')
+TPlot2.set_ylabel('Sum Terminals')
+
+TPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Terminals.png"), dpi=300)
+#%%
+JPlot = plt.figure()
+JPlot.suptitle('Movement of Junctions')
+JPlot1 = JPlot.add_subplot(211)
+JPlot1.axvline(x=42,color='k')
+JPlot1.axvline(x=121,color='k')
+JPlot1.axvline(x=206,color='k')
+JPlot1.axvline(x=283,color='k')
+JPlot1.axvline(x=334,color='k')
+JPlot1.axvline(x=422,color='k')
+JPlot1.axvline(x=478,color='k')
+CPlot = JPlot1.imshow(JuncSum, cmap='Reds')
+#JPlot.colorbar(CPlot)
+JPlot1.set_ylim(50,150)
+
+JPlot2 = JPlot.add_subplot(212)
+JPlot2.plot( (JuncSum).sum(axis=0) )
+JPlot2.axvline(x=42,color='k')
+JPlot2.axvline(x=121,color='k')
+JPlot2.axvline(x=206,color='k')
+JPlot2.axvline(x=283,color='k')
+JPlot2.axvline(x=334,color='k')
+JPlot2.axvline(x=422,color='k')
+JPlot2.axvline(x=478,color='k')
+JPlot2.set_xlim(0, 512)
+#JPlot2.set_ylim(0,100)
+JPlot2.set_xlabel('Distance along channel (px)')
+JPlot2.set_ylabel('Sum Junctions')
+JPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Junctions.png"), dpi=300)
+
+#%% Ratio of Defects
+
+#RDefPlot = plt.figure()
+#RDefPlot.suptitle('Ratio of Junctions to Terminal Defects')
+#RDefPlot1 = RDefPlot.add_subplot(111)
+##RDefPlot1.axvline(x=42,color='k')
+##RDefPlot1.axvline(x=121,color='k')
+##RDefPlot1.axvline(x=206,color='k')
+##RDefPlot1.axvline(x=283,color='k')
+##RDefPlot1.axvline(x=334,color='k')
+##RDefPlot1.axvline(x=422,color='k')
+##RDefPlot1.axvline(x=478,color='k')
+#RDefPlot1.semilogy(np.divide(JuncSum.sum(axis=0),TermSum.sum(axis=0)))
+
+
+#%%
+DefPlot = plt.figure()
+DefPlot.suptitle('Movement of Defects')
+DefPlot1 = DefPlot.add_subplot(211)
+DefPlot1.axvline(x=42,color='k')
+DefPlot1.axvline(x=121,color='k')
+DefPlot1.axvline(x=206,color='k')
+DefPlot1.axvline(x=283,color='k')
+DefPlot1.axvline(x=334,color='k')
+DefPlot1.axvline(x=422,color='k')
+DefPlot1.axvline(x=478,color='k')
+CPlot = DefPlot1.imshow((TermSum+JuncSum), cmap='Purples')
+#DefPlot.colorbar(CPlot)
+DefPlot1.set_ylim(50,150)
+
+DefPlot2 = DefPlot.add_subplot(212)
+DefPlot2.plot(  np.divide(((TermSum+JuncSum)).sum(axis=0),DefMask.sum(axis=0)) )
+DefPlot2.axvline(x=42,color='k')
+DefPlot2.axvline(x=121,color='k')
+DefPlot2.axvline(x=206,color='k')
+DefPlot2.axvline(x=283,color='k')
+DefPlot2.axvline(x=334,color='k')
+DefPlot2.axvline(x=422,color='k')
+DefPlot2.axvline(x=478,color='k')
+DefPlot2.set_xlim(0, 512)
+#DefPlot2.set_ylim(0,100)
+DefPlot2.set_xlabel('Distance along channel (px)')
+DefPlot2.set_ylabel('Sum Defects')
+DefPlot.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "Defects.png"), dpi=300)
+#%%
+
+
+#%% Animation Setup
+MovieFig = plt.figure(dpi=300)
+MovieSubplot = MovieFig.add_subplot(111)
+
+#ims = []
+#for ii in range(0, len(FNFull) ):
+#
+#    Frame = plt.imshow(SkelOut[:,:,ImNum], animated=True)
+#    ims.append([Frame])
+
+ims=[]
+for ImNum in range(0, len(FNFull)):
+    Frame=MovieSubplot.imshow(DefMask*Mask*(Junc[:,:,ImNum]*50+Term[:,:,ImNum]*100), animated=True)
+    ims.append([Frame])
+    print(ImNum)
+ani = manimation.ArtistAnimation(MovieFig, ims,blit=True)
+#%%
+MWriter = manimation.FFMpegWriter( fps=10, extra_args=['-c:v','libx264' ,'-b:v','3000k', '-profile:v', 'high', '-level:v' ,'4.0', '-pix_fmt' ,'yuv420p' ,'-crf' ,'22'])
+ani.save('Defects.mp4' , writer=MWriter, dpi=300)
+plt.clf()
+#%%
+MovieFig = plt.figure(dpi=300)
+MovieSubplot = MovieFig.add_subplot(111)
+
+ims=[]
+for ImNum in range(0, len(FNFull) ):
+#    Frame=MovieSubplot.imshow(Mask*(np.nan_to_num(AngOut[:,:,ImNum])+ThreshOut[:,:,ImNum]*50),cmap='magma', animated=True)
+    Frame=MovieSubplot.imshow(Mask*(AngOut[:,:,ImNum]),cmap='magma', vmin = 0, vmax = 360, animated=True)
+    ims.append([Frame])
+    print(ImNum)
+ani = manimation.ArtistAnimation(MovieFig, ims,blit=True)
+
+#%% Save animation
+MWriter = manimation.FFMpegWriter( fps=10, extra_args=['-c:v','libx264' ,'-b:v','3000k', '-profile:v', 'high', '-level:v' ,'4.0', '-pix_fmt' ,'yuv420p' ,'-crf' ,'22'])
+ani.save('AngMid.mp4' , writer=MWriter, dpi=300)
