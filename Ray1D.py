@@ -3,6 +3,8 @@
 Created on Wed Apr 26 14:20:58 2017
 
 AFM 1D Data creation script as used for paper DOI:XXX
+Main code/Options start at line ~400, (search for ##Vers = "AAA"## not including the ##
+having the definitions in a separate file broke the parallelization and the easiest way to fix it was copy them here :( 
 """
 #%% Imports
 import tkinter as tk
@@ -99,63 +101,142 @@ def AutoDetect( FileName , Opt ):
 #        print("Instrument was not detected, and NmPP was not set. Please set NmPP and rerun")
     return(imarray)
 
-def PeakPara(LineIn, NmPP, CValley, SetFWidth):
+def ERFPara(LineIn, NmPP, CValley,LEdgeInd, REdgeInd,  SetFWidth):
+    # Reviewer asked about impact of fitting derivative, fit the ERF on the OG data instead
     Length = LineIn.size
     gmodel = lmfit.Model(gaussian)
+    ERFmodel = lmfit.Model(erf)
     Inits = gmodel.make_params()
+    ERFInits = ERFmodel.make_params()
     FPeak = np.zeros(CValley.shape)
+    FEdgeL = np.zeros(CValley.shape)
+    FEdgeR = np.zeros(CValley.shape)
     FPWidth = np.zeros(CValley.shape)
-    GradCurve = np.diff(np.sign((np.gradient(LineIn)))) 
+    FirstDer = np.gradient(LineIn)
+    GradCurve = np.diff(np.sign((FirstDer))) 
     # this just says where sign of 1D changes
-    
     for pp in range(len(CValley)): #loop through peak positions (guesstimates)
         PCur = int(CValley[pp]) # this is our current *peak* guesstimate
         # first goal : Refine the peak guesstimate for this line
-        FitWidth = SetFWidth # look at local area only
-        PLow = int(np.maximum((PCur-FitWidth),0))
-        PHigh = int(np.min((PCur+FitWidth+1,Length-1)))
-
-        try:PCur = int(np.arange(PLow,PHigh)[np.argmax(GradCurve[PLow:PHigh])+1])
+        FitWidth = 2 # look at local area only
+        
+        PLow = int(np.maximum((PCur-FitWidth),0)) #PLow is a fixed distance
+        PHigh = int(np.min((PCur+FitWidth+1,Length-1))) #PHigh is fixed +1 still here to fix indexing
+        try:PCur = int(np.arange(PLow,PHigh)[np.argmin(LineIn[PLow:PHigh])])
         except:pass
+
         # set peak as the minimum (max 2nd div) 
         # the +1 is to fix the derivative offset from data
-        #now expand our range to the next domains
-        FitWidth = SetFWidth * 2
-        PLow = int(np.maximum((PCur-FitWidth),0))
-        PHigh = int(np.min((PCur+FitWidth+1,Length-1)))
-        
-        # now fix the point to the Right of the valley
-        # Remember we are looking for mim of second derivative +1 is to fix diff offset
-        PHigh = int(PCur +  np.argmin(GradCurve[PCur:PHigh]) +1) 
-        # now fix the point to the left of the valley. 
-        #Do the flip so the first point we find is closest to peak
-        # do -1 cus we're moving otherway
-        PLow = int(PCur - np.argmin(np.flip(GradCurve[PLow:PCur],0)) -1)
-        # PLow is now the max peak to the left of the current valley 
-        # PHigh is now the max peak to the right of the current valley
 
-        LocalCurve = abs((LineIn[PLow:PHigh]-max(LineIn[PLow:PHigh])))
         
-        # this just flips the curve to be right side up with a minimum of 0
-        # so we can map it onto the typical gaussian        
-        Inits['amp']=lmfit.Parameter(name='amp', value= max(LocalCurve))
-        Inits['wid']=lmfit.Parameter(name='wid', value= FitWidth)
-        Inits['cen']=lmfit.Parameter(name='cen', value= PCur, min=PCur-7, max=PCur+7)
-    
-        try:
-            Res = gmodel.fit(LocalCurve, Inits, x=np.arange(PLow,PHigh))
-            FPeak[pp] = Res.best_values['cen']*NmPP
-            FPWidth[pp] = abs(np.copy(Res.best_values['wid']*2.35482*NmPP)) # FWHM in NM
-            if (abs(Res.best_values['cen'] - PCur) > 5) or (Res.best_values['wid'] > 50) or (Res.best_values['cen']==PCur):
-                FPWidth[pp] = np.nan
+        #%% Fit Left Edge
+        if (pp == LEdgeInd).max() :  # are we on the edge of a trench? if so must fit carefully
+            FitWidth = SetFWidth
+            PLow = int(np.maximum((PCur-FitWidth),0)) #PLow is a fixed distance
+            PHigh = int(np.min((PCur+FitWidth+1+2,Length-1))) # +1 to account for index. +2 for wiggle room
+            PHigh = int(PCur +  np.argmax(LineIn[PCur:PHigh]))  # find max in that wiggle room
+            LocalCurve = abs((LineIn[PLow:PHigh]-max(LineIn[PLow:PHigh]))) 
+            # Set our initial guesses
+            
+            Inits['amp']=lmfit.Parameter(name='amp', value= max(LocalCurve))
+            Inits['wid']=lmfit.Parameter(name='wid', value= LocalCurve.size)
+            Inits['cen']=lmfit.Parameter(name='cen', value= PCur, min=PLow, max=PHigh)
+            try:
+                Res = gmodel.fit(LocalCurve, Inits, x=np.arange(PLow,PHigh))
+                FPeak[pp] = Res.best_values['cen']*NmPP
+                if (abs(Res.best_values['cen'] <= PLow)) or (abs(Res.best_values['cen'] >= PHigh)):
+                    FPeak[pp] = np.nan
+            except:
                 FPeak[pp] = np.nan
-        except:
-            FPWidth[pp] = np.nan
-            FPeak[pp] = np.nan
-    return( FPeak, FPWidth)
+            FEdgeL[pp] = np.nan
+        else:
+
+            #now expand our range to the next domains
+            FitWidth = SetFWidth * 2
+            PLow = int(np.maximum((PCur-FitWidth),0))
+            # now fix the point to the left of the valley. 
+            #Do the flip so the first point we find is closest to peak
+            # do -1 cus we're moving otherway
+            PLow = int(PCur - np.argmin(np.flip(GradCurve[PLow:PCur],0)) -1)
+            # PLow is now the max peak to the left of the current valley 
+            
+            # now we want to fit edges. so max or mins of derivative. 
+            #flip
+
+            
+            LocalCurve = abs(LineIn[PLow:PCur]-LineIn[PLow])
+            # Rectify so it is rising signal from 0 to amp       
+            ERFInits['amp']=lmfit.Parameter(name='amp', value= LocalCurve[-1]-LocalCurve[0])
+            ERFInits['wid']=lmfit.Parameter(name='wid', value= LocalCurve.size)
+            ERFInits['cen']=lmfit.Parameter(name='cen', value= (PLow+PCur)/2, min=PLow, max=PCur)
+        
+            try:
+                Res = ERFmodel.fit(LocalCurve, ERFInits, x=np.arange(PLow,PCur))
+                FEdgeL[pp] = Res.best_values['cen']*NmPP
+                if (abs(Res.best_values['cen'] <= PLow)) or (abs(Res.best_values['cen'] >= PCur)):
+                    FEdgeL[pp] = np.nan
+            except:
+                FEdgeL[pp] = np.nan
+            
+        #%% Fit Right Edge
+        if (pp == REdgeInd).max(): # are we on the edge of a trench? if so must fit carefully
+            FitWidth = SetFWidth
+            PHigh = int(np.min((PCur+FitWidth+1,Length-1))) #PHigh is fixed +1 still here to fix indexing
+            PLow = int(np.maximum((PCur-FitWidth-2),0)) #PLow now needs to be tweaked, minus two for wiggle
+            PLow = int(PCur -  np.argmax(np.flip(LineIn[PLow:PCur],0)) -1)  # find max in that wiggle room
+            LocalCurve = abs((LineIn[PLow:PHigh]-max(LineIn[PLow:PHigh]))) 
+            # Set our initial guesses
+            
+            Inits['amp']=lmfit.Parameter(name='amp', value= max(LocalCurve))
+            Inits['wid']=lmfit.Parameter(name='wid', value= LocalCurve.size)
+            Inits['cen']=lmfit.Parameter(name='cen', value= PCur, min=PLow, max=PHigh)
+            try:
+                Res = gmodel.fit(LocalCurve, Inits, x=np.arange(PLow,PHigh))
+                FPeak[pp] = Res.best_values['cen']*NmPP
+                if (abs(Res.best_values['cen'] <= PLow)) or (abs(Res.best_values['cen'] >= PHigh)):
+                    FPeak[pp] = np.nan
+            except:
+                FPeak[pp] = np.nan
+            FEdgeR[pp] = np.nan
+        else:
+            #now expand our range to the next domains
+            FitWidth = SetFWidth * 2
+            PHigh = int(np.min((PCur+FitWidth+1,Length-1)))  
+            # now fix the point to the Right of the valley
+            # Remember we are looking for mim of second derivative +1 is to fix diff offset
+            PHigh = int(PCur +  np.argmin(GradCurve[PCur:PHigh]) +1) 
+            
+            
+            LocalCurve = abs(LineIn[PCur:PHigh]-LineIn[PCur])
+            # Rectify so it is rising signal from 0 to amp       
+            ERFInits['amp']=lmfit.Parameter(name='amp', value= LocalCurve[-1]-LocalCurve[0])
+            ERFInits['wid']=lmfit.Parameter(name='wid', value= LocalCurve.size)
+            ERFInits['cen']=lmfit.Parameter(name='cen', value= (PCur+PHigh)/2, min=PCur, max=PHigh)
+        
+            try:
+                Res = ERFmodel.fit(LocalCurve, ERFInits, x=np.arange(PCur,PHigh))
+                FEdgeR[pp] = Res.best_values['cen']*NmPP
+                if (abs(Res.best_values['cen'] <= PCur)) or (abs(Res.best_values['cen'] >= PHigh)):
+                    FEdgeR[pp] = np.nan
+            except:
+                FEdgeR[pp] = np.nan
+        #%% Calc Width and Peak
+        if (pp == LEdgeInd).max(): # if we're on left edge
+            FPWidth[pp] = (FEdgeR[pp] - FPeak[pp])*2
+        elif (pp == REdgeInd).max(): # if we're on right edge
+            FPWidth[pp] = (FPeak[pp] - FEdgeL[pp])*2
+        else: # calc as usual
+            FPWidth[pp]= FEdgeR[pp] - FEdgeL[pp]
+            FPeak[pp] = 0.5*(FEdgeL[pp]+FEdgeR[pp])
+        
+        
+    FPWidth[FPWidth < 0] = np.nan # if we have bad data lets throw it out
+            
+    return( FPeak, FPWidth, FEdgeL, FEdgeR)
+            
+
     
 def LERPara(LineIn, NmPP, CValley,LEdgeInd, REdgeInd,  SetFWidth):
-    
     Length = LineIn.size
     gmodel = lmfit.Model(gaussian)
     Inits = gmodel.make_params()
@@ -166,7 +247,6 @@ def LERPara(LineIn, NmPP, CValley,LEdgeInd, REdgeInd,  SetFWidth):
     FirstDer = np.gradient(LineIn)
     GradCurve = np.diff(np.sign((FirstDer))) 
     # this just says where sign of 1D changes
-    
     for pp in range(len(CValley)): #loop through peak positions (guesstimates)
         PCur = int(CValley[pp]) # this is our current *peak* guesstimate
         # first goal : Refine the peak guesstimate for this line
@@ -176,7 +256,6 @@ def LERPara(LineIn, NmPP, CValley,LEdgeInd, REdgeInd,  SetFWidth):
         PHigh = int(np.min((PCur+FitWidth+1,Length-1))) #PHigh is fixed +1 still here to fix indexing
         try:PCur = int(np.arange(PLow,PHigh)[np.argmin(LineIn[PLow:PHigh])])
         except:pass
-        
 
         # set peak as the minimum (max 2nd div) 
         # the +1 is to fix the derivative offset from data
@@ -314,6 +393,9 @@ def onkey(event):
 def gaussian(x, amp, cen, wid):
     return amp * np.exp(-(x-cen)**2 / (2*wid**2))
 
+def erf(x, amp, cen, wid):
+    # fun fact, np.math.erf can't handle arrays. Ask me how I found out.
+    return (amp * scipy.special.erf( (x-cen)/(2*wid**2) ))
 #%%
 def Hooks(x, K, Offset):
     return 0.5*x**2*K+Offset
@@ -330,26 +412,24 @@ if __name__ == '__main__':
     class Output:
         pass
     #%% Default options
-
-    
     
     #IndividualLog =1; # Write a log for each sample?
     CombLog = 1 # If One write a combined log, if two clean it out each time(don't append)
     #ShowImage = 0 # Show images?
     plt.ioff()# Dont show plots as made, all plots are saved so just use that
-    Opt.Boltz = 8.617e-5 # boltzmann, using eV/K here
-    
     
     Opt.NmPP = 0 # Nanometers per pixel scaling (will autodetect)
     Opt.l0 = 50 # nanometer l0
     Opt.DomPerTrench = 7 # how many domains are there in a trench?
-    Opt.Thread = -1 # how many thread to use. -1 = all possible minus 1, -2 = all possible -2 etc
+    Opt.Thread = -3 # how many thread to use. -1 = all possible minus 1, -2 = all possible -2 etc
+ 
+
     #%% AFM Settings
-    Opt.AFMLayer = "Phase" #Matched Phase ZSensor
+    Opt.AFMLayer = "Phase" #Regex matching with channel name e.g. Phase ZSensor
     Opt.AFMLevel = 3  # 0 = none 1 = Median 2= Median of Dif 3 = polyfit
     Opt.AFMPDeg = 1 # degree of polynomial.
     
-    # Autocorrelation max shift
+    # Autocorrelation max shift/size
     Opt.ACCutoff = 50
     Opt.ACSize = 400
     
@@ -357,9 +437,12 @@ if __name__ == '__main__':
     # EG AngMP = 5 then 1 2 3 4 5, 3 will be calc off angle 1 - 5
     Opt.Machine = "Unknown"
     
+    Opt.Boltz = 8.617e-5 # boltzmann, using eV/K here
+    
     #%% Plot Options
-    Opt.TDriftP = 0
+    Opt.TDriftP = 1 # Show thermal drift plot?
     Opt.OptPlots = 0 # this stops all the non paper plots from being made
+    
 #    Opt.PColor = "#FFD966"
 #    Opt.EColor = "#203864"
 #    Opt.WColor = "#C5E0B4"
@@ -368,6 +451,16 @@ if __name__ == '__main__':
     Opt.PColor = "#3c8434"
     Opt.EColor = "#c00000"
     Opt.WColor = "#95a7f5"
+    
+    #%% Extra Options
+    #These are to answer reviewer critiques. If set to 0 = As run for paper
+    
+    ReviewerFit = 0 # 1 = Will use ERF to fit raw data.
+    # By default we used gaussian fits of the 1st derivative to identify the edges of the domains
+    # but we can also use ERF to fit the raw data. We tried this to respond to R1 critique.
+    
+    ReviewerThermal = 0 # We correct for thermal drift if this is set to 1 we won't do this
+    #This is so we can examine how lossy drift correction is
     #%% Select Files
     FOpen=tk.Tk()
     
@@ -513,9 +606,13 @@ if __name__ == '__main__':
         #% Parallel cus gotta go fast
         print('\n Image '+Opt.FName+'\n')
         __spec__ = "ModuleSpec(name='builtins', loader=<class '_frozen_importlib.BuiltinImporter'>)"
-
-        POut = Parallel(n_jobs=Opt.Thread,verbose=5)(delayed(LERPara)(RawIn[:,tt,ImNum], Opt.NmPP, CValley, LEdgeInd, REdgeInd, FitWidth) # backend='threading' removed
-            for tt in range(RawIn.shape[1]))
+        
+        if ReviewerFit == 0:
+            POut = Parallel(n_jobs=Opt.Thread,verbose=5)(delayed(LERPara)(RawIn[:,tt,ImNum], Opt.NmPP, CValley, LEdgeInd, REdgeInd, FitWidth) # backend='threading' removed
+                for tt in range(RawIn.shape[1]))
+        else:
+            POut = Parallel(n_jobs=Opt.Thread,verbose=5)(delayed(ERFPara)(RawIn[:,tt,ImNum], Opt.NmPP, CValley, LEdgeInd, REdgeInd, FitWidth) # backend='threading' removed
+                for tt in range(RawIn.shape[1]))
         #%%
         FPTuple, FPWTuple, FELTup, FERTup = zip(*POut)
         FPeak = np.array(FPTuple).transpose()
@@ -555,22 +652,26 @@ if __name__ == '__main__':
         FDisp = ((FPeak.transpose() - np.nanmean(FPeak,axis=1)).transpose())
 
         #%% Do thermal drift correction
-        XTD = np.arange(FDisp.shape[1])
-        YTD = np.nanmean(FDisp,axis=0)
-        TDFit = np.polyfit(XTD,YTD,1)
-        TDPlot = np.polyval(TDFit,XTD)
-        if Opt.TDriftP == 1:
-            TDF, TDAx = plt.subplots()
-            TDF.suptitle('Thermal Drift y=%f*x+%f' % (TDFit[0],TDFit[1]))
-            TDAx.plot(XTD,YTD,XTD,TDPlot)
-            TDF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "ThermalDrift.png"), dpi=600)
-            TDF.clf()
-            plt.close(TDF)
-        #%% now correct the data for drift
-        FDispCorrect = (FDisp - TDPlot)
-        FELDrift = (FEL - TDPlot)
-        FERDrift = (FER - TDPlot)
-        
+        if ReviewerThermal == 0:
+            XTD = np.arange(FDisp.shape[1])
+            YTD = np.nanmean(FDisp,axis=0)
+            TDFit = np.polyfit(XTD,YTD,1)
+            TDPlot = np.polyval(TDFit,XTD)
+            if Opt.TDriftP == 1:
+                TDF, TDAx = plt.subplots()
+                TDF.suptitle('Thermal Drift y=%f*x+%f' % (TDFit[0],TDFit[1]))
+                TDAx.plot(XTD,YTD,XTD,TDPlot)
+                TDF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "ThermalDrift.png"), dpi=600)
+                TDF.clf()
+                plt.close(TDF)
+            #%% now correct the data for drift
+            FDispCorrect = (FDisp - TDPlot)
+            FELDrift = (FEL - TDPlot)
+            FERDrift = (FER - TDPlot)
+        else:
+            FDispCorrect = (FDisp)
+            FELDrift = (FEL)
+            FERDrift = (FER)
         #%% Calc Displacement for edges/width
 
         FELCorrect = ((FEL.transpose() - np.nanmean(FEL,axis=1)).transpose())
@@ -817,7 +918,7 @@ if __name__ == '__main__':
         PSDF , PSDAx = plt.subplots(ncols=3,nrows=3, sharex = True,sharey=True, figsize=(9,9))
         PSDF.suptitle('Power Spectral Density')
         RollAv = int(5)
-        
+        # order is weird on the plots I know...
         #% Peak
         PSDMean = np.nanmean(PSDPeak, axis=0)[1:]
         
@@ -831,21 +932,21 @@ if __name__ == '__main__':
             PSDLPREdge = np.vstack((PSDLPROut, np.nanmean(PSDPeak[EdgeInd,:], axis=0)[1:]))
             
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDAx[0,0].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.PColor,alpha=0.5)
-        PSDAx[0,0].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
-        PSDAx[0,0].set_title('LPR')
+        PSDAx[2,0].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.PColor,alpha=0.5)
+        PSDAx[2,0].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+        PSDAx[2,0].set_title('LPR')
         
         PSDMean = np.nanmean(PSDPeak[MidInd,:], axis=0)[1:]
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDAx[0,1].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.PColor,alpha=0.5)
-        PSDAx[0,1].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
-        PSDAx[0,1].set_title('Mid')
+        PSDAx[2,1].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.PColor,alpha=0.5)
+        PSDAx[2,1].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+        PSDAx[2,1].set_title('Mid')
         
         PSDMean = np.nanmean(PSDPeak[EdgeInd,:], axis=0)[1:]
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDAx[0,2].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.PColor,alpha=0.5)
-        PSDAx[0,2].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
-        PSDAx[0,2].set_title('Edge')
+        PSDAx[2,2].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.PColor,alpha=0.5)
+        PSDAx[2,2].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+        PSDAx[2,2].set_title('Edge')
         
         #% Width
         PSDMean = np.nanmean(PSDWidth, axis=0)[1:]
@@ -888,20 +989,20 @@ if __name__ == '__main__':
             PSDLERMid = np.vstack((PSDLEROut, np.nanmean(PSDEdge[MidInd,:], axis=0)[1:]))
             PSDLEREdge = np.vstack((PSDLEROut, np.nanmean(PSDEdge[EdgeInd,:], axis=0)[1:]))
         
-        PSDAx[2,0].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.EColor,alpha=0.5)
-        PSDAx[2,0].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+        PSDAx[0,0].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.EColor,alpha=0.5)
+        PSDAx[0,0].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
         
         PSDMean = np.nanmean(PSDEdge[np.sort(np.append(MidInd*2, MidInd*2+1)),:], axis=0)[1:]
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDAx[2,1].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.EColor,alpha=0.5)
-        PSDAx[2,1].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+        PSDAx[0,1].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.EColor,alpha=0.5)
+        PSDAx[0,1].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
 
         
         PSDMean = np.nanmean(PSDEdge[np.sort(np.append(EdgeInd*2, EdgeInd*2+1)),:], axis=0)[1:]
         PSDRMean = np.convolve(PSDMean, np.ones((RollAv,))/RollAv, mode='valid')
-        PSDAx[2,2].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.EColor,alpha=0.5)
-        PSDAx[2,2].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
-        PSDAx[2,0].set_title('LER')
+        PSDAx[0,2].loglog(PSDFreq[1:], PSDMean,'.',color=Opt.EColor,alpha=0.5)
+        PSDAx[0,2].loglog(PSDFreq[int(np.ceil(RollAv/2)):-int(np.floor(RollAv/2))], PSDRMean,'k')
+        PSDAx[0,0].set_title('LER')
 
         PSDF.tight_layout(rect=(0,0,1,0.95))
         PSDF.savefig(os.path.join(Opt.FPath,"output",Opt.FName + "PSD.png"), dpi=300)
