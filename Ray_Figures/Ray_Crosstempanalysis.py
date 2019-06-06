@@ -12,18 +12,21 @@ import pandas as pd
 import matplotlib.pyplot as plt
 #%% First section does PSD. Second Section does Box/Table
 #%% import data
+LER31 = pd.read_csv("31LER.csv",header=None)
 LER150 = pd.read_csv("150LER.csv",header=None)
 LER210 = pd.read_csv("210LER.csv",header=None)
 LER240 = pd.read_csv("240LER.csv",header=None)
 LERMid = pd.read_csv("LER-Mid.csv",header=None)
 LEREdge = pd.read_csv("LER-Edge.csv",header=None)
-# and LPR
+# and LWR
+LWR31 = pd.read_csv("31LWR.csv",header=None)
 LWR150 = pd.read_csv("150LWR.csv",header=None)
 LWR210 = pd.read_csv("210LWR.csv",header=None)
 LWR240 = pd.read_csv("240LWR.csv",header=None)
 LWRMid = pd.read_csv("LWR-Mid.csv",header=None)
 LWREdge = pd.read_csv("LWR-Edge.csv",header=None)
 # and lpr
+LPR31 = pd.read_csv("31LPR.csv",header=None)
 LPR150 = pd.read_csv("150LPR.csv",header=None)
 LPR210 = pd.read_csv("210LPR.csv",header=None)
 LPR240 = pd.read_csv("240LPR.csv",header=None)
@@ -46,6 +49,12 @@ CColor = "#646464"
 
 #%% LER
 #ScanNo = int(6) #didn't end up using for paper. was investigating extraneous effect of edge v center
+
+LER31Mean = np.nanmean(LER31.values[1:,:],axis=0)
+LER31Roll = np.convolve(LER31Mean, np.ones((RollAv,))/RollAv, mode=ConMode)
+LER31Std = np.nanstd(LER31.values[1:,:],axis=0)
+LER31Elow = LER31Mean*10**(LER31Std/(LER31Mean*np.log(10)))
+LER31Ehigh = LER31Mean/10**(LER31Std/(LER31Mean*np.log(10)))
 
 LER150Mean = np.nanmean(LER150.values[1:,:],axis=0)
 LER150Roll = np.convolve(LER150Mean, np.ones((RollAv,))/RollAv, mode=ConMode)
@@ -79,6 +88,12 @@ LER240Ehigh = LER240Mean/10**(LER240Std/(LER240Mean*np.log(10)))
 #LEREdgeEhigh = ((LEREdgeMean) + LEREdgeStd/(LEREdgeMean*np.log(10)))
 
 #% LWR
+LWR31Mean = np.nanmean(LWR31.values[1:,:],axis=0)
+LWR31Roll = np.convolve(LWR31Mean, np.ones((RollAv,))/RollAv, mode=ConMode)
+LWR31Std = np.nanstd(LWR31.values[1:,:],axis=0)
+LWR31Elow = LWR31Mean*10**(LWR31Std/(LWR31Mean*np.log(10)))
+LWR31Ehigh = LWR31Mean/10**(LWR31Std/(LWR31Mean*np.log(10)))
+
 LWR150Mean = np.nanmean(LWR150.values[1:,:],axis=0)
 LWR150Roll = np.convolve(LWR150Mean, np.ones((RollAv,))/RollAv, mode=ConMode)
 LWR150Std = np.nanstd(LWR150.values[1:,:],axis=0)
@@ -112,6 +127,12 @@ LWR240Ehigh = LWR240Mean/10**(LWR240Std/(LWR240Mean*np.log(10)))
 #LWREdgeEhigh = ((LWREdgeMean) + LWREdgeStd/(LWREdgeMean*np.log(10)))
 
 #% LPR
+LPR31Mean = np.nanmean(LPR31.values[1:,:],axis=0)
+LPR31Roll = np.convolve(LPR31Mean, np.ones((RollAv,))/RollAv, mode=ConMode)
+LPR31Std = np.nanstd(LPR31.values[1:,:],axis=0)
+LPR31Elow = LPR31Mean*10**(LPR31Std/(LPR31Mean*np.log(10)))
+LPR31Ehigh = LPR31Mean/10**(LPR31Std/(LPR31Mean*np.log(10)))
+
 LPR150Mean = np.nanmean(LPR150.values[1:,:],axis=0)
 LPR150Roll = np.convolve(LPR150Mean, np.ones((RollAv,))/RollAv, mode=ConMode)
 LPR150Std = np.nanstd(LPR150.values[1:,:],axis=0)
@@ -146,38 +167,56 @@ LPR240Ehigh = LPR240Mean/10**(LPR240Std/(LPR240Mean*np.log(10)))
 
 #% One way to plot
 if PSDPlot == 1:
-    PSDFigSTD, PSDAxSTD = plt.subplots(ncols=3, nrows=3, sharex=True, sharey=True, figsize=(9,9))
+    PSDFigSTD, PSDAxSTD = plt.subplots(ncols=3, nrows=4, sharex=True, sharey=True, figsize=(9,9))
     PSDAxSTD[0,0].loglog()
-    PSDAxSTD[0,0].fill_between(PSDFreq,LER150Elow, LER150Ehigh, color=LERColor,alpha = 0.3)
-    PSDAxSTD[0,0].plot(PSDFreq[3:-3],LER150Roll[3:-3],color='black')
+    PSDAxSTD[0,0].fill_between(PSDFreq,LER31Elow, LER31Ehigh, color=LERColor,alpha = 0.3)
+    PSDAxSTD[0,0].plot(PSDFreq[3:-3],LER31Roll[3:-3],color='black')
+    
     PSDAxSTD[1,0].loglog()
-    PSDAxSTD[1,0].fill_between(PSDFreq,LER210Elow, LER210Ehigh, color=LERColor,alpha = 0.3)
-    PSDAxSTD[1,0].plot(PSDFreq[3:-3],LER210Roll[3:-3],color='black')
+    PSDAxSTD[1,0].fill_between(PSDFreq,LER150Elow, LER150Ehigh, color=LERColor,alpha = 0.3)
+    PSDAxSTD[1,0].plot(PSDFreq[3:-3],LER150Roll[3:-3],color='black')
+    
     PSDAxSTD[2,0].loglog()
-    PSDAxSTD[2,0].fill_between(PSDFreq,LER240Elow, LER240Ehigh, color=LERColor,alpha = 0.3)
-    PSDAxSTD[2,0].plot(PSDFreq[3:-3],LER240Roll[3:-3],color='black')
+    PSDAxSTD[2,0].fill_between(PSDFreq,LER210Elow, LER210Ehigh, color=LERColor,alpha = 0.3)
+    PSDAxSTD[2,0].plot(PSDFreq[3:-3],LER210Roll[3:-3],color='black')
+    
+    PSDAxSTD[3,0].loglog()
+    PSDAxSTD[3,0].fill_between(PSDFreq,LER240Elow, LER240Ehigh, color=LERColor,alpha = 0.3)
+    PSDAxSTD[3,0].plot(PSDFreq[3:-3],LER240Roll[3:-3],color='black')
     PSDAxSTD[0,0].set_title('LER')
     
     PSDAxSTD[0,1].loglog()
-    PSDAxSTD[0,1].fill_between(PSDFreq,LPR150Elow, LPR150Ehigh, color=LPRColor,alpha = 0.3)
-    PSDAxSTD[0,1].plot(PSDFreq[3:-3],LPR150Roll[3:-3],color='black')
-    PSDAxSTD[0,1].loglog()
-    PSDAxSTD[1,1].fill_between(PSDFreq,LPR210Elow, LPR210Ehigh, color=LPRColor,alpha = 0.3)
-    PSDAxSTD[1,1].plot(PSDFreq[3:-3],LPR210Roll[3:-3],color='black')
-    PSDAxSTD[1,1].loglog()
-    PSDAxSTD[2,1].fill_between(PSDFreq,LPR240Elow, LPR240Ehigh, color=LPRColor,alpha = 0.3)
-    PSDAxSTD[2,1].plot(PSDFreq[3:-3],LPR240Roll[3:-3],color='black')
-    PSDAxSTD[0,1].set_title('LPR')
+    PSDAxSTD[0,1].fill_between(PSDFreq,LPR31Elow, LPR31Ehigh, color=LPRColor,alpha = 0.3)
+    PSDAxSTD[0,1].plot(PSDFreq[3:-3],LPR31Roll[3:-3],color='black')
     
+    PSDAxSTD[1,1].loglog()
+    PSDAxSTD[1,1].fill_between(PSDFreq,LPR150Elow, LPR150Ehigh, color=LPRColor,alpha = 0.3)
+    PSDAxSTD[1,1].plot(PSDFreq[3:-3],LPR150Roll[3:-3],color='black')
+
+    PSDAxSTD[2,1].loglog()
+    PSDAxSTD[2,1].fill_between(PSDFreq,LPR210Elow, LPR210Ehigh, color=LPRColor,alpha = 0.3)
+    PSDAxSTD[2,1].plot(PSDFreq[3:-3],LPR210Roll[3:-3],color='black')
+
+    PSDAxSTD[3,1].loglog()
+    PSDAxSTD[3,1].fill_between(PSDFreq,LPR240Elow, LPR240Ehigh, color=LPRColor,alpha = 0.3)
+    PSDAxSTD[3,1].plot(PSDFreq[3:-3],LPR240Roll[3:-3],color='black')
+    PSDAxSTD[0,1].set_title('LPR')
+
     PSDAxSTD[0,2].loglog()
-    PSDAxSTD[0,2].fill_between(PSDFreq,LWR150Elow, LWR150Ehigh, color=LWRColor,alpha = 0.3)
-    PSDAxSTD[0,2].plot(PSDFreq[3:-3],LWR150Roll[3:-3],color='black')
+    PSDAxSTD[0,2].fill_between(PSDFreq,LWR31Elow, LWR31Ehigh, color=LWRColor,alpha = 0.3)
+    PSDAxSTD[0,2].plot(PSDFreq[3:-3],LWR31Roll[3:-3],color='black')
+    
     PSDAxSTD[1,2].loglog()
-    PSDAxSTD[1,2].fill_between(PSDFreq,LWR210Elow, LWR210Ehigh, color=LWRColor,alpha = 0.3)
-    PSDAxSTD[1,2].plot(PSDFreq[3:-3],LWR210Roll[3:-3],color='black')
+    PSDAxSTD[1,2].fill_between(PSDFreq,LWR150Elow, LWR150Ehigh, color=LWRColor,alpha = 0.3)
+    PSDAxSTD[1,2].plot(PSDFreq[3:-3],LWR150Roll[3:-3],color='black')
+    
     PSDAxSTD[2,2].loglog()
-    PSDAxSTD[2,2].fill_between(PSDFreq,LWR240Elow, LWR240Ehigh, color=LWRColor,alpha = 0.3)
-    PSDAxSTD[2,2].plot(PSDFreq[3:-3],LWR240Roll[3:-3],color='black')
+    PSDAxSTD[2,2].fill_between(PSDFreq,LWR210Elow, LWR210Ehigh, color=LWRColor,alpha = 0.3)
+    PSDAxSTD[2,2].plot(PSDFreq[3:-3],LWR210Roll[3:-3],color='black')
+    
+    PSDAxSTD[3,2].loglog()
+    PSDAxSTD[3,2].fill_between(PSDFreq,LWR240Elow, LWR240Ehigh, color=LWRColor,alpha = 0.3)
+    PSDAxSTD[3,2].plot(PSDFreq[3:-3],LWR240Roll[3:-3],color='black')
     PSDAxSTD[0,2].set_title('LWR')
     
     PSDFigSTD.savefig("PSDasTemp.png", dpi=600)
@@ -187,18 +226,28 @@ if PSDPlot == 1:
 
 #%
 if PSDPlot == 2:
-    PSDFigFit, PSDAxFit = plt.subplots(ncols=3, nrows=3, sharex=True, sharey=True, figsize=(9,9))
+    PSDFigFit, PSDAxFit = plt.subplots(ncols=3, nrows=4, sharex=True, sharey=True, figsize=(9,9))
     
     SetAlph = 0.5
     Offset = 0
+    crit31 = 0
     crit150 = 0
     crit210 = 0
+    Edge31L = int(0)
+    Edge31R = int(0)
     Edge150L = int(0)
     Edge150R = int(0)
     Edge210L = int(0)
     Edge210R = int(0)
     
     for CutOff in np.arange(10,PSDFreq.size-110):
+        FitL31 = np.polyfit(np.log10(PSDFreq[:CutOff+1]),np.log10(LER31Mean[:CutOff+1]),1)
+        FitR31 = np.polyfit(np.log10(PSDFreq[CutOff:]),np.log10(LER31Mean[CutOff:]),1)
+        if abs(FitL31[0]-FitR31[0]) > crit31:
+            crit31 = abs(FitL31[0]-FitR31[0])
+            F31 = np.copy(CutOff)
+        
+        
         FitL150 = np.polyfit(np.log10(PSDFreq[:CutOff+1]),np.log10(LER150Mean[:CutOff+1]),1)
         FitR150 = np.polyfit(np.log10(PSDFreq[CutOff:]),np.log10(LER150Mean[CutOff:]),1)
         if abs(FitL150[0]-FitR150[0]) > crit150:
@@ -216,65 +265,86 @@ if PSDPlot == 2:
 #    F210 = 63
     #%
     TableFit = pd.DataFrame(index=['150L','150R','210L','210R','240'],columns=['LER','LWR','LPR'])
-    #% LER150
+    
+    # LER 31
     PSDAxFit[0,0].loglog()
-    PSDAxFit[0,0].fill_between(PSDFreq,LER150Ehigh, LER150Elow, color=LERColor,alpha = SetAlph)
+    PSDAxFit[0,0].fill_between(PSDFreq,LER31Ehigh, LER31Elow, color=LERColor,alpha = SetAlph)
+    FitL = np.polyfit(np.log10(PSDFreq[:F31+1]),np.log10(LER31Mean[:F31+1]),1)
+    FitR = np.polyfit(np.log10(PSDFreq[F31:]),np.log10(LER31Mean[F31:]),1)
+    PSDAxFit[0,0].plot(PSDFreq[:F31+Edge31R],10**(np.polyval(FitL,np.log10(PSDFreq[:F31+Edge31R]))+Offset),'k:')
+    PSDAxFit[0,0].plot(PSDFreq[F31-Edge31L:],10**(np.polyval(FitR,np.log10(PSDFreq[F31-Edge31L:]))+Offset),'k:')
+    PSDAxFit[0,0].set_ylabel(r'$31 \degree C$')
+    PSDAxFit[0,0].axvline(x=PSDFreq[F31],color='gray')
+    
+    #% LER150
+    PSDAxFit[1,0].loglog()
+    PSDAxFit[1,0].fill_between(PSDFreq,LER150Ehigh, LER150Elow, color=LERColor,alpha = SetAlph)
     FitL = np.polyfit(np.log10(PSDFreq[:F150+1]),np.log10(LER150Mean[:F150+1]),1)
     FitR = np.polyfit(np.log10(PSDFreq[F150:]),np.log10(LER150Mean[F150:]),1)
-    PSDAxFit[0,0].plot(PSDFreq[:F150+Edge150R],10**(np.polyval(FitL,np.log10(PSDFreq[:F150+Edge150R]))+Offset),'k:')
-    PSDAxFit[0,0].plot(PSDFreq[F150-Edge150L:],10**(np.polyval(FitR,np.log10(PSDFreq[F150-Edge150L:]))+Offset),'k:')
-    PSDAxFit[0,0].set_ylabel(r'$150 \degree C$')
-    PSDAxFit[0,0].axvline(x=PSDFreq[F150],color='gray')
+    PSDAxFit[1,0].plot(PSDFreq[:F150+Edge150R],10**(np.polyval(FitL,np.log10(PSDFreq[:F150+Edge150R]))+Offset),'k:')
+    PSDAxFit[1,0].plot(PSDFreq[F150-Edge150L:],10**(np.polyval(FitR,np.log10(PSDFreq[F150-Edge150L:]))+Offset),'k:')
+    PSDAxFit[1,0].set_ylabel(r'$150 \degree C$')
+    PSDAxFit[1,0].axvline(x=PSDFreq[F150],color='gray')
+    
     TableFit.iloc[0,0]=FitL[0]
     TableFit.iloc[1,0]=FitR[0]
     
-    PSDAxFit[1,0].loglog()
-    PSDAxFit[1,0].fill_between(PSDFreq,LER210Elow, LER210Ehigh, color=LERColor,alpha = SetAlph)
+    PSDAxFit[2,0].loglog()
+    PSDAxFit[2,0].fill_between(PSDFreq,LER210Elow, LER210Ehigh, color=LERColor,alpha = SetAlph)
     FitL = np.polyfit(np.log10(PSDFreq[:F210+1]),np.log10(LER210Mean[:F210+1]),1)
     FitR = np.polyfit(np.log10(PSDFreq[F210:]),np.log10(LER210Mean[F210:]),1)
-    PSDAxFit[1,0].plot(PSDFreq[:F210+Edge210R],10**(np.polyval(FitL,np.log10(PSDFreq[:F210+Edge210R]))+Offset),'k:')
-    PSDAxFit[1,0].plot(PSDFreq[F210-Edge210L:],10**(np.polyval(FitR,np.log10(PSDFreq[F210-Edge210L:]))+Offset),'k:')
-    PSDAxFit[1,0].set_ylabel(r'$210 \degree C$')
-    PSDAxFit[1,0].axvline(x=PSDFreq[F210],color='gray')
+    PSDAxFit[2,0].plot(PSDFreq[:F210+Edge210R],10**(np.polyval(FitL,np.log10(PSDFreq[:F210+Edge210R]))+Offset),'k:')
+    PSDAxFit[2,0].plot(PSDFreq[F210-Edge210L:],10**(np.polyval(FitR,np.log10(PSDFreq[F210-Edge210L:]))+Offset),'k:')
+    PSDAxFit[2,0].set_ylabel(r'$210 \degree C$')
+    PSDAxFit[2,0].axvline(x=PSDFreq[F210],color='gray')
     TableFit.iloc[2,0]=FitL[0]
     TableFit.iloc[3,0]=FitR[0]
     
-    PSDAxFit[2,0].loglog()
-    PSDAxFit[2,0].fill_between(PSDFreq,LER240Elow, LER240Ehigh, color=LERColor,alpha = SetAlph)
+    PSDAxFit[3,0].loglog()
+    PSDAxFit[3,0].fill_between(PSDFreq,LER240Elow, LER240Ehigh, color=LERColor,alpha = SetAlph)
     FitL = np.polyfit(np.log10(PSDFreq),np.log10(LER240Mean),1)
-    PSDAxFit[2,0].plot(PSDFreq,10**(np.polyval(FitL,np.log10(PSDFreq))+Offset),'k:')
-    PSDAxFit[2,0].set_ylabel(r'$240 \degree C$')
+    PSDAxFit[3,0].plot(PSDFreq,10**(np.polyval(FitL,np.log10(PSDFreq))+Offset),'k:')
+    PSDAxFit[3,0].set_ylabel(r'$240 \degree C$')
     TableFit.iloc[4,0]=FitL[0]
     
     
     PSDAxFit[0,0].set_title('LER')
     
-    #% LPR 150
+    #% LPR
     
     PSDAxFit[0,1].loglog()
-    PSDAxFit[0,1].fill_between(PSDFreq,LPR150Elow, LPR150Ehigh, color=LPRColor,alpha = SetAlph)
+    PSDAxFit[0,1].fill_between(PSDFreq,LPR31Elow, LPR31Ehigh, color=LPRColor,alpha = SetAlph)
+    FitL = np.polyfit(np.log10(PSDFreq[:F31+1]),np.log10(LPR31Mean[:F31+1]),1)
+    FitR = np.polyfit(np.log10(PSDFreq[F31:]),np.log10(LPR31Mean[F31:]),1)
+    PSDAxFit[0,1].plot(PSDFreq[:F31+Edge31R],10**(np.polyval(FitL,np.log10(PSDFreq[:F31+Edge31R]))+Offset),'k:')
+    PSDAxFit[0,1].plot(PSDFreq[F31-Edge31L:],10**(np.polyval(FitR,np.log10(PSDFreq[F31-Edge31L:]))+Offset),'k:')
+    PSDAxFit[0,1].axvline(x=PSDFreq[F31],color='gray')
+
+    
+    PSDAxFit[1,1].loglog()
+    PSDAxFit[1,1].fill_between(PSDFreq,LPR150Elow, LPR150Ehigh, color=LPRColor,alpha = SetAlph)
     FitL = np.polyfit(np.log10(PSDFreq[:F150+1]),np.log10(LPR150Mean[:F150+1]),1)
     FitR = np.polyfit(np.log10(PSDFreq[F150:]),np.log10(LPR150Mean[F150:]),1)
-    PSDAxFit[0,1].plot(PSDFreq[:F150+Edge150R],10**(np.polyval(FitL,np.log10(PSDFreq[:F150+Edge150R]))+Offset),'k:')
-    PSDAxFit[0,1].plot(PSDFreq[F150-Edge150L:],10**(np.polyval(FitR,np.log10(PSDFreq[F150-Edge150L:]))+Offset),'k:')
-    PSDAxFit[0,1].axvline(x=PSDFreq[F150],color='gray')
+    PSDAxFit[1,1].plot(PSDFreq[:F150+Edge150R],10**(np.polyval(FitL,np.log10(PSDFreq[:F150+Edge150R]))+Offset),'k:')
+    PSDAxFit[1,1].plot(PSDFreq[F150-Edge150L:],10**(np.polyval(FitR,np.log10(PSDFreq[F150-Edge150L:]))+Offset),'k:')
+    PSDAxFit[1,1].axvline(x=PSDFreq[F150],color='gray')
     TableFit.iloc[0,1]=FitL[0]
     TableFit.iloc[1,1]=FitR[0]
     
-    PSDAxFit[0,1].loglog()
-    PSDAxFit[1,1].fill_between(PSDFreq,LPR210Elow, LPR210Ehigh, color=LPRColor,alpha = SetAlph)
+    PSDAxFit[2,1].loglog()
+    PSDAxFit[2,1].fill_between(PSDFreq,LPR210Elow, LPR210Ehigh, color=LPRColor,alpha = SetAlph)
     FitL = np.polyfit(np.log10(PSDFreq[:F210+1]),np.log10(LPR210Mean[:F210+1]),1)
     FitR = np.polyfit(np.log10(PSDFreq[F210:]),np.log10(LPR210Mean[F210:]),1)
-    PSDAxFit[1,1].plot(PSDFreq[:F210+Edge210R],10**(np.polyval(FitL,np.log10(PSDFreq[:F210+Edge210R]))+Offset),'k:')
-    PSDAxFit[1,1].plot(PSDFreq[F210-Edge210L:],10**(np.polyval(FitR,np.log10(PSDFreq[F210-Edge210L:]))+Offset),'k:')
-    PSDAxFit[1,1].axvline(x=PSDFreq[F210],color='gray')
+    PSDAxFit[2,1].plot(PSDFreq[:F210+Edge210R],10**(np.polyval(FitL,np.log10(PSDFreq[:F210+Edge210R]))+Offset),'k:')
+    PSDAxFit[2,1].plot(PSDFreq[F210-Edge210L:],10**(np.polyval(FitR,np.log10(PSDFreq[F210-Edge210L:]))+Offset),'k:')
+    PSDAxFit[2,1].axvline(x=PSDFreq[F210],color='gray')
     TableFit.iloc[2,1]=FitL[0]
     TableFit.iloc[3,1]=FitR[0]
     
-    PSDAxFit[1,1].loglog()
-    PSDAxFit[2,1].fill_between(PSDFreq,LPR240Elow, LPR240Ehigh, color=LPRColor,alpha = SetAlph)
+    PSDAxFit[3,1].loglog()
+    PSDAxFit[3,1].fill_between(PSDFreq,LPR240Elow, LPR240Ehigh, color=LPRColor,alpha = SetAlph)
     FitL = np.polyfit(np.log10(PSDFreq),np.log10(LPR240Mean),1)
-    PSDAxFit[2,1].plot(PSDFreq,10**(np.polyval(FitL,np.log10(PSDFreq))+Offset),'k:')
+    PSDAxFit[3,1].plot(PSDFreq,10**(np.polyval(FitL,np.log10(PSDFreq))+Offset),'k:')
     TableFit.iloc[4,1]=FitL[0]
 
     
@@ -282,29 +352,38 @@ if PSDPlot == 2:
     
     #% LWR
     PSDAxFit[0,2].loglog()
-    PSDAxFit[0,2].fill_between(PSDFreq,LWR150Elow, LWR150Ehigh, color=LWRColor,alpha = SetAlph)
+    PSDAxFit[0,2].fill_between(PSDFreq,LWR31Elow, LWR31Ehigh, color=LWRColor,alpha = SetAlph)
+    FitL = np.polyfit(np.log10(PSDFreq[:F31+1]),np.log10(LWR31Mean[:F31+1]),1)
+    FitR = np.polyfit(np.log10(PSDFreq[F31:]),np.log10(LWR31Mean[F31:]),1)
+    PSDAxFit[0,2].plot(PSDFreq[:F31+Edge31R],10**(np.polyval(FitL,np.log10(PSDFreq[:F31+Edge31R]))+Offset),'k:')
+    PSDAxFit[0,2].plot(PSDFreq[F31-Edge31L:],10**(np.polyval(FitR,np.log10(PSDFreq[F31-Edge31L:]))+Offset),'k:')
+    PSDAxFit[0,2].axvline(x=PSDFreq[F31],color='gray')
+
+    
+    PSDAxFit[1,2].loglog()
+    PSDAxFit[1,2].fill_between(PSDFreq,LWR150Elow, LWR150Ehigh, color=LWRColor,alpha = SetAlph)
     FitL = np.polyfit(np.log10(PSDFreq[:F150+1]),np.log10(LWR150Mean[:F150+1]),1)
     FitR = np.polyfit(np.log10(PSDFreq[F150:]),np.log10(LWR150Mean[F150:]),1)
-    PSDAxFit[0,2].plot(PSDFreq[:F150+Edge150R],10**(np.polyval(FitL,np.log10(PSDFreq[:F150+Edge150R]))+Offset),'k:')
-    PSDAxFit[0,2].plot(PSDFreq[F150-Edge150L:],10**(np.polyval(FitR,np.log10(PSDFreq[F150-Edge150L:]))+Offset),'k:')
-    PSDAxFit[0,2].axvline(x=PSDFreq[F150],color='gray')
+    PSDAxFit[1,2].plot(PSDFreq[:F150+Edge150R],10**(np.polyval(FitL,np.log10(PSDFreq[:F150+Edge150R]))+Offset),'k:')
+    PSDAxFit[1,2].plot(PSDFreq[F150-Edge150L:],10**(np.polyval(FitR,np.log10(PSDFreq[F150-Edge150L:]))+Offset),'k:')
+    PSDAxFit[1,2].axvline(x=PSDFreq[F150],color='gray')
     TableFit.iloc[0,2]=FitL[0]
     TableFit.iloc[1,2]=FitR[0]
     
-    PSDAxFit[1,2].loglog()
-    PSDAxFit[1,2].fill_between(PSDFreq,LWR210Elow, LWR210Ehigh, color=LWRColor,alpha = SetAlph)
+    PSDAxFit[2,2].loglog()
+    PSDAxFit[2,2].fill_between(PSDFreq,LWR210Elow, LWR210Ehigh, color=LWRColor,alpha = SetAlph)
     FitL = np.polyfit(np.log10(PSDFreq[:F210+1]),np.log10(LWR210Mean[:F210+1]),1)
     FitR = np.polyfit(np.log10(PSDFreq[F210:]),np.log10(LWR210Mean[F210:]),1)
-    PSDAxFit[1,2].plot(PSDFreq[:F210+Edge210R],10**(np.polyval(FitL,np.log10(PSDFreq[:F210+Edge210R]))+Offset),'k:')
-    PSDAxFit[1,2].plot(PSDFreq[F210-Edge210L:],10**(np.polyval(FitR,np.log10(PSDFreq[F210-Edge210L:]))+Offset),'k:')
-    PSDAxFit[1,2].axvline(x=PSDFreq[F210],color='gray')
+    PSDAxFit[2,2].plot(PSDFreq[:F210+Edge210R],10**(np.polyval(FitL,np.log10(PSDFreq[:F210+Edge210R]))+Offset),'k:')
+    PSDAxFit[2,2].plot(PSDFreq[F210-Edge210L:],10**(np.polyval(FitR,np.log10(PSDFreq[F210-Edge210L:]))+Offset),'k:')
+    PSDAxFit[2,2].axvline(x=PSDFreq[F210],color='gray')
     TableFit.iloc[2,2]=FitL[0]
     TableFit.iloc[3,2]=FitR[0]
     
-    PSDAxFit[2,2].loglog()
-    PSDAxFit[2,2].fill_between(PSDFreq,LWR240Elow, LWR240Ehigh, color=LWRColor,alpha = SetAlph)
+    PSDAxFit[3,2].loglog()
+    PSDAxFit[3,2].fill_between(PSDFreq,LWR240Elow, LWR240Ehigh, color=LWRColor,alpha = SetAlph)
     FitL = np.polyfit(np.log10(PSDFreq),np.log10(LWR240Mean),1)
-    PSDAxFit[2,2].plot(PSDFreq,10**(np.polyval(FitL,np.log10(PSDFreq))+Offset),'k:')
+    PSDAxFit[3,2].plot(PSDFreq,10**(np.polyval(FitL,np.log10(PSDFreq))+Offset),'k:')
     TableFit.iloc[4,2]=FitL[0]
 
     
@@ -470,7 +549,7 @@ LPRSig = pd.read_csv("LPRSigma.csv")
 LWRSig = pd.read_csv("LWRSigma.csv")
 CKSig = pd.read_csv("CKSigma.csv")
 
-#%% correct for the fact we exported VAR instead of STDEV by accident
+#%% correct for the fact we exported VAR instead of STDEV by accident in the OG data used. This is already fixed in Ray1D for future use
 # Note we drop 175 as the data was very noisy.
 LER3Sig = 3*np.sqrt(LERSig.drop(['175'],axis = 1).values/3)
 LPR3Sig = 3*np.sqrt(LPRSig.drop(['175'],axis = 1).values/3)

@@ -16,18 +16,24 @@ from glob import glob #glob? GLOB!
 #%% Options here
 
 DomPerTrench = int(7)
+LPRColor = "#3c8434"
+LERColor = "#c00000"
+LWRColor = "#95a7f5"
+CColor = "#646464"
+
 
 try:
     os.stat(os.path.join(os.curdir,"output"))
 except:
     os.mkdir(os.path.join(os.curdir,"output"))
 #%%
-    
-CrossEF, CrossEAx = plt.subplots(4,3, figsize=(9,12)) # this will make cross temp LER fig
+TempList = [31, 150, 210, 240]
 
-CrossEWPF, CrossEWPAx = plt.subplots(3,3, figsize=(9,9)) # this will make cross temp LER LWR LPR composite fig
+CrossEF, CrossEAx = plt.subplots(4,len(TempList), figsize=(9,12)) # this will make cross temp LER fig
+
+CrossEWPF, CrossEWPAx = plt.subplots(3,len(TempList), figsize=(9,9)) # this will make cross temp LER LWR LPR composite fig
 #%% loop to import and reduce >
-TempList = [150, 210, 240]
+
 for TT in np.arange(len(TempList)):
     # could use iglob but mehhhhhhhhhhhhh
     ELList = glob("./**/Paper*/**/*%i*FitEdgeL.csv" %(TempList[TT]), recursive = True)
@@ -287,3 +293,218 @@ CrossEWPAx[2,0].set_ylabel('Width Cross Correlations')
 plt.tight_layout(h_pad=1.0)
 CrossEWPF.savefig(os.path.join(os.curdir,"output","EWP_Cross.png"), dpi=600)
 
+#%% Sigmas are at different temps (More)
+TempList = [31, 150, 210, 220, 230, 240]
+for TT in np.arange(len(TempList)):
+    # could use iglob but mehhhhhhhhhhhhh
+    ELList = glob("./**/Paper*/**/*%i*FitEdgeL.csv" %(TempList[TT]), recursive = True)
+    ERList = glob("./**/Paper*/**/*%i*FitEdgeR.csv" %(TempList[TT]), recursive = True)
+    FPList = glob("./**/Paper*/**/*%i*FitPeak.csv" %(TempList[TT]), recursive = True)
+    FWList = glob("./**/Paper*/**/*%i*FitWidth.csv" %(TempList[TT]), recursive = True)
+    
+    LER3Sig = np.zeros((1, len(ELList)))
+    LPR3Sig = np.zeros((1, len(ELList)))
+    LWR3Sig = np.zeros((1, len(ELList)))
+    CK3Sig = np.zeros((1, len(ELList)))
+    
+    for ii in np.arange(len(ELList)): # start per file loop
+        # reimport stuff on a file/file basis and rename it as it was so I can copy pasta the figure code from Ray1D here
+        FPeak = np.genfromtxt(FPList[ii], delimiter=",", filling_values=float('nan'))
+        FPWidth = np.genfromtxt(FWList[ii], delimiter=",", filling_values=float('nan'))
+        FEL = np.genfromtxt(ELList[ii], delimiter=",", filling_values=float('nan'))
+        FER = np.genfromtxt(ERList[ii], delimiter=",", filling_values=float('nan'))
+       
+
+        #% Calc Displacement for peaks to do drift correct
+        FDisp = ((FPeak.transpose() - np.nanmean(FPeak,axis=1)).transpose())
+        
+        #% Do thermal drift correction
+        XTD = np.arange(FDisp.shape[1])
+        YTD = np.nanmean(FDisp,axis=0)
+        TDFit = np.polyfit(XTD,YTD,1)
+        TDPlot = np.polyval(TDFit,XTD)
+        # now correct the data for drift
+        FDispCorrect = (FDisp - TDPlot)
+        FELDrift = (FEL - TDPlot)
+        FERDrift = (FER - TDPlot)
+
+        #% Calc Displacement for edges/width
+        
+        FELCorrect = ((FEL.transpose() - np.nanmean(FEL,axis=1)).transpose())
+        FERCorrect = ((FER.transpose() - np.nanmean(FER,axis=1)).transpose())
+        FPWidthRes = ((FPWidth.transpose() - np.nanmean(FPWidth,axis=1)).transpose())
+
+        #% put edges together
+        
+        FECorrect = np.zeros((FER.shape[0]*2,FER.shape[1]))
+        FECorrect[0::2,:] = FELCorrect
+        FECorrect[1::2,:] = FERCorrect
+        
+        StackDisp = FDispCorrect.transpose()[:,0:DomPerTrench]
+        StackWidth = FPWidthRes.transpose()[:,0:DomPerTrench]
+        StackEdge = FECorrect.transpose()[:,0:DomPerTrench*2]
+        NumTrench = FDispCorrect.shape[0]/DomPerTrench
+        
+        # Calc the Sigma across all domains in this pic for use in first box plots
+        LER3Sig[0, ii] = 3*np.nanstd(StackEdge)
+        LPR3Sig[0, ii] = 3*np.nanstd(StackDisp)
+        LWR3Sig[0, ii] = 3*np.nanstd(StackWidth)
+        CK3Sig[0, ii] = 1 - (LWR3Sig[0,ii]/3)**2 / (2* (LER3Sig[0,ii]/3)**2)
+        
+        for xx in np.arange(1,NumTrench).astype(int):
+            StackDisp=np.concatenate( (StackDisp,FDispCorrect.transpose()[:,xx*DomPerTrench:(xx+1)*DomPerTrench]) )
+            StackWidth=np.concatenate((StackWidth,FPWidthRes.transpose()[:,xx*DomPerTrench:(xx+1)*DomPerTrench]))
+            StackEdge=np.concatenate((StackEdge,FECorrect.transpose()[:,2*xx*DomPerTrench:2*(xx+1)*DomPerTrench]))
+    
+
+        PDStackD = pd.DataFrame(data=StackDisp)
+        PDStackW = pd.DataFrame(data=StackWidth)
+        PDStackE = pd.DataFrame(data=StackEdge)
+        if ii == 0:
+            TempStackD = PDStackD.copy()
+            TempStackW = PDStackW.copy()
+            TempStackE = PDStackE.copy()
+        else:
+            TempStackD = TempStackD.append(PDStackD)
+            TempStackW = TempStackW.append(PDStackW)
+            TempStackE = TempStackE.append(PDStackE)
+        
+        # end per file loop below is per temperature
+    print('Temp = %i,n=%f' %(TempList[TT],TempStackD.size))
+        
+    #%
+#    LER3Sig = 3*np.nanstd(TempStackE, axis = 1)
+#    LPR3Sig = 3*np.nanstd(TempStackD, axis = 1)
+#    LWR3Sig = 3*np.nanstd(TempStackW, axis = 1)
+#    CK3Sig = 1 - (LWR3Sig/3)**2 / (2* (LER3Sig/3)**2)
+    
+    
+    
+    
+    #%
+    if TT == 0:
+        BoxF, BoxAx = plt.subplots(nrows = 4, sharex=True,figsize =(6,12))
+        
+        
+    BoxAx[0].set_ylabel(r'$3\sigma_e (nm)$')
+
+    BER = BoxAx[0].boxplot(LER3Sig.T,patch_artist = True,positions = [TT+1]\
+               ,boxprops = dict(facecolor = LERColor)\
+               ,medianprops = dict(color ='black')\
+               ,showfliers=False)
+    BoxAx[0].set_ylim([0,14])
+
+    
+    BoxAx[1].set_ylabel(r'$3\sigma_p (nm)$')
+
+    BPR = BoxAx[1].boxplot(LPR3Sig.T,patch_artist = True,positions = [TT+1]\
+               ,boxprops = dict(facecolor = LPRColor)\
+               ,medianprops = dict(color ='black')\
+               ,showfliers=False)
+    BoxAx[1].set_ylim([0,14])
+    
+    BoxAx[2].set_ylabel(r'$3\sigma_w (nm)$')
+
+    BWR = BoxAx[2].boxplot(LWR3Sig.T,patch_artist = True,positions = [TT+1]\
+               ,boxprops = dict(facecolor = LWRColor)\
+               ,medianprops = dict(color ='black')\
+               ,showfliers=False)
+    BoxAx[2].set_ylim([0,14])
+    
+      
+    
+    #%
+    BoxAx[3].set_ylabel(r'$c$')
+    mask = np.isfinite(CK3Sig)
+    CK3Filt = [d[m] for d, m in zip(CK3Sig.T, mask.T)]
+    BCK = BoxAx[3].boxplot(CK3Sig.T,patch_artist = True,positions = [TT+1]\
+               ,boxprops = dict(facecolor = CColor)\
+               ,medianprops = dict(color ='black')\
+               ,showfliers=False)
+    BoxAx[3].set_ylim([0,1])
+    
+    BoxAx[3].set_xlim([0, len(TempList)+1])
+    
+    BoxF.tight_layout()
+    BoxF.savefig("SigmasRecolor.png", dpi=600)
+    
+    
+#    #%%
+#    if TT == 0:
+#        BoxFDom, BoxAxDom = plt.subplots(nrows = 4, sharex=True,figsize=(6,12))
+#    #%
+#    LER3SigTemp = LER3Sig[:,Temp]
+#    LPR3SigTemp = LPR3Sig[:,Temp]
+#    LWR3SigTemp = LWR3Sig[:,Temp]
+#    CK3SigTemp = CK3Sig[:,Temp]
+#    
+#    TempList = [LER3SigTemp, LPR3SigTemp, LWR3SigTemp, CK3SigTemp]
+#    
+#    SDom = int(np.ceil(LER3SigTemp.size/7)*2)
+#    
+#    LER3SigDom = np.zeros((SDom,4))*np.nan
+#    LPR3SigDom = np.zeros((SDom,4))*np.nan
+#    LWR3SigDom = np.zeros((SDom,4))*np.nan
+#    CK3SigDom = np.zeros((SDom,4))*np.nan
+#    
+#    DomList = [LER3SigDom, LPR3SigDom, LWR3SigDom, CK3SigDom] # remember python is pointers!
+#    
+#    
+#    #%
+#    for Rough in zip(DomList,TempList):
+#        Rough[0][:int(SDom/2),0] = Rough[1][0::7]
+#        Rough[0][int(SDom/2):-1,0] = Rough[1][6::7]
+#        Rough[0][:int(SDom/2),1] = Rough[1][1::7]
+#        Rough[0][int(SDom/2):-1,1] = Rough[1][5::7]
+#        Rough[0][:int(SDom/2)-1,2] = Rough[1][2::7]
+#        Rough[0][int(SDom/2):-1,2] = Rough[1][4::7]
+#        Rough[0][int(SDom/2):-1,3] = Rough[1][3::7]
+#    
+#    #% Plot for domains
+#    #%
+#
+#    
+#    labels = [r'$1, 7$',r'$2, 6$',r'$3, 5$',r'$4$']
+#    pos = [1,2,3,4]
+#    #BoxFDom.suptitle('Sigmas for Temperature %i'%(TempNames[Temp]))
+#    BoxAxDom[0].set_ylabel(r'$3\sigma_e (nm)$')
+#    mask = np.isfinite(LER3SigDom)
+#    LER3Filt = [d[m] for d, m in zip(LER3SigDom.T, mask.T)]
+#    
+#    BoxAxDom[0].boxplot(LER3Filt,patch_artist = True,positions = pos,labels=labels
+#               ,boxprops = dict(facecolor = LERColor)
+#               ,medianprops = dict(color ='black')
+#               ,showfliers=False)
+#    
+#    
+#      
+#    BoxAxDom[1].set_ylabel(r'$3\sigma_p (nm)$')
+#    mask = np.isfinite(LPR3SigDom)
+#    LPR3Filt = [d[m] for d, m in zip(LPR3SigDom.T, mask.T)]
+#    BoxAxDom[1].boxplot(LPR3Filt,patch_artist = True,positions = pos,labels=labels
+#               ,boxprops = dict(facecolor = LPRColor)
+#               ,medianprops = dict(color ='black')
+#               ,showfliers = False)
+#    
+#    
+#    BoxAxDom[2].set_ylabel(r'$3\sigma_w (nm)$')
+#    mask = np.isfinite(LWR3SigDom)
+#    LWR3Filt = [d[m] for d, m in zip(LWR3SigDom.T, mask.T)]
+#    BoxAxDom[2].boxplot(LWR3Filt,patch_artist = True,positions = pos,labels=labels
+#               ,boxprops = dict(facecolor = LWRColor)
+#               ,medianprops = dict(color ='black')
+#               ,showfliers=False)
+#    
+#    #%
+#    BoxAxDom[3].set_ylabel(r'$c$')
+#    mask = np.isfinite(CK3SigDom)
+#    CK3Filt = [d[m] for d, m in zip(CK3SigDom.T, mask.T)]
+#    BoxAxDom[3].boxplot(CK3Filt,patch_artist = True,positions = pos,labels=labels
+#               ,boxprops = dict(facecolor = CColor)
+#               ,medianprops = dict(color ='black')
+#               ,showfliers = False)
+#    
+#    BoxAxDom[3].set_ylim([0,1])
+#    
+#    BoxFDom.tight_layout()
+#    BoxFDom.savefig("SigmasRecolorT%i.png" %(TempNames[Temp]), dpi=600)
